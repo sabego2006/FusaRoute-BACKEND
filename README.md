@@ -6,3 +6,4 @@ API REST para el sistema de información de transporte público de Fusagasugá.
 Este es un ejercicio de prueba para validar la integración de agentes de IA en el flujo de desarrollo.
 - Implementado vía rama `feature/SCRUM-5-ai-agent-test`.
 - Vinculado al issue SCRUM-5.
+Prueba de integración de IA
