@@ -82,6 +82,10 @@ com.fusaroute
 
 **Autorización por rol.** Todo endpoint de escritura sobre rutas es exclusivo de administrador. La verificación va en la capa de seguridad, no dispersa en los controllers.
 
+**CORS, y por qué existe.** El frontend corre en un origen distinto del backend —`localhost:4200` contra `localhost:8080` en DEV—, así que sin configuración de CORS el navegador bloquea *toda* llamada del Angular a esta API. No es opcional ni un detalle de despliegue: sin esto, el ambiente DEV no funciona de punta a punta. Vive en `infrastructure/config/SecurityConfig`, con los orígenes permitidos leídos de `app.cors.allowed-origins`.
+
+Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credenciales habilitadas el comodín ni siquiera es válido, y aunque lo fuera, abrir la API a cualquier origen es regalar superficie de ataque—; y **en PRE y PROD la variable no tiene valor por defecto**, a propósito, para que un origen mal configurado rompa el arranque en vez de colarse en silencio.
+
 **Secretos, nunca en el repositorio.** Credenciales de Supabase y API key de Google Maps van en variables de entorno. Se versiona `.env.example` con las claves vacías; `.env` y `application-local.yml` van en `.gitignore`. Antes de cualquier commit, verificar que no se cuele una credencial.
 
 **API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota.
