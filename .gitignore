@@ -43,3 +43,12 @@ build.log
 
 # VS Code
 .vscode/
+
+# Variables de entorno (nunca se versionan; ver .env.example)
+.env
+.env.local
+application-local.yml
+application-local.properties
+
+# Configuracion personal de la sesion de Claude Code (rutas locales de cada quien)
+.claude/settings.local.json
