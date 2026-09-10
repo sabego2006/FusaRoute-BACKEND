@@ -12,7 +12,7 @@ El contexto completo del curso, el alcance del proyecto y las métricas de calid
 
 ## Stack
 
-- Java 21 + Spring Boot 3.x, Maven
+- **Java 25** (LTS vigente) + **Spring Boot 3.5.16**, Maven 3.9+
 - **Arquitectura hexagonal** (puertos y adaptadores) — exigida por el docente
 - PostgreSQL alojado en Supabase, vía Spring Data JPA
 - Spring Security + JWT
@@ -128,7 +128,9 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 # comprobar: GET http://localhost:8080/health  →  {"status":"UP"}
 ```
 
-Requiere **JDK 21** (es lo declarado en `pom.xml`) y un PostgreSQL local con la base `fusaroute_dev` creada.
+Requiere **JDK 25** y **Maven 3.9+** instalados, y un PostgreSQL local con la base `fusaroute_dev` creada.
+
+**Por qué 3.5 y no 4.x:** la línea 4 de Spring Boot ya está publicada y es la que sirve `start.spring.io`, pero es un cambio de versión mayor. Siendo la primera vez del equipo con Spring, el material que van a encontrar buscando un error —tutoriales, respuestas de StackOverflow, ejemplos— es de la línea 3.x, y esa diferencia se paga en horas de depuración. Se arranca en la última 3.x, que no tiene cambios de ruptura, y el salto a 4 queda como decisión propia con su tarjeta, no como algo que se hace a mitad de un sprint.
 
 ## Calidad medible (ISO/IEC 25010)
 
