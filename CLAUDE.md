@@ -88,6 +88,16 @@ Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credencial
 
 **Secretos, nunca en el repositorio.** Credenciales de Supabase y API key de Google Maps van en variables de entorno. Se versiona `.env.example` con las claves vacías; `.env` y `application-local.yml` van en `.gitignore`. Antes de cualquier commit, verificar que no se cuele una credencial.
 
+**Regla fija: nunca el superusuario de la base de datos.** La aplicación jamás se conecta con `postgres` (o el admin del proveedor gestionado) — ni siquiera en DEV. Cada ambiente tiene su propio usuario dedicado, dueño solo de su base:
+
+| Ambiente | Usuario | Base |
+|---|---|---|
+| DEV | `fusaroute_dev` | `fusaroute_dev`, en el PostgreSQL local de cada integrante |
+| PRE | usuario propio del proyecto Supabase de PRE | la de ese proyecto |
+| PROD | usuario propio del proyecto Supabase de PROD | la de ese proyecto |
+
+La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a esa base; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
+
 **API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota.
 
 **Errores explícitos.** Nada de `catch` vacíos ni de devolver `null` para disimular un fallo. Códigos HTTP correctos (`400` validación, `401` sin autenticar, `403` sin permiso, `404` no existe) y un cuerpo de error consistente. El docente evalúa fiabilidad con métrica.
