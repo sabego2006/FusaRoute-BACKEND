@@ -52,3 +52,7 @@ application-local.properties
 
 # Configuracion personal de la sesion de Claude Code (rutas locales de cada quien)
 .claude/settings.local.json
+
+# Salida de compilacion del plugin de Java de VS Code / Eclipse
+# (no es target/: es la carpeta 'bin' que crea el builder del IDE)
+bin/
