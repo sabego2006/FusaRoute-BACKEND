@@ -2,9 +2,11 @@
 
 API REST del sistema de información de transporte público de Fusagasugá. Proyecto Integrador de Ingeniería de Software I, Universidad de Cundinamarca (docente: Ing. Luiferney Ortiz Parra).
 
-**Recursos externos:** la carpeta del curso en OneDrive (`C:/Users/Santiago/OneDrive - UNIVERSIDAD DE CUNDINAMARCA/Universidad/5 SEMESTRE/INGENIERIA SOFTWARE I`) contiene la Actividad 3 v3 y el material de clase. Las historias de usuario grilladas (RF-01 a RF-12, con criterios de aceptación) están en `docs/backlog/historias-rf01-rf12.md` de esa misma carpeta — es la fuente de las reglas de negocio de este archivo.
+**Recursos externos:** la carpeta del curso en OneDrive (`C:/Users/Santiago/OneDrive - UNIVERSIDAD DE CUNDINAMARCA/Universidad/5 SEMESTRE/INGENIERIA SOFTWARE I`) contiene la Actividad 3 v3 y el material de clase. Las 15 historias de usuario aprobadas (RF-01 a RF-15, con criterios de aceptación) están en `docs/backlog/historias-rf01-rf15.md` de esa misma carpeta, y los RNF en `docs/backlog/requisitos-no-funcionales.md` — es la fuente de las reglas de negocio de este archivo.
 
-**Planes vigentes** (leer los dos al abrir sesión nueva): el plan maestro de arranque en `C:/Users/Santiago/.claude/plans/eager-coalescing-creek.md` y el **Plan de Metodología y Preparación** (vigente desde 2026-09-09) en `C:/Users/Santiago/.claude/plans/lee-el-estado-del-wondrous-hoare.md`.
+**Jira:** proyecto `SCRUM` en `fusaroute.atlassian.net`. 5 épicas (`SCRUM-7`..`SCRUM-11`), 15 historias (`SCRUM-12`..`SCRUM-26` + `SCRUM-153`, la parte de última milla/offline separada de HU_MF02_001), 7 RNF como Task (`SCRUM-127`..`SCRUM-133`). **Sprint Planning cerrado el 2026-09-17**: 9 sprints semanales, cada issue con Sprint + Story Points + responsable asignado, cada Subtask con descripción y responsable. Sprint 1 activo (15→21 sep, arranque técnico — RNF-03 mantenibilidad + RNF-05 seguridad). Ver `docs/guia-jira-fusaroute.md` en la carpeta del curso para las convenciones completas del tablero.
+
+**Planes vigentes** (leer al abrir sesión nueva): el plan maestro de arranque en `C:/Users/Santiago/.claude/plans/eager-coalescing-creek.md`, el **Plan de Metodología y Preparación** en `C:/Users/Santiago/.claude/plans/lee-el-estado-del-wondrous-hoare.md`, y el plan de carga a Jira (ya ejecutado, referencia de las decisiones tomadas) en `C:/Users/Santiago/.claude/plans/dreamy-exploring-unicorn.md`.
 
 El contexto completo del curso, el alcance del proyecto y las métricas de calidad comprometidas están en el `CLAUDE.md` de la carpeta madre de la asignatura.
 
@@ -110,7 +112,7 @@ La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limi
 |---|---|---|
 | **DEV** | PostgreSQL en el portátil de cada integrante. Cada quien rompe lo suyo. | **activo** |
 | **PRE** | proyecto Supabase con datos de prueba. El ensayo general. | se monta en el Sprint 2 |
-| **PROD** | proyecto Supabase con las rutas reales. Lo que ve el comité. | se monta en el Sprint 2 · **no está desplegado en ningún servidor este semestre**: el backend corre desde un portátil el día de la demostración |
+| **PROD** | proyecto Supabase con las rutas reales; frontend en **Vercel**, backend en **Render** (tier gratis). Lo que ve el comité. | decidido el 2026-09-14, **por desplegar en el Sprint 2** · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
 
 ```
 src/main/resources/
@@ -153,7 +155,7 @@ Requiere **JDK 25** y **Maven 3.9+** instalados, y un PostgreSQL local con la ba
 | Atributo | Métrica | Cómo se verifica |
 |---|---|---|
 | Rendimiento | p95 < 8 s end-to-end (cliente → backend → Google Maps → render) en `/api/routes/search` sobre 4G. Caché de 5 min por par origen-destino. | Spring Boot Actuator + Micrometer (percentil 95) sobre el endpoint, midiendo latencia total desde que entra al controller hasta que sale la respuesta |
-| Fiabilidad | ≥ 95 % uptime mensual en horario hábil (lun–vie 7:00–21:00), RTO < 1 h lectiva, RPO < 24 h | healthcheck externo + backup diario automatizado de PostgreSQL con restore probado al cierre de sprint |
+| Fiabilidad | ≥ 95 % de los latidos de monitoreo responden en horario hábil (lun–vie 7:00–21:00), incluyendo el cold start del tier gratis de Render (hasta 60 s tras 15 min de inactividad); RPO < 24 h | UptimeRobot (backend en Render) + backup diario automatizado de PostgreSQL (Supabase), con restore probado al cierre de sprint |
 | Mantenibilidad | 0 violaciones de la regla de dependencia hexagonal · cobertura de `domain/` y `application/` ≥ 70 % | **ArchUnit** en el build (falla el build, no el revisor) + **JaCoCo** con umbral bloqueante; además revisión en PR |
 | Seguridad | 0 vulnerabilidades críticas conocidas | auditoría de dependencias |
 | Usabilidad de la API | códigos HTTP correctos y errores descriptivos | revisión en PR |
