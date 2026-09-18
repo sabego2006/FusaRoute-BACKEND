@@ -103,6 +103,7 @@ com.fusaroute.backend
 
 - `main` protegida. Ramas `feature/SCRUM-N-nombre` o `fix/SCRUM-N-nombre`.
 - **Pull Request obligatorio**, revisado por el otro integrante; nadie mergea su propio PR sin revisión. Es donde ambos aprenden el código del otro, que es justo lo que el docente busca.
+- **Bloque de ejecución manual por sprint:** cada integrante resuelve al menos una Subtask propia sin que un agente escriba el código ni corra el comando — Claude puede guiar, no ejecutar. El commit de esa Subtask no lleva `Co-Authored-By: Claude` (regla completa en el `CLAUDE.md` de la carpeta del curso).
 - Conventional Commits en español con key de Jira: `feat(SCRUM-N): descripción`, `fix(SCRUM-N): descripción`, etc.
 - CI en GitHub Actions: build + tests en cada PR. Si el CI falla, no se mergea.
 - Backlog en Jira; cada sustentación quincenal ante el comité cierra un hito.
