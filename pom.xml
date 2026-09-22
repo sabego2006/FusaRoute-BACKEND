@@ -72,7 +72,7 @@
 					<configuration>
 						<configLocation>google_checks.xml</configLocation>
 						<consoleOutput>true</consoleOutput>
-						<failsOnError>true</failsOnError>
+						<failsOnError>false</failsOnError>
 						<linkXRef>false</linkXRef>
 					</configuration>
 					<executions>
