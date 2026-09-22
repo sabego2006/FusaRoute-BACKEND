@@ -1,4 +1,4 @@
-package com.fusaroute.infrastructure.web;
+package com.fusaroute.infrastructure.adapter.in.web;
 
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RestController;
