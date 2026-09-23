@@ -13,10 +13,14 @@ class HexagonalArchitectureTest {
 
     @ArchTest
     public void capas_apuntan_hacia_adentro(JavaClasses classes) {
+        // optionalLayer, no layer: domain/ y application/ hoy solo tienen el .gitkeep
+        // (SCRUM-163 borró las clases Empty.java que sostenían el gate de JaCoCo).
+        // Con layer() una capa vacía es en sí misma una violación; optionalLayer()
+        // deja la regla activa y lista para cuando llegue la primera clase real.
         Architectures.layeredArchitecture()
             .consideringOnlyDependenciesInLayers()
-            .layer("Domain").definedBy("com.fusaroute.domain..")
-            .layer("Application").definedBy("com.fusaroute.application..")
+            .optionalLayer("Domain").definedBy("com.fusaroute.domain..")
+            .optionalLayer("Application").definedBy("com.fusaroute.application..")
             .layer("Infrastructure").definedBy("com.fusaroute.infrastructure..")
             .whereLayer("Domain").mayNotBeAccessedByAnyLayer()
             .whereLayer("Application").mayOnlyBeAccessedByLayers("Infrastructure")
