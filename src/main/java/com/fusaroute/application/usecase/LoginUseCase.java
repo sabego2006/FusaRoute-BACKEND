@@ -9,8 +9,6 @@ import com.fusaroute.domain.port.out.TokenServicePort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
-
 /**
  * Caso de uso para la autenticación de usuarios.
  * Orquestra la validación de credenciales y la generación del token.

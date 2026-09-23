@@ -18,7 +18,8 @@ public class User {
     private int failedLoginAttempts;
     private LocalDateTime lockoutUntil;
 
-    public User(UUID id, String name, String email, String password, boolean isActive, int failedLoginAttempts, LocalDateTime lockoutUntil) {
+    public User(UUID id, String name, String email, String password,
+                   boolean isActive, int failedLoginAttempts, LocalDateTime lockoutUntil) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -51,7 +52,9 @@ public class User {
     }
 
     public boolean isLockedOut() {
-        if (lockoutUntil == null) return false;
+        if (lockoutUntil == null) {
+            return false;
+        }
         return LocalDateTime.now().isBefore(lockoutUntil);
     }
 
@@ -85,8 +88,12 @@ public class User {
 
     @Override
     public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
         User user = (User) o;
         return Objects.equals(id, user.id) && Objects.equals(email, user.email);
     }

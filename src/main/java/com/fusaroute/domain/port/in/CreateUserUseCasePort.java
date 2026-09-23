@@ -1,7 +1,6 @@
 package com.fusaroute.domain.port.in;
 
 import com.fusaroute.domain.model.User;
-import java.util.Optional;
 
 /**
  * Puerto de entrada para la funcionalidad de creación de usuarios.
