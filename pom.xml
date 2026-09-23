@@ -160,6 +160,11 @@
 								<format>HTML</format>
 								<format>JSON</format>
 							</formats>
+							<!-- CVEs puntuales sin fix publicado, con justificación de
+							     inalcanzabilidad documentada por CVE. Ver el archivo. -->
+							<suppressionFiles>
+								<suppressionFile>config/owasp/suppression.xml</suppressionFile>
+							</suppressionFiles>
 						</configuration>
 						<executions>
 							<execution>

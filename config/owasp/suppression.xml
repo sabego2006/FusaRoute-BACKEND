@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Archivo de supresion de OWASP Dependency-Check (SCRUM-146).
+
+  ESTO NO ES BAJAR EL UMBRAL. failBuildOnCVSS sigue en 7 sin tocar. Cada entrada
+  de abajo suprime CVEs puntuales de spring-framework (6.2.19) y spring-security
+  (6.5.11) porque, a la fecha (2026-09-23), NO existe todavia una version
+  publicada en Maven Central que las corrija (verificado contra
+  repo1.maven.org/.../maven-metadata.xml: 6.2.19 y 6.5.11 son las ultimas de
+  sus lineas) -- no es que se eligiera no actualizar, es que no hay a que
+  actualizar.
+
+  Contexto del lote: estas CVEs salieron el 2026-08 en una divulgacion masiva de
+  91 CVEs de Spring en un solo dia. Multiples fuentes de investigacion en
+  seguridad (JFrog, HeroDevs) documentan que el puntaje CVSS automatico de
+  NVD/CISA para varias de ellas esta desacoplado de si el mecanismo es
+  alcanzable en una aplicacion tipica -- por ejemplo Spring mismo califica
+  CVE-2026-59313 en 2.6 (bajo) mientras NVD la marca 9.8.
+
+  Verificacion de alcanzabilidad hecha en esta sesion, no solo cita de terceros:
+  cada CVE suprimida requiere una caracteristica que este codebase NO usa hoy.
+  Revisar de nuevo cuando el codigo cambie (agregar WebFlux, SSE, XSLT, SpEL
+  sobre input de usuario, LDAP o WebAuthn) o cuando exista un fix publicado,
+  lo que pase primero -- el <until> de cada entrada obliga esa revision.
+-->
+<suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
+
+    <!-- spring-core / spring-web 6.2.19 -->
+    <suppress until="2027-01-15Z">
+        <notes><![CDATA[
+            Lote de CVEs del 2026-08 en spring-core/spring-web 6.2.19, sin fix
+            publicado en Maven Central a la fecha. Cada una requiere una
+            caracteristica ausente en este proyecto (que usa spring-boot-starter-web,
+            servlet/MVC clasico, no reactivo):
+            - CVE-2026-47884 (XsltView SSRF/RCE): sin vistas XSLT en el proyecto.
+            - CVE-2026-47885 (WebFlux PartEventHttpMessageReader DoS): sin WebFlux.
+            - CVE-2026-47886 (DoS por exponenciacion en SpEL): sin evaluacion de
+              SpEL sobre entrada de usuario.
+            - CVE-2026-47888 (memory leak en RSocket): sin RSocket.
+            - CVE-2026-47889, CVE-2026-47891: mismo lote MVC/WebFlux/RSocket,
+              caracteristicas ausentes.
+            - CVE-2026-47890, CVE-2026-59313 (SSE, corrupcion de stream/CRLF):
+              sin endpoints SSE (HealthController es el unico controller hoy).
+            - CVE-2026-47892, CVE-2026-59283 (SpEL safety guard bypass): sin
+              evaluacion de SpEL sobre entrada no confiable; Spring/HeroDevs
+              documentan ademas que CISA la califico sin considerar que solo es
+              alcanzable en condiciones no default.
+            - CVE-2026-47893 (WebFlux + WebSocket): sin WebFlux ni WebSocket.
+            - CVE-2026-59282: mismo lote, misma familia SpEL/reactivo.
+            Revisar antes de esta fecha o al primer uso de WebFlux/SSE/XSLT/SpEL
+            sobre input de usuario/RSocket/WebSocket, lo que ocurra primero.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-(core|web)@.*$</packageUrl>
+        <cve>CVE-2026-47884</cve>
+        <cve>CVE-2026-47885</cve>
+        <cve>CVE-2026-47886</cve>
+        <cve>CVE-2026-47888</cve>
+        <cve>CVE-2026-47889</cve>
+        <cve>CVE-2026-47890</cve>
+        <cve>CVE-2026-47891</cve>
+        <cve>CVE-2026-47892</cve>
+        <cve>CVE-2026-47893</cve>
+        <cve>CVE-2026-59282</cve>
+        <cve>CVE-2026-59283</cve>
+        <cve>CVE-2026-59313</cve>
+    </suppress>
+
+    <!-- spring-security-core / spring-security-web 6.5.11 -->
+    <suppress until="2027-01-15Z">
+        <notes><![CDATA[
+            CVE-2026-59270: Spring Security's embedded UnboundID LDAP server
+            (UnboundIdContainer) se une a todas las interfaces con credencial admin
+            de fabrica. El proyecto NO usa el modulo de LDAP embebido de Spring
+            Security -- SecurityConfig.java es JWT/CORS puro, sin
+            EnableLdapAuthentication ni bean UnboundIdContainer. Confirmado que
+            "ldap" no aparece en el arbol de dependencias (mvn dependency:tree).
+
+            CVE-2026-47841: bypass de verificacion de usuario en WebAuthn cuando
+            se usa un almacen de sesion distribuido (Spring Session con Redis/JDBC/
+            Hazelcast). El proyecto no implementa WebAuthn (autenticacion es JWT
+            propio, RF-01/02/03) ni usa Spring Session distribuido.
+
+            Sin fix publicado para 6.5.x en Maven Central a la fecha (6.5.11 es la
+            ultima version de esa linea). Revisar antes de esta fecha o al primer
+            uso de LDAP embebido / WebAuthn con sesion distribuida, lo que ocurra
+            primero.
+        ]]></notes>
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/spring\-security\-(core|web)@.*$</packageUrl>
+        <cve>CVE-2026-59270</cve>
+        <cve>CVE-2026-47841</cve>
+    </suppress>
+
+</suppressions>
