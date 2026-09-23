@@ -2,7 +2,11 @@
 
 API REST del sistema de información de transporte público de Fusagasugá. Proyecto Integrador de Ingeniería de Software I, Universidad de Cundinamarca (docente: Ing. Luiferney Ortiz Parra).
 
-**Recursos externos:** la carpeta del curso en OneDrive (`C:/Users/Santiago/OneDrive - UNIVERSIDAD DE CUNDINAMARCA/Universidad/5 SEMESTRE/INGENIERIA SOFTWARE I`) contiene la Actividad 3 v3 y el material de clase.
+**Recursos externos:** la carpeta del curso en OneDrive (`C:/Users/Santiago/OneDrive - UNIVERSIDAD DE CUNDINAMARCA/Universidad/5 SEMESTRE/INGENIERIA SOFTWARE I`) contiene la Actividad 3 v3 y el material de clase. Las 15 historias de usuario aprobadas (RF-01 a RF-15, con criterios de aceptación) están en `docs/backlog/historias-rf01-rf15.md` de esa misma carpeta, y los RNF en `docs/backlog/requisitos-no-funcionales.md` — es la fuente de las reglas de negocio de este archivo.
+
+**Jira:** proyecto `SCRUM` en `fusaroute.atlassian.net`. 5 épicas (`SCRUM-7`..`SCRUM-11`), 15 historias (`SCRUM-12`..`SCRUM-26` + `SCRUM-153`, la parte de última milla/offline separada de HU_MF02_001), 7 RNF como Task (`SCRUM-127`..`SCRUM-133`). **Sprint Planning cerrado el 2026-09-17**: 9 sprints semanales, cada issue con Sprint + Story Points + responsable asignado, cada Subtask con descripción y responsable. Sprint 1 activo (15→21 sep, arranque técnico — RNF-03 mantenibilidad + RNF-05 seguridad). Ver `docs/guia-jira-fusaroute.md` en la carpeta del curso para las convenciones completas del tablero.
+
+**Planes vigentes** (leer al abrir sesión nueva): el plan maestro de arranque en `C:/Users/Santiago/.claude/plans/eager-coalescing-creek.md`, el **Plan de Metodología y Preparación** en `C:/Users/Santiago/.claude/plans/lee-el-estado-del-wondrous-hoare.md`, y el plan de carga a Jira (ya ejecutado, referencia de las decisiones tomadas) en `C:/Users/Santiago/.claude/plans/dreamy-exploring-unicorn.md`.
 
 El contexto completo del curso, el alcance del proyecto y las métricas de calidad comprometidas están en el `CLAUDE.md` de la carpeta madre de la asignatura.
 
@@ -10,7 +14,7 @@ El contexto completo del curso, el alcance del proyecto y las métricas de calid
 
 ## Stack
 
-- Java 21 + Spring Boot 3.x, Maven
+- **Java 25** (LTS vigente) + **Spring Boot 3.5.16**, Maven 3.9+
 - **Arquitectura hexagonal** (puertos y adaptadores) — exigida por el docente
 - PostgreSQL alojado en Supabase, vía Spring Data JPA
 - Spring Security + JWT
@@ -27,7 +31,7 @@ domain  ←  application  ←  infrastructure
 Concretamente: una clase en `domain/` **nunca** importa Spring, JPA, Jackson, HTTP ni Supabase. Si aparece un `@Entity`, un `@Autowired` o un `import org.springframework...` dentro de `domain/`, la capa está contaminada y hay que corregirlo.
 
 ```
-com.fusaroute.backend
+com.fusaroute
 ├── domain
 │   ├── model/            Route, Stop, Neighborhood, Fare, TrafficSector, User, SearchRecord, Feedback
 │   └── port
@@ -56,18 +60,23 @@ com.fusaroute.backend
 
 ## Dominio inicial
 
-- **`Route`** — ruta de buseta: nombre/número, secuencia ordenada de paradas, barrios y comunas por los que pasa, tarifa, estado (activa / suspendida temporalmente).
-- **`Stop`** — parada con coordenadas.
-- **`Neighborhood`** — barrio o comuna; una ruta atraviesa varios.
-- **`Fare`** — costo del pasaje, con historial (las tarifas cambian por año).
-- **`TrafficSector`** — sector propenso a trancón, con las franjas horarias en que se congestiona. Base del aviso de hora pico.
+- **`Route`** — ruta de buseta: nombre/número, trazado GeoJSON, barrios por los que pasa, tarifa, estado (activa / suspendida temporalmente). **Sin transbordos** — cada ruta es un recorrido directo de un solo tramo, fuera de alcance combinar varias. Ida y vuelta son dos registros de `Route` independientes, no un mismo registro con "sentido".
+- **`Neighborhood`** — barrio o comuna; una ruta atraviesa varios. **Sin paradas formales**: en Fusagasugá uno para la buseta con la mano, como un taxi, así que el sistema no modela paradas fijas. Los barrios de cada ruta son dato cargado a mano y validado por inspección visual contra el GeoJSON — no hay validación geoespacial automática (eso exigiría PostGIS, fuera de alcance).
+- **`Fare`** — costo del pasaje. **Dos formas según el tipo de ruta:**
+  - Urbana (dentro de Fusagasugá): un único precio fijo por ruta, sin importar dónde se suba o baje el usuario.
+  - Intermunicipal (Chinauta, Pasca, Arbeláez): tabla de precios por **punto de referencia de bajada** (ej. "hasta el primer retorno: $X / hasta el Hotel Chinauta Real: $Y"), ordenada de menor a mayor. No es tarifa por parada (no hay paradas) ni por tramo formal — es un punto de referencia geográfico dentro del trazado.
+  - Cada tarifa tiene `vigenteDesde`; la pantalla muestra la fecha de última actualización.
+  - Tarifas diferenciales (estudiante, adulto mayor) fuera de alcance.
+- **`CongestionWindow`** — ventana de congestión histórica de un **tramo** de una ruta (no de la ruta completa), modelada con `horaInicio` y `horaFin` — **no un booleano**, porque el aviso se activa 30 minutos antes de `horaInicio` y se apaga al llegar a `horaFin`, cálculo que un bool no puede sostener. Sin distinción por día de la semana este semestre (misma ventana todos los días).
 - **`User`** — usuario final o administrador (rol).
-- **`SearchRecord`** — búsqueda guardada en el historial del usuario; incluye la ruta que el usuario deje fijada para una hora específica.
-- **`Feedback`** — mensaje de la caja de comentarios y la respuesta del administrador.
+- **`SearchRecord`** — búsqueda guardada en el historial del usuario (origen + destino); se conservan las últimas 6 por usuario, asociadas a la cuenta (no al dispositivo), para que persistan al cambiar de equipo.
+- **`Feedback`** — comentario de un usuario (10–100 caracteres, sin URLs, filtrado contra un banco de palabras prohibidas) vinculado a su perfil, y la respuesta del administrador. Editable/borrable por su autor solo mientras esté pendiente de respuesta; una vez respondido, queda bloqueado (protege la métrica de "comentarios pendientes" de RF-13).
 
-**Regla de negocio central:** hay más de 20 rutas y varias sirven para llegar al mismo destino. El caso de uso de búsqueda **simula cada ruta en Google Maps** y devuelve la de menor tiempo estimado. El catálogo de rutas (con sus paradas y trazado GeoJSON) es nuestro dato propio: ahí viven las polilíneas que el backend envía a Google Maps para pedirle la estimación de tiempo por ruta. **No** se compara un banco estático de tiempos — los tiempos se calculan en cada consulta a Maps.
+**Regla de negocio central:** hay más de 20 rutas y varias sirven para llegar al mismo destino. El caso de uso de búsqueda filtra las rutas candidatas que conectan origen y destino y **el dominio decide cuál es la mejor** por menor tiempo estimado — el tiempo lo informa un puerto de salida `TravelTimePort`, implementado por un adaptador que consulta Google Directions (Google cronometra rutas ya filtradas por el dominio; nunca elige el trazado ni decide cuál es mejor — eso rompería RNF-03 y dejaría `domain/` sin nada que cubrir en JaCoCo). El catálogo de rutas (con su trazado GeoJSON) es nuestro dato propio. Sin ruta candidata que conecte origen-destino, se devuelve un mensaje explícito, no una lista vacía.
 
 **Modo offline:** el backend expone además un endpoint que, sin llamar a Google Maps, **calcula la mejor ruta por distancia geométrica** sobre los GeoJSON del catálogo. La app usa ese endpoint cuando no tiene red. No calcula tiempo de llegada ni trancones offline — solo distancia total.
+
+**Autenticación (RF-01/02/03):** registro con nombre, correo (único, formato validado) y contraseña (mínimo 8 caracteres, 1 mayúscula, 1 número), activación inmediata sin verificación por correo. Login con JWT de validez **una semana** — vencido, el usuario reloguea (RNF-04: máximo 1 login por semana). Hasta 4 intentos fallidos con mensaje genérico; al quinto, bloqueo temporal con aviso explícito de bloqueo (no el mensaje genérico de los anteriores). Recuperación de contraseña fuera de alcance este semestre. Perfil editable (nombre, correo, teléfono, contraseña); cambiar contraseña exige la contraseña actual.
 
 ## Reglas técnicas
 
@@ -75,11 +84,69 @@ com.fusaroute.backend
 
 **Autorización por rol.** Todo endpoint de escritura sobre rutas es exclusivo de administrador. La verificación va en la capa de seguridad, no dispersa en los controllers.
 
+**CORS, y por qué existe.** El frontend corre en un origen distinto del backend —`localhost:4200` contra `localhost:8080` en DEV—, así que sin configuración de CORS el navegador bloquea *toda* llamada del Angular a esta API. No es opcional ni un detalle de despliegue: sin esto, el ambiente DEV no funciona de punta a punta. Vive en `infrastructure/config/SecurityConfig`, con los orígenes permitidos leídos de `app.cors.allowed-origins`.
+
+Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credenciales habilitadas el comodín ni siquiera es válido, y aunque lo fuera, abrir la API a cualquier origen es regalar superficie de ataque—; y **en PRE y PROD la variable no tiene valor por defecto**, a propósito, para que un origen mal configurado rompa el arranque en vez de colarse en silencio.
+
 **Secretos, nunca en el repositorio.** Credenciales de Supabase y API key de Google Maps van en variables de entorno. Se versiona `.env.example` con las claves vacías; `.env` y `application-local.yml` van en `.gitignore`. Antes de cualquier commit, verificar que no se cuele una credencial.
+
+**Regla fija: nunca el superusuario de la base de datos.** La aplicación jamás se conecta con `postgres` (o el admin del proveedor gestionado) — ni siquiera en DEV. Cada ambiente tiene su propio usuario dedicado, dueño solo de su base:
+
+| Ambiente | Usuario | Base |
+|---|---|---|
+| DEV | `fusaroute_dev` | `fusaroute_dev`, en el PostgreSQL local de cada integrante |
+| PRE | usuario propio del proyecto Supabase de PRE | la de ese proyecto |
+| PROD | usuario propio del proyecto Supabase de PROD | la de ese proyecto |
+
+La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a esa base; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
 
 **API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota.
 
 **Errores explícitos.** Nada de `catch` vacíos ni de devolver `null` para disimular un fallo. Códigos HTTP correctos (`400` validación, `401` sin autenticar, `403` sin permiso, `404` no existe) y un cuerpo de error consistente. El docente evalúa fiabilidad con métrica.
+
+## Ambientes y configuración
+
+**Concepto, en una línea:** el código nunca cambia entre ambientes; lo que cambia es cuál archivo de configuración se activa.
+
+| Ambiente | Qué es | Estado hoy |
+|---|---|---|
+| **DEV** | PostgreSQL en el portátil de cada integrante. Cada quien rompe lo suyo. | **activo** |
+| **PRE** | proyecto Supabase con datos de prueba. El ensayo general. | se monta en el Sprint 2 |
+| **PROD** | proyecto Supabase con las rutas reales; frontend en **Vercel**, backend en **Render** (tier gratis). Lo que ve el comité. | decidido el 2026-09-14, **por desplegar en el Sprint 2** · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
+
+```
+src/main/resources/
+├── application.properties        # común · spring.profiles.active=${SPRING_PROFILE:dev}
+├── application-dev.properties    # PostgreSQL local
+├── application-pre.properties    # claves declaradas y vacías hasta el Sprint 2
+└── application-prod.properties   # claves declaradas y vacías hasta el Sprint 2
+```
+
+Los cuatro archivos existen desde ya, para cumplir en estructura con la §22 de la guía de buenas prácticas aunque PRE y PROD todavía no tengan valores.
+
+**Ningún valor se escribe a mano en un `.properties`.** Todos entran por variable de entorno:
+
+```properties
+spring.datasource.url=${DB_URL}
+spring.datasource.username=${DB_USERNAME}
+spring.datasource.password=${DB_PASSWORD}
+server.port=${PORT:8080}
+google.maps.api.key=${GOOGLE_MAPS_API_KEY}
+```
+
+`.env.example` está versionado con las claves vacías y **es la documentación ejecutable: si una variable no está ahí, no existe.** `.env` está en `.gitignore` junto con `application-local.*`.
+
+Arranque en DEV, desde un clon limpio:
+
+```bash
+cp .env.example .env      # y llenarlo con la contraseña del PostgreSQL local
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# comprobar: GET http://localhost:8080/health  →  {"status":"UP"}
+```
+
+Requiere **JDK 25** y **Maven 3.9+** instalados, y un PostgreSQL local con la base `fusaroute_dev` creada.
+
+**Por qué 3.5 y no 4.x:** la línea 4 de Spring Boot ya está publicada y es la que sirve `start.spring.io`, pero es un cambio de versión mayor. Siendo la primera vez del equipo con Spring, el material que van a encontrar buscando un error —tutoriales, respuestas de StackOverflow, ejemplos— es de la línea 3.x, y esa diferencia se paga en horas de depuración. Se arranca en la última 3.x, que no tiene cambios de ruptura, y el salto a 4 queda como decisión propia con su tarjeta, no como algo que se hace a mitad de un sprint.
 
 ## Calidad medible (ISO/IEC 25010)
 
@@ -88,10 +155,19 @@ com.fusaroute.backend
 | Atributo | Métrica | Cómo se verifica |
 |---|---|---|
 | Rendimiento | p95 < 8 s end-to-end (cliente → backend → Google Maps → render) en `/api/routes/search` sobre 4G. Caché de 5 min por par origen-destino. | Spring Boot Actuator + Micrometer (percentil 95) sobre el endpoint, midiendo latencia total desde que entra al controller hasta que sale la respuesta |
-| Fiabilidad | ≥ 95 % uptime mensual en horario hábil (lun–vie 7:00–21:00), RTO < 1 h lectiva, RPO < 24 h | healthcheck externo + backup diario automatizado de PostgreSQL con restore probado al cierre de sprint |
-| Mantenibilidad | 0 violaciones de la regla de dependencia hexagonal | revisión en PR; `domain/` sin imports de framework |
+| Fiabilidad | ≥ 95 % de los latidos de monitoreo responden en horario hábil (lun–vie 7:00–21:00), incluyendo el cold start del tier gratis de Render (hasta 60 s tras 15 min de inactividad); RPO < 24 h | UptimeRobot (backend en Render) + backup diario automatizado de PostgreSQL (Supabase), con restore probado al cierre de sprint |
+| Mantenibilidad | 0 violaciones de la regla de dependencia hexagonal · cobertura de `domain/` y `application/` ≥ 70 % | **ArchUnit** en el build (falla el build, no el revisor) + **JaCoCo** con umbral bloqueante; además revisión en PR |
 | Seguridad | 0 vulnerabilidades críticas conocidas | auditoría de dependencias |
 | Usabilidad de la API | códigos HTTP correctos y errores descriptivos | revisión en PR |
+
+## Instrumentos de la métrica de mantenibilidad
+
+La regla hexagonal no se sostiene con buena voluntad: se sostiene con dos herramientas en el build. **Ninguna de las dos existe todavía — se instalan en el Sprint 1.**
+
+- **ArchUnit** (test de arquitectura en `src/test/java`): comprueba que ninguna clase de `com.fusaroute.domain..` importe `org.springframework..`, `jakarta.persistence..` ni `com.fasterxml.jackson..`, y que la dependencia entre capas apunte siempre hacia adentro. Si alguien contamina el dominio, **falla el build**, no lo tiene que ver un humano en el PR.
+- **JaCoCo**: umbral de cobertura **bloqueante** sobre `domain/` y `application/`. Se limita a esos dos paquetes a propósito: son los que contienen lógica de negocio propia y los únicos donde la cobertura significa algo. Cubrir controllers para subir un porcentaje es maquillaje.
+
+Las reglas de ArchUnit se escriben **contra nombres de paquete**. Por eso los nombres de este archivo y los del repositorio tienen que coincidir exactamente: si los nombres mienten, la métrica no se puede implementar.
 
 ## Testing
 
@@ -103,6 +179,7 @@ com.fusaroute.backend
 
 - `main` protegida. Ramas `feature/SCRUM-N-nombre` o `fix/SCRUM-N-nombre`.
 - **Pull Request obligatorio**, revisado por el otro integrante; nadie mergea su propio PR sin revisión. Es donde ambos aprenden el código del otro, que es justo lo que el docente busca.
+- **Bloque de ejecución manual por sprint:** cada integrante resuelve al menos una Subtask propia sin que un agente escriba el código ni corra el comando — Claude puede guiar, no ejecutar. El commit de esa Subtask no lleva `Co-Authored-By: Claude` (regla completa en el `CLAUDE.md` de la carpeta del curso).
 - Conventional Commits en español con key de Jira: `feat(SCRUM-N): descripción`, `fix(SCRUM-N): descripción`, etc.
 - CI en GitHub Actions: build + tests en cada PR. Si el CI falla, no se mergea.
 - Backlog en Jira; cada sustentación quincenal ante el comité cierra un hito.
