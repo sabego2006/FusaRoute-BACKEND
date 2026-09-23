@@ -1,0 +1,61 @@
+name: Seguridad
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  owasp-dependency-check:
+    runs-on: ubuntu-latest
+    env:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      # Caché del repositorio Maven, excluyendo la base de datos de la NVD:
+      # sin la exclusión, este caché duplicaría ~1 GB de la NVD y se comería
+      # el presupuesto de 10 GB de caché por repositorio.
+      - name: Cachear dependencias de Maven
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/owasp/dependency-check-data
+          key: maven-${{ runner.os }}-${{ hashFiles('pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      # Caché semanal de la base de la NVD: sin esto, cada corrida re-descarga
+      # la base completa y quema minutos y el límite de tasa del NIST.
+      # Llave semanal (no por run) para no acumular ~1 GB por corrida.
+      - name: Calcular la semana ISO actual
+        id: semana
+        run: echo "clave=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
+
+      - name: Cachear base de datos de la NVD
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-${{ runner.os }}-${{ steps.semana.outputs.clave }}
+          restore-keys: |
+            nvd-${{ runner.os }}-
+
+      - name: Escanear dependencias con OWASP Dependency-Check
+        run: mvn -B -Psecurity org.owasp:dependency-check-maven:check
+
+      - name: Subir reporte OWASP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-owasp
+          path: target/dependency-check-report.*
+          if-no-files-found: ignore

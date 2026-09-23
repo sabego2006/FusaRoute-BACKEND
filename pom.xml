@@ -103,4 +103,38 @@
 			</plugin>
 		</plugins>
 	</build>
+	<profiles>
+		<profile>
+			<!-- mvn -Psecurity verify: escaneo de dependencias, aparte del build normal
+			     porque exige NVD_API_KEY y puede tardar minutos descargando la base NVD. -->
+			<id>security</id>
+			<build>
+				<plugins>
+					<plugin>
+						<groupId>org.owasp</groupId>
+						<artifactId>dependency-check-maven</artifactId>
+						<version>12.1.3</version>
+						<configuration>
+							<!-- La key llega por variable de entorno; jamás se escribe aquí. -->
+							<nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+							<failBuildOnCVSS>7</failBuildOnCVSS>
+							<formats>
+								<format>HTML</format>
+								<format>JSON</format>
+							</formats>
+						</configuration>
+						<executions>
+							<execution>
+								<id>owasp-check</id>
+								<phase>verify</phase>
+								<goals>
+									<goal>check</goal>
+								</goals>
+							</execution>
+						</executions>
+					</plugin>
+				</plugins>
+			</build>
+		</profile>
+	</profiles>
 </project>
