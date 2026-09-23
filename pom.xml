@@ -15,6 +15,15 @@
 	<description>Backend for FusaRoute project</description>
 	<properties>
 		<java.version>25</java.version>
+		<!-- Overrides puntuales sobre lo que gestiona el BOM de spring-boot-starter-parent
+		     3.5.16 (el patch mas reciente disponible hoy en Maven Central): CVE-2026-54291
+		     (postgresql, downgrade silencioso de channel-binding SCRAM) y CVE-2026-65905
+		     y otras de Tomcat DIGEST, ambas con CVSS >=7 y fix ya publicado. No se tocan
+		     spring-framework (6.2.19) ni spring-security (6.5.11): sus CVEs tambien
+		     detectadas por el escaneo no tienen todavia una version parcheada publicada
+		     en Maven Central para esa linea. -->
+		<postgresql.version>42.7.13</postgresql.version>
+		<tomcat.version>10.1.60</tomcat.version>
 	</properties>
 	<dependencies>
 		<dependency>
