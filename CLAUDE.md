@@ -90,15 +90,15 @@ Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credencial
 
 **Secretos, nunca en el repositorio.** Credenciales de Supabase y API key de Google Maps van en variables de entorno. Se versiona `.env.example` con las claves vacías; `.env` y `application-local.yml` van en `.gitignore`. Antes de cualquier commit, verificar que no se cuele una credencial.
 
-**Regla fija: nunca el superusuario de la base de datos.** La aplicación jamás se conecta con `postgres` (o el admin del proveedor gestionado) — ni siquiera en DEV. Cada ambiente tiene su propio usuario dedicado, dueño solo de su base:
+**Regla fija: nunca el superusuario de la base de datos.** La aplicación jamás se conecta con `postgres` (o el admin del proveedor gestionado) — ni siquiera en DEV. Supabase solo da una base, siempre llamada `postgres` — no se puede tener una base `fusaroute_dev` dedicada — así que la regla se cumple con un rol propio sin privilegios de superusuario, dueño de su propio esquema, no con una base separada:
 
-| Ambiente | Usuario | Base |
+| Ambiente | Usuario | Esquema/base |
 |---|---|---|
-| DEV | `fusaroute_dev` | `fusaroute_dev`, en el PostgreSQL local de cada integrante |
+| DEV | `fusaroute_dev` (sin `rolsuper`/`rolcreaterole`/`rolbypassrls`) | esquema `fusaroute` en la base `postgres` del proyecto Supabase `fusaroute-dev`, compartido por el equipo |
 | PRE | usuario propio del proyecto Supabase de PRE | la de ese proyecto |
 | PROD | usuario propio del proyecto Supabase de PROD | la de ese proyecto |
 
-La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a esa base; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
+La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a ese esquema; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
 
 **API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota.
 
@@ -110,14 +110,14 @@ La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limi
 
 | Ambiente | Qué es | Estado hoy |
 |---|---|---|
-| **DEV** | PostgreSQL en el portátil de cada integrante. Cada quien rompe lo suyo. | **activo** |
+| **DEV** | proyecto Supabase compartido `fusaroute-dev` (rol `fusaroute_dev`, esquema `fusaroute`). Ya no es PostgreSQL local por integrante. | **activo** |
 | **PRE** | proyecto Supabase con datos de prueba. El ensayo general. | se monta en el Sprint 2 |
 | **PROD** | proyecto Supabase con las rutas reales; frontend en **Vercel**, backend en **Render** (tier gratis). Lo que ve el comité. | decidido el 2026-09-14, **por desplegar en el Sprint 2** · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
 
 ```
 src/main/resources/
 ├── application.properties        # común · spring.profiles.active=${SPRING_PROFILE:dev}
-├── application-dev.properties    # PostgreSQL local
+├── application-dev.properties    # Supabase fusaroute-dev, rol fusaroute_dev
 ├── application-pre.properties    # claves declaradas y vacías hasta el Sprint 2
 └── application-prod.properties   # claves declaradas y vacías hasta el Sprint 2
 ```
@@ -139,12 +139,12 @@ google.maps.api.key=${GOOGLE_MAPS_API_KEY}
 Arranque en DEV, desde un clon limpio:
 
 ```bash
-cp .env.example .env      # y llenarlo con la contraseña del PostgreSQL local
+cp .env.example .env      # y llenarlo con las credenciales de fusaroute_dev (pedirlas por canal privado)
 mvn spring-boot:run -Dspring-boot.run.profiles=dev
 # comprobar: GET http://localhost:8080/health  →  {"status":"UP"}
 ```
 
-Requiere **JDK 25** y **Maven 3.9+** instalados, y un PostgreSQL local con la base `fusaroute_dev` creada.
+Requiere **JDK 25** y **Maven 3.9+** instalados. No requiere PostgreSQL local — DEV apunta al proyecto Supabase compartido `fusaroute-dev`; las credenciales del rol `fusaroute_dev` se piden a quien haya provisionado el proyecto, nunca por repo ni por Jira.
 
 **Por qué 3.5 y no 4.x:** la línea 4 de Spring Boot ya está publicada y es la que sirve `start.spring.io`, pero es un cambio de versión mayor. Siendo la primera vez del equipo con Spring, el material que van a encontrar buscando un error —tutoriales, respuestas de StackOverflow, ejemplos— es de la línea 3.x, y esa diferencia se paga en horas de depuración. Se arranca en la última 3.x, que no tiene cambios de ruptura, y el salto a 4 queda como decisión propia con su tarjeta, no como algo que se hace a mitad de un sprint.
 
