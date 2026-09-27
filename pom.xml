@@ -45,6 +45,19 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- Flyway es el dueno del esquema: cada cambio viaja en un .sql revisable en el
+		     PR y se aplica igual en DEV, PRE y PROD. Hibernate solo valida (ddl-auto=validate).
+		     flyway-database-postgresql es obligatorio desde Flyway 10: el soporte de cada
+		     motor salio del core a su propio artefacto. Las versiones las fija el BOM de
+		     spring-boot-starter-parent. -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
