@@ -45,6 +45,17 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
 		</dependency>
+		<!-- Flyway dueño del esquema. flyway-database-postgresql es obligatorio
+		     desde Flyway 10 para hablar con PostgreSQL. Version la gestiona el
+		     BOM de spring-boot-starter-parent. -->
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
 			<artifactId>postgresql</artifactId>
