@@ -17,6 +17,7 @@ El contexto completo del curso, el alcance del proyecto y las métricas de calid
 - **Java 25** (LTS vigente) + **Spring Boot 3.5.16**, Maven 3.9+
 - **Arquitectura hexagonal** (puertos y adaptadores) — exigida por el docente
 - PostgreSQL alojado en Supabase, vía Spring Data JPA
+- **Flyway** para versionar el esquema — Hibernate solo valida, nunca genera DDL
 - Spring Security + JWT
 - JUnit 5 + Mockito
 
@@ -119,8 +120,25 @@ src/main/resources/
 ├── application.properties        # común · spring.profiles.active=${SPRING_PROFILE:dev}
 ├── application-dev.properties    # Supabase fusaroute-dev, rol fusaroute_dev
 ├── application-pre.properties    # claves declaradas y vacías hasta el Sprint 2
-└── application-prod.properties   # claves declaradas y vacías hasta el Sprint 2
+├── application-prod.properties   # claves declaradas y vacías hasta el Sprint 2
+└── db/migration/                 # migraciones de Flyway, en orden V1, V2, ...
 ```
+
+**El dueño del esquema es Flyway, no Hibernate.** Los tres perfiles van con
+`spring.jpa.hibernate.ddl-auto=validate`: Hibernate comprueba que las entidades calcen
+con las tablas, y nunca las crea ni las altera. Cada cambio de esquema es un archivo
+nuevo en `db/migration/`, revisable en el PR y aplicado igual en DEV, PRE y PROD.
+
+Dos reglas que no se rompen:
+
+- **Una migración ya aplicada no se edita jamás.** Flyway guarda un checksum de cada
+  archivo en `fusaroute.flyway_schema_history`; si el archivo cambia después de haberse
+  aplicado, el arranque falla con un error de validación. Un cambio se corrige con una
+  migración **nueva**, no editando la anterior.
+- **El esquema se declara, no se hereda del rol.** `spring.flyway.schemas` e
+  `hibernate.default_schema` apuntan a `${DB_SCHEMA:fusaroute}` en
+  `application.properties`. El rol `fusaroute_dev` ya trae `search_path=fusaroute`, pero
+  el arranque no depende de esa propiedad del servidor, que no está en el repositorio.
 
 Los cuatro archivos existen desde ya, para cumplir en estructura con la §22 de la guía de buenas prácticas aunque PRE y PROD todavía no tengan valores.
 
