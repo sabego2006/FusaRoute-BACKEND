@@ -63,7 +63,15 @@
             Revisar antes de esta fecha o al primer uso de WebFlux/SSE/XSLT/SpEL
             sobre input de usuario/RSocket/WebSocket, lo que ocurra primero.
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-(core|web)@.*$</packageUrl>
+        <!-- El regex cubre TODA la linea de spring-framework, no solo core y web.
+             La NVD atribuye estas CVEs al CPE cpe:2.3:a:*:spring_framework:6.2.19,
+             que aplica al artefacto completo, asi que OWASP las reporta igual en
+             spring-tx, spring-webmvc, spring-beans, spring-context y demas modulos
+             de la misma version. El argumento de alcanzabilidad es por
+             caracteristica (no hay WebFlux, SSE, XSLT ni SpEL sobre input de
+             usuario), no por jar, asi que aplica identico a todos. Limitar el
+             regex a (core|web) solo dejaba el build rojo por los hermanos. -->
+        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-[a-z0-9\-]+@.*$</packageUrl>
         <cve>CVE-2026-47884</cve>
         <cve>CVE-2026-47885</cve>
         <cve>CVE-2026-47886</cve>
@@ -114,7 +122,10 @@
             fecha o al primer uso de LDAP embebido / WebAuthn con sesion
             distribuida / OAuth2 con DPoP, lo que ocurra primero.
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/spring\-security\-(core|web)@.*$</packageUrl>
+        <!-- Misma razon que arriba: el CPE cpe:2.3:a:*:spring_security:6.5.11
+             cubre la linea entera, y estas CVEs salen tambien en
+             spring-security-config y spring-security-crypto. -->
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/spring\-security\-[a-z0-9\-]+@.*$</packageUrl>
         <cve>CVE-2026-59270</cve>
         <cve>CVE-2026-47841</cve>
         <cve>CVE-2026-41707</cve>
