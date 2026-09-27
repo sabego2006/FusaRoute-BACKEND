@@ -24,6 +24,13 @@
 		     en Maven Central para esa linea. -->
 		<postgresql.version>42.7.13</postgresql.version>
 		<tomcat.version>10.1.60</tomcat.version>
+		<!-- log4j2: CVE-2026-34479 (CVSS 7.5) esta corregida desde 2.25.4; 2.25.5
+		     es la ultima de esa linea. El fallo real vive en log4j-1.2-api, que
+		     este proyecto NO trae (solo log4j-api y log4j-to-slf4j), y OWASP la
+		     asocia por el CPE generico cpe:2.3:a:apache:log4j. Se sube igual en
+		     vez de suprimirla: hay fix publicado, y actualizar es mas facil de
+		     defender que argumentar un falso positivo. -->
+		<log4j2.version>2.25.5</log4j2.version>
 	</properties>
 	<dependencies>
 		<dependency>
@@ -156,6 +163,12 @@
 							<!-- La key llega por variable de entorno; jamás se escribe aquí. -->
 							<nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
 							<failBuildOnCVSS>7</failBuildOnCVSS>
+							<!-- El OSS Index de Sonatype falla en todos los artefactos
+							     ("Failed to request component-reports") porque sin cuenta
+							     esta limitado por tasa: no aporta un solo hallazgo y llena
+							     el log de warnings que esconden los mensajes que si
+							     importan. Se apaga; la NVD sigue siendo la fuente. -->
+							<ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
 							<formats>
 								<format>HTML</format>
 								<format>JSON</format>

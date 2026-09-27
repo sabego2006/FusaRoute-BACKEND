@@ -49,6 +49,13 @@ jobs:
           restore-keys: |
             nvd-${{ runner.os }}-
 
+      # Guardarrail: un comentario XML con dos guiones seguidos deja el archivo
+      # de supresiones sin parsear, y Dependency-Check solo lo avisa con un
+      # WARNING que se pierde en el log. Paso el 2026-09-26 y dejo el job rojo
+      # tres dias. Esto falla en milisegundos y de forma ruidosa.
+      - name: Validar el XML de supresiones
+        run: xmllint --noout config/owasp/suppression.xml
+
       - name: Escanear dependencias con OWASP Dependency-Check
         run: mvn -B -Psecurity org.owasp:dependency-check-maven:check
 
