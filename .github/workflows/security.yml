@@ -53,8 +53,11 @@ jobs:
       # de supresiones sin parsear, y Dependency-Check solo lo avisa con un
       # WARNING que se pierde en el log. Paso el 2026-09-26 y dejo el job rojo
       # tres dias. Esto falla en milisegundos y de forma ruidosa.
+      # Se valida con python3 (viene en la imagen) y no con xmllint, que NO
+      # esta instalado en ubuntu-latest: el primer intento de este paso murio
+      # con "xmllint: command not found".
       - name: Validar el XML de supresiones
-        run: xmllint --noout config/owasp/suppression.xml
+        run: python3 -c "import sys,xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1]); print('suppression.xml parsea')" config/owasp/suppression.xml
 
       - name: Escanear dependencias con OWASP Dependency-Check
         run: mvn -B -Psecurity org.owasp:dependency-check-maven:check
