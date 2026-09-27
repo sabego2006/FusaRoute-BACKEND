@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.config;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.web.SecurityFilterChain;
@@ -33,9 +34,10 @@ import java.util.List;
  * credenciales habilitadas el comodin ni siquiera es valido, y aunque lo fuera,
  * abrir la API a cualquier origen es regalar la superficie de ataque.
  *
- * El JWT propiamente dicho (filtro, emision y validacion) llega con RF-02 en la
- * epica de Cuenta de usuario. Este archivo es solo el piso para que el ambiente
- * DEV arranque, se pueda comprobar y el frontend pueda hablarle.
+ * El registro (POST /api/auth/register, RF-01) es publico: un usuario nuevo no
+ * tiene todavia con que autenticarse. El JWT propiamente dicho (filtro, emision y
+ * validacion) llega con SCRUM-13 (login). Este archivo es el piso para que el
+ * ambiente DEV arranque, se pueda comprobar y el frontend pueda hablarle.
  */
 @Configuration
 @EnableWebSecurity
@@ -54,6 +56,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
                         .anyRequest().authenticated())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
