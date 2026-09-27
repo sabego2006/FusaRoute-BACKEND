@@ -56,3 +56,6 @@ application-local.properties
 # Salida de compilacion del plugin de Java de VS Code / Eclipse
 # (no es target/: es la carpeta 'bin' que crea el builder del IDE)
 bin/
+
+# Base local de OWASP Dependency-Check (la baja el escaneo, no se versiona)
+.nvd-data/

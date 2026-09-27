@@ -53,9 +53,7 @@ jobs:
       - name: Cachear dependencias de Maven
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/owasp/dependency-check-data
+          path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('pom.xml') }}
           restore-keys: |
             maven-${{ runner.os }}-
@@ -65,25 +63,25 @@ jobs:
       - name: Restaurar el snapshot vigente de la NVD
         uses: actions/cache/restore@v4
         with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: nvd-snapshot-${{ runner.os }}
+          path: ${{ github.workspace }}/.nvd-data
+          key: nvd-snapshot-v2-${{ runner.os }}
           restore-keys: |
-            nvd-snapshot-${{ runner.os }}
+            nvd-snapshot-v2-${{ runner.os }}
 
       # update-only actualiza la base sin evaluar dependencias. Separarlo del
       # escaneo permite publicar el snapshot nuevo aunque el escaneo salga rojo.
       - name: Actualizar la base de la NVD
-        run: mvn -B -Psecurity org.owasp:dependency-check-maven:update-only
+        run: mvn -B -Psecurity org.owasp:dependency-check-maven:update-only -DdataDirectory=${{ github.workspace }}/.nvd-data
 
       - name: Borrar el snapshot anterior
         continue-on-error: true
-        run: gh cache delete "nvd-snapshot-${{ runner.os }}" --repo "$GITHUB_REPOSITORY"
+        run: gh cache delete "nvd-snapshot-v2-${{ runner.os }}" --repo "$GITHUB_REPOSITORY"
 
       - name: Publicar el snapshot nuevo
         uses: actions/cache/save@v4
         with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: nvd-snapshot-${{ runner.os }}
+          path: ${{ github.workspace }}/.nvd-data
+          key: nvd-snapshot-v2-${{ runner.os }}
 
       - name: Validar el XML de supresiones
         run: python3 -c "import sys,xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1]); print('suppression.xml parsea')" config/owasp/suppression.xml
@@ -92,7 +90,7 @@ jobs:
       # significa "hay CVEs nuevas sin triar", no "main esta roto".
       - name: Buscar CVEs nuevas sin triar
         id: escaneo
-        run: mvn -B -Psecurity org.owasp:dependency-check-maven:check -DautoUpdate=false
+        run: mvn -B -Psecurity org.owasp:dependency-check-maven:check -DautoUpdate=false -DdataDirectory=${{ github.workspace }}/.nvd-data
 
       - name: Resumen para el informe de sprint
         if: always()

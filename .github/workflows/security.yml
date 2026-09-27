@@ -38,15 +38,19 @@ jobs:
           distribution: temurin
           java-version: '25'
 
-      # Caché del repositorio Maven, excluyendo la base de datos de la NVD:
-      # sin la exclusión, este caché duplicaría ~1 GB de la NVD y se comería
-      # el presupuesto de 10 GB de caché por repositorio.
+      # La base de la NVD vive FUERA de ~/.m2 a proposito. Antes se intentaba
+      # excluirla del cache de Maven con el patron "!~/.m2/.../dependency-check-data",
+      # y esa exclusion NO funciona: actions/cache no expande el ~ en un patron de
+      # negacion, asi que la base viajaba dentro del cache de Maven (212 MiB en vez
+      # de ~92) y se restauraba por una llave distinta, dependiente del hash del
+      # pom.xml. El escaneo dejaba de ser reproducible sin que se notara: la corrida
+      # 36299172832 dio "verde en frio" en 21 s porque encontro una base que
+      # supuestamente no estaba ahi. Con dataDirectory apuntando al workspace, cada
+      # cache guarda exactamente lo suyo.
       - name: Cachear dependencias de Maven
         uses: actions/cache@v4
         with:
-          path: |
-            ~/.m2/repository
-            !~/.m2/repository/org/owasp/dependency-check-data
+          path: ~/.m2/repository
           key: maven-${{ runner.os }}-${{ hashFiles('pom.xml') }}
           restore-keys: |
             maven-${{ runner.os }}-
@@ -58,10 +62,10 @@ jobs:
         id: snapshot
         uses: actions/cache/restore@v4
         with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: nvd-snapshot-${{ runner.os }}
+          path: ${{ github.workspace }}/.nvd-data
+          key: nvd-snapshot-v2-${{ runner.os }}
           restore-keys: |
-            nvd-snapshot-${{ runner.os }}
+            nvd-snapshot-v2-${{ runner.os }}
 
       # Guardarrail: un comentario XML con dos guiones seguidos deja el archivo
       # de supresiones sin parsear, y Dependency-Check solo lo avisa con un
@@ -79,7 +83,7 @@ jobs:
         if: steps.snapshot.outputs.cache-matched-key != ''
         run: |
           echo "Snapshot de la NVD: ${{ steps.snapshot.outputs.cache-matched-key }}"
-          mvn -B -Psecurity org.owasp:dependency-check-maven:check -DautoUpdate=false
+          mvn -B -Psecurity org.owasp:dependency-check-maven:check -DautoUpdate=false -DdataDirectory=${{ github.workspace }}/.nvd-data
 
       # Camino de arranque en frio: todavia no existe snapshot (primera corrida
       # con este workflow, o el cache expiro por los 7 dias sin uso de GitHub).
@@ -90,14 +94,14 @@ jobs:
         if: steps.snapshot.outputs.cache-matched-key == ''
         run: |
           echo "No habia snapshot de la NVD; se descarga y se siembra."
-          mvn -B -Psecurity org.owasp:dependency-check-maven:check
+          mvn -B -Psecurity org.owasp:dependency-check-maven:check -DdataDirectory=${{ github.workspace }}/.nvd-data
 
       - name: Sembrar el snapshot de la NVD
         if: always() && steps.snapshot.outputs.cache-matched-key == ''
         uses: actions/cache/save@v4
         with:
-          path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: nvd-snapshot-${{ runner.os }}
+          path: ${{ github.workspace }}/.nvd-data
+          key: nvd-snapshot-v2-${{ runner.os }}
 
       - name: Subir reporte OWASP
         if: always()
