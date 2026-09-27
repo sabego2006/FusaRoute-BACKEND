@@ -1,0 +1,123 @@
+# Vigilancia de la NVD. NO bloquea ningun PR ni el merge a main.
+#
+# Divide el trabajo con .github/workflows/security.yml asi:
+#   - security.yml (gate)  : "las dependencias de ESTE commit estan limpias?"
+#                            Bloqueante, deterministico, contra un snapshot fijo.
+#   - este workflow (watch): "aparecio una CVE nueva desde el ultimo snapshot?"
+#                            Informativo, semanal, y el unico que actualiza la
+#                            base de la NVD.
+#
+# La razon de separarlos: hasta el 2026-09-27 un solo job hacia las dos cosas, y
+# el resultado del PR dependia de lo que el NIST publicara esa madrugada. El
+# mismo codigo daba verde el sabado y rojo el lunes. Mezclar "mi codigo esta
+# limpio" con "el mundo cambio" hace que el rojo no signifique nada.
+#
+# Cuando este workflow sale rojo NO significa que main este roto: significa que
+# hay una CVE nueva de CVSS >= 7 sin triar. El triaje es una decision con
+# argumento (subir la version si hay fix publicado; suprimir con justificacion
+# de inalcanzabilidad si no lo hay; ver RNF-05), no algo que deba resolverse a
+# la carrera porque un PR quedo bloqueado.
+#
+# El umbral NO se relaja en ningun lado: failBuildOnCVSS sigue en 7 en el pom.
+name: Seguridad — vigilancia NVD (informativo)
+
+on:
+  schedule:
+    # Domingos 22:00 UTC (5:00 pm en Colombia): deja el snapshot fresco para la
+    # semana y da margen de triaje antes del comite, que suele ser en semana.
+    - cron: '0 22 * * 0'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  # Necesario para borrar el caché del snapshot anterior: las llaves de caché
+  # son inmutables, así que refrescar el snapshot es borrar y volver a guardar.
+  actions: write
+
+jobs:
+  vigilancia-nvd:
+    runs-on: ubuntu-latest
+    env:
+      NVD_API_KEY: ${{ secrets.NVD_API_KEY }}
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configurar JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Cachear dependencias de Maven
+        uses: actions/cache@v4
+        with:
+          path: ~/.m2/repository
+          key: maven-${{ runner.os }}-${{ hashFiles('pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-
+
+      # Se parte del snapshot vigente para descargar solo el delta, en vez de
+      # re-bajar ~1 GB y quemar el limite de tasa del NIST.
+      - name: Restaurar el snapshot vigente de la NVD
+        uses: actions/cache/restore@v4
+        with:
+          path: ${{ github.workspace }}/.nvd-data
+          key: nvd-snapshot-v2-${{ runner.os }}
+          restore-keys: |
+            nvd-snapshot-v2-${{ runner.os }}
+
+      # update-only actualiza la base sin evaluar dependencias. Separarlo del
+      # escaneo permite publicar el snapshot nuevo aunque el escaneo salga rojo.
+      - name: Actualizar la base de la NVD
+        run: mvn -B -Psecurity org.owasp:dependency-check-maven:update-only -DdataDirectory=${{ github.workspace }}/.nvd-data
+
+      - name: Borrar el snapshot anterior
+        continue-on-error: true
+        run: gh cache delete "nvd-snapshot-v2-${{ runner.os }}" --repo "$GITHUB_REPOSITORY"
+
+      - name: Publicar el snapshot nuevo
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ github.workspace }}/.nvd-data
+          key: nvd-snapshot-v2-${{ runner.os }}
+
+      - name: Validar el XML de supresiones
+        run: python3 -c "import sys,xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1]); print('suppression.xml parsea')" config/owasp/suppression.xml
+
+      # Este es el unico paso que puede poner el workflow en rojo, y su rojo
+      # significa "hay CVEs nuevas sin triar", no "main esta roto".
+      - name: Buscar CVEs nuevas sin triar
+        id: escaneo
+        run: mvn -B -Psecurity org.owasp:dependency-check-maven:check -DautoUpdate=false -DdataDirectory=${{ github.workspace }}/.nvd-data
+
+      - name: Resumen para el informe de sprint
+        if: always()
+        run: |
+          {
+            echo "## Vigilancia NVD — $(date -u +%Y-%m-%d)"
+            echo
+            if [ "${{ steps.escaneo.outcome }}" = "success" ]; then
+              echo "Sin CVEs de CVSS >= 7 sin suprimir. El snapshot quedo actualizado."
+            else
+              echo "**Hay CVEs de CVSS >= 7 sin triar.** Esto NO bloquea PRs ni main."
+              echo
+              echo "Que hacer, en este orden (RNF-05):"
+              echo "1. Revisar si existe version corregida publicada en Maven Central."
+              echo "2. Si existe, subir la version en el pom. No suprimir."
+              echo "3. Si no existe, verificar alcanzabilidad contra el codigo y suprimir"
+              echo "   en config/owasp/suppression.xml con su justificacion y su until."
+              echo "4. Nunca bajar failBuildOnCVSS."
+              echo
+              echo "El detalle esta en el artefacto reporte-owasp-vigilancia."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Subir reporte OWASP
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reporte-owasp-vigilancia
+          path: target/dependency-check-report.*
+          if-no-files-found: ignore

@@ -2,26 +2,39 @@
 <!--
   Archivo de supresion de OWASP Dependency-Check (SCRUM-146).
 
+  OJO AL EDITAR: XML 1.0 prohibe la secuencia de dos guiones seguidos dentro de
+  un comentario. Entre el 2026-09-23 y el 2026-09-26 este archivo tuvo tres de
+  esas secuencias en este mismo encabezado, usadas como raya de inciso. El
+  parser rechazo el archivo COMPLETO y Dependency-Check solo lo reporto como
+  WARNING ("Unable to parse suppression xml file"), asi que durante tres dias
+  ninguna supresion se aplico y el job "Seguridad" quedo rojo en main sin que
+  la causa fuera evidente. De ahi el paso de xmllint que ahora corre en
+  .github/workflows/security.yml antes del escaneo. Para incisos, un guion
+  simple; los guiones dobles solo son legales dentro de los bloques CDATA de
+  <notes>.
+
   ESTO NO ES BAJAR EL UMBRAL. failBuildOnCVSS sigue en 7 sin tocar. Cada entrada
   de abajo suprime CVEs puntuales de spring-framework (6.2.19) y spring-security
-  (6.5.11) porque, a la fecha (2026-09-23), NO existe todavia una version
+  (6.5.11) porque, a la fecha (2026-09-26), NO existe todavia una version
   publicada en Maven Central que las corrija (verificado contra
   repo1.maven.org/.../maven-metadata.xml: 6.2.19 y 6.5.11 son las ultimas de
-  sus lineas) -- no es que se eligiera no actualizar, es que no hay a que
-  actualizar.
+  sus lineas) - no es que se eligiera no actualizar, es que no hay a que
+  actualizar. Cuando si hay fix publicado se sube la version en vez de suprimir:
+  es lo que se hizo con log4j2 (2.24.3 a 2.25.5) por CVE-2026-34479.
 
   Contexto del lote: estas CVEs salieron el 2026-08 en una divulgacion masiva de
   91 CVEs de Spring en un solo dia. Multiples fuentes de investigacion en
   seguridad (JFrog, HeroDevs) documentan que el puntaje CVSS automatico de
   NVD/CISA para varias de ellas esta desacoplado de si el mecanismo es
-  alcanzable en una aplicacion tipica -- por ejemplo Spring mismo califica
+  alcanzable en una aplicacion tipica - por ejemplo Spring mismo califica
   CVE-2026-59313 en 2.6 (bajo) mientras NVD la marca 9.8.
 
   Verificacion de alcanzabilidad hecha en esta sesion, no solo cita de terceros:
   cada CVE suprimida requiere una caracteristica que este codebase NO usa hoy.
   Revisar de nuevo cuando el codigo cambie (agregar WebFlux, SSE, XSLT, SpEL
-  sobre input de usuario, LDAP o WebAuthn) o cuando exista un fix publicado,
-  lo que pase primero -- el <until> de cada entrada obliga esa revision.
+  sobre input de usuario, LDAP, WebAuthn u OAuth2/DPoP) o cuando exista un fix
+  publicado, lo que pase primero - el <until> de cada entrada obliga esa
+  revision.
 -->
 <suppressions xmlns="https://jeremylong.github.io/DependencyCheck/dependency-suppression.1.3.xsd">
 
@@ -50,7 +63,15 @@
             Revisar antes de esta fecha o al primer uso de WebFlux/SSE/XSLT/SpEL
             sobre input de usuario/RSocket/WebSocket, lo que ocurra primero.
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-(core|web)@.*$</packageUrl>
+        <!-- El regex cubre TODA la linea de spring-framework, no solo core y web.
+             La NVD atribuye estas CVEs al CPE cpe:2.3:a:*:spring_framework:6.2.19,
+             que aplica al artefacto completo, asi que OWASP las reporta igual en
+             spring-tx, spring-webmvc, spring-beans, spring-context y demas modulos
+             de la misma version. El argumento de alcanzabilidad es por
+             caracteristica (no hay WebFlux, SSE, XSLT ni SpEL sobre input de
+             usuario), no por jar, asi que aplica identico a todos. Limitar el
+             regex a (core|web) solo dejaba el build rojo por los hermanos. -->
+        <packageUrl regex="true">^pkg:maven/org\.springframework/spring\-[a-z0-9\-]+@.*$</packageUrl>
         <cve>CVE-2026-47884</cve>
         <cve>CVE-2026-47885</cve>
         <cve>CVE-2026-47886</cve>
@@ -80,14 +101,34 @@
             Hazelcast). El proyecto no implementa WebAuthn (autenticacion es JWT
             propio, RF-01/02/03) ni usa Spring Session distribuido.
 
-            Sin fix publicado para 6.5.x en Maven Central a la fecha (6.5.11 es la
-            ultima version de esa linea). Revisar antes de esta fecha o al primer
-            uso de LDAP embebido / WebAuthn con sesion distribuida, lo que ocurra
-            primero.
+            CVE-2026-41707: replay de pruebas DPoP en DPoPProofJwtDecoderFactory.
+            Un atacante inunda la cache de JWT ID para desalojar entradas
+            legitimas y reenviar una prueba DPoP interceptada. Solo es alcanzable
+            con un resource server OAuth2 con DPoP configurado: el arbol de
+            dependencias del escaneo no tiene ningun spring-security-oauth2-*, y
+            SecurityConfig.java es CORS + permitAll en /health + authenticated()
+            en el resto, con CSRF, httpBasic y formLogin desactivados.
+            Caso aparte en cuanto al fix: aqui SI existe una version corregida de
+            la linea 6.5 (la 6.5.12), pero el aviso oficial
+            https://spring.io/security/cve-2026-41707 la marca "Enterprise Support
+            Only" y por eso no esta en Maven Central (6.5.12 devuelve 404). Las
+            correcciones abiertas son 7.0.7 y 7.1.1, que exigen Spring Boot 4: un
+            salto mayor que el CLAUDE.md ya declaro como decision propia con su
+            tarjeta y su sustentacion, no algo que se mete a mitad de sprint.
+            Revisar al primer uso de OAuth2/DPoP.
+
+            Sin fix publicado en abierto para 6.5.x en Maven Central a la fecha
+            (6.5.11 es la ultima version de esa linea). Revisar antes de esta
+            fecha o al primer uso de LDAP embebido / WebAuthn con sesion
+            distribuida / OAuth2 con DPoP, lo que ocurra primero.
         ]]></notes>
-        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/spring\-security\-(core|web)@.*$</packageUrl>
+        <!-- Misma razon que arriba: el CPE cpe:2.3:a:*:spring_security:6.5.11
+             cubre la linea entera, y estas CVEs salen tambien en
+             spring-security-config y spring-security-crypto. -->
+        <packageUrl regex="true">^pkg:maven/org\.springframework\.security/spring\-security\-[a-z0-9\-]+@.*$</packageUrl>
         <cve>CVE-2026-59270</cve>
         <cve>CVE-2026-47841</cve>
+        <cve>CVE-2026-41707</cve>
     </suppress>
 
 </suppressions>
