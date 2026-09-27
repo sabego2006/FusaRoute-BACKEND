@@ -1,3 +1,20 @@
+# Gate de seguridad BLOQUEANTE, y deterministico a proposito.
+#
+# Por que existe separado de .github/workflows/security-nvd-watch.yml: un check
+# de CI debe ser funcion del commit. Hasta el 2026-09-27 este job resolvia la
+# base de la NVD en cada corrida, asi que el mismo codigo podia dar verde el
+# sabado y rojo el lunes solo porque el NIST publico CVEs nuevas en la noche.
+# Eso no es un gate, es un chequeo inestable: le pone rojo al PR de quien no
+# rompio nada y entrena al equipo a ignorar el color.
+#
+# Ahora el escaneo corre contra un SNAPSHOT fijo de la NVD, que solo cambia
+# cuando el workflow de vigilancia lo actualiza (semanal o a mano). Asi este
+# job responde una sola pregunta, la que le corresponde: las dependencias de
+# ESTE commit, tienen vulnerabilidades conocidas al momento del snapshot.
+#
+# Descubrir CVEs nuevas es otra pregunta y vive en el otro workflow, que no
+# bloquea ningun PR. El umbral NO se toca: failBuildOnCVSS sigue en 7 en el
+# pom.xml. Esto hace el gate estable, no permisivo.
 name: Seguridad
 
 on:
@@ -34,20 +51,17 @@ jobs:
           restore-keys: |
             maven-${{ runner.os }}-
 
-      # Caché semanal de la base de la NVD: sin esto, cada corrida re-descarga
-      # la base completa y quema minutos y el límite de tasa del NIST.
-      # Llave semanal (no por run) para no acumular ~1 GB por corrida.
-      - name: Calcular la semana ISO actual
-        id: semana
-        run: echo "clave=$(date -u +%G-%V)" >> "$GITHUB_OUTPUT"
-
-      - name: Cachear base de datos de la NVD
-        uses: actions/cache@v4
+      # Solo restaura, nunca guarda: el dueño del snapshot es el workflow de
+      # vigilancia. Si este job guardara, cada corrida dejaría ~1 GB nuevo y se
+      # comería el presupuesto de caché del repositorio.
+      - name: Restaurar el snapshot de la NVD
+        id: snapshot
+        uses: actions/cache/restore@v4
         with:
           path: ~/.m2/repository/org/owasp/dependency-check-data
-          key: nvd-${{ runner.os }}-${{ steps.semana.outputs.clave }}
+          key: nvd-snapshot-${{ runner.os }}
           restore-keys: |
-            nvd-${{ runner.os }}-
+            nvd-snapshot-${{ runner.os }}
 
       # Guardarrail: un comentario XML con dos guiones seguidos deja el archivo
       # de supresiones sin parsear, y Dependency-Check solo lo avisa con un
@@ -59,8 +73,31 @@ jobs:
       - name: Validar el XML de supresiones
         run: python3 -c "import sys,xml.dom.minidom; xml.dom.minidom.parse(sys.argv[1]); print('suppression.xml parsea')" config/owasp/suppression.xml
 
-      - name: Escanear dependencias con OWASP Dependency-Check
-        run: mvn -B -Psecurity org.owasp:dependency-check-maven:check
+      # Camino normal: hay snapshot, se escanea contra el y NO se actualiza.
+      # autoUpdate=false es lo que hace el resultado reproducible.
+      - name: Escanear contra el snapshot fijo de la NVD
+        if: steps.snapshot.outputs.cache-matched-key != ''
+        run: |
+          echo "Snapshot de la NVD: ${{ steps.snapshot.outputs.cache-matched-key }}"
+          mvn -B -Psecurity org.owasp:dependency-check-maven:check -DautoUpdate=false
+
+      # Camino de arranque en frio: todavia no existe snapshot (primera corrida
+      # con este workflow, o el cache expiro por los 7 dias sin uso de GitHub).
+      # Se descarga la NVD y se siembra el snapshot, para que las corridas
+      # siguientes ya sean deterministas. Sin esto el job fallaria por falta de
+      # datos, que es un rojo inutil.
+      - name: Escanear descargando la NVD (no habia snapshot)
+        if: steps.snapshot.outputs.cache-matched-key == ''
+        run: |
+          echo "No habia snapshot de la NVD; se descarga y se siembra."
+          mvn -B -Psecurity org.owasp:dependency-check-maven:check
+
+      - name: Sembrar el snapshot de la NVD
+        if: always() && steps.snapshot.outputs.cache-matched-key == ''
+        uses: actions/cache/save@v4
+        with:
+          path: ~/.m2/repository/org/owasp/dependency-check-data
+          key: nvd-snapshot-${{ runner.os }}
 
       - name: Subir reporte OWASP
         if: always()
