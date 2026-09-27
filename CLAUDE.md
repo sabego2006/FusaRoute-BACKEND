@@ -35,17 +35,20 @@ Concretamente: una clase en `domain/` **nunca** importa Spring, JPA, Jackson, HT
 com.fusaroute
 ├── domain
 │   ├── model/            Route, Stop, Neighborhood, Fare, TrafficSector, User, SearchRecord, Feedback
+│   ├── exception/        excepciones de negocio (FieldViolation, InvalidRegistrationException...)
 │   └── port
 │       ├── in/           interfaces de casos de uso (lo que el mundo puede pedirle al dominio)
 │       └── out/          interfaces que el dominio necesita (RouteRepositoryPort, TravelTimePort...)
 ├── application
 │   └── usecase/          implementación de los casos de uso; orquesta dominio + puertos out
 └── infrastructure
+    ├── config/           SecurityConfig, UseCaseConfig (cablea casos de uso con adaptadores)
     └── adapter
         ├── in
         │   └── web/      @RestController, DTOs de request/response, mappers
         └── out
             ├── persistence/  @Entity JPA, repositorios Spring Data, mappers a/desde dominio
+            ├── security/     hasheo de contraseñas (BCrypt), implementa PasswordHasherPort
             └── maps/         cliente HTTP de Google Maps
 ```
 
