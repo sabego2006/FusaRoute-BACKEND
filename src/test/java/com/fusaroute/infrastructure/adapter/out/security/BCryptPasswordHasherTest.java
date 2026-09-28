@@ -27,4 +27,17 @@ class BCryptPasswordHasherTest {
         assertThat(new BCryptPasswordEncoder().matches("Abcdef12", hash)).isTrue();
         assertThat(new BCryptPasswordEncoder().matches("otra", hash)).isFalse();
     }
+
+    @Test
+    void matches_acepta_la_contrasena_correcta_y_rechaza_otra() {
+        String hash = hasher.hash("Abcdef12");
+
+        assertThat(hasher.matches("Abcdef12", hash)).isTrue();
+        assertThat(hasher.matches("otra", hash)).isFalse();
+    }
+
+    @Test
+    void matches_con_hash_nulo_devuelve_false_sin_lanzar() {
+        assertThat(hasher.matches("Abcdef12", null)).isFalse();
+    }
 }

@@ -69,6 +69,19 @@ class UserPersistenceAdapterIT {
     }
 
     @Test
+    void find_by_email_devuelve_el_usuario_con_su_hash_o_vacio() {
+        adapter.save(User.register("Dora", Email.of("dora@x.co"), "$2a$12$hashdora"));
+
+        assertThat(adapter.findByEmail(Email.of("dora@x.co")))
+                .hasValueSatisfying(u -> {
+                    assertThat(u.getName()).isEqualTo("Dora");
+                    assertThat(u.getPasswordHash()).isEqualTo("$2a$12$hashdora");
+                    assertThat(u.isActive()).isTrue();
+                });
+        assertThat(adapter.findByEmail(Email.of("nadie@x.co"))).isEmpty();
+    }
+
+    @Test
     void el_unique_se_traduce_a_email_ya_registrado() {
         adapter.save(User.register("Cira", Email.of("cira@x.co"), "$2a$12$hash"));
 
