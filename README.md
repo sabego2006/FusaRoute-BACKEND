@@ -44,8 +44,8 @@ graph TB
     subgraph "application/usecase"
         S1[RegisterUserService]
         S2[LoginService]
-        S3[GetAllRoutesService]
-        S4[GetRouteByIdService]
+        S3[ListActiveRoutesService]
+        S4[GetRouteDetailService]
         S5[GetProfileService]
         S6[UpdateProfileService]
         S7[ChangePasswordService]
@@ -53,13 +53,13 @@ graph TB
 
     subgraph "domain"
         M["model/<br/>User · Route · Email<br/>PasswordPolicy · PhoneNumber · NameRule"]
-        PI["port/in/<br/>RegisterUserUseCase<br/>LoginUseCase<br/>GetProfileUseCase<br/>UpdateProfileUseCase<br/>ChangePasswordUseCase"]
+        PI["port/in/<br/>RegisterUserUseCase<br/>LoginUseCase<br/>GetProfileUseCase<br/>UpdateProfileUseCase<br/>ChangePasswordUseCase<br/>ListActiveRoutesUseCase<br/>GetRouteDetailUseCase"]
         PO["port/out/<br/>UserRepositoryPort<br/>RouteRepositoryPort<br/>PasswordHasherPort<br/>TokenIssuerPort"]
     end
 
     subgraph "infrastructure/adapter/out"
         P1[persistence/<br/>UserPersistenceAdapter<br/>RoutePersistenceAdapter]
-        P2[security/<br/>BcryptPasswordHasher]
+        P2[security/<br/>BCryptPasswordHasher]
         P3[security/<br/>JwtTokenIssuer]
     end
 
