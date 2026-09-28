@@ -28,10 +28,9 @@ public class ListActiveRoutesService implements ListActiveRoutesUseCase {
     @Override
     public List<Route> listActive() {
         LocalDate today = LocalDate.now(clock);
-        // Collator y no String.compareTo: una ruta que empiece con tilde debe ordenar junto a su letra.
         Collator collator = Collator.getInstance(Locale.forLanguageTag("es-CO"));
         return routeRepository.findAll().stream()
-                .filter(Route::isActive)
+                .filter(route -> route != null && route.isActive())
                 .map(route -> route.withCurrentFares(today))
                 .sorted((a, b) -> collator.compare(a.name(), b.name()))
                 .toList();

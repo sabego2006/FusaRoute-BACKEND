@@ -27,6 +27,23 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
+    @ExceptionHandler(com.fusaroute.domain.exception.UserNotFoundException.class)
+    public ProblemDetail handleUserNotFound(com.fusaroute.domain.exception.UserNotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    @ExceptionHandler(com.fusaroute.domain.exception.IncorrectCurrentPasswordException.class)
+    public ProblemDetail handleIncorrectPassword(com.fusaroute.domain.exception.IncorrectCurrentPasswordException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    @ExceptionHandler(com.fusaroute.domain.exception.InvalidProfileException.class)
+    public ProblemDetail handleInvalidProfile(com.fusaroute.domain.exception.InvalidProfileException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        problem.setProperty("violations", e.getViolations());
+        return problem;
+    }
+
     /** Validacion de negocio: devuelve todos los incumplimientos juntos. */
     @ExceptionHandler(InvalidRegistrationException.class)
     public ProblemDetail handleInvalidRegistration(InvalidRegistrationException e) {

@@ -22,7 +22,7 @@ public class GetRouteDetailService implements GetRouteDetailUseCase {
     @Override
     public Route getById(Long id) {
         return routeRepository.findById(id)
-                .filter(Route::isActive)
+                .filter(route -> route != null && route.isActive())
                 .map(route -> route.withCurrentFares(LocalDate.now(clock)))
                 .orElseThrow(RouteNotFoundException::new);
     }

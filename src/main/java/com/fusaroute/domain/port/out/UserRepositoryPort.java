@@ -15,6 +15,8 @@ public interface UserRepositoryPort {
 
     Optional<User> findByEmail(Email email);
 
+    Optional<User> findById(Long id);
+
     /**
      * Persiste el usuario y devuelve la version con id asignado.
      *

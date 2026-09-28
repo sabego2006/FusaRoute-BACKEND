@@ -46,6 +46,21 @@ public class User {
         return new User(null, name, email, passwordHash, null, UserRole.USER, true);
     }
 
+    /**
+     * Actualiza la información del perfil. Sigue la inmutabilidad del dominio
+     * devolviendo una nueva instancia.
+     */
+    public User updateProfile(String newName, Email newEmail, String newPhone) {
+        return new User(this.id, newName, newEmail, this.passwordHash, newPhone, this.role, this.active);
+    }
+
+    /**
+     * Actualiza el hash de la contraseña.
+     */
+    public User withPasswordHash(String newPasswordHash) {
+        return new User(this.id, this.name, this.email, newPasswordHash, this.phone, this.role, this.active);
+    }
+
     public Long getId() {
         return id;
     }
