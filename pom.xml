@@ -50,6 +50,13 @@
 		     flyway-database-postgresql es obligatorio desde Flyway 10: el soporte de cada
 		     motor salio del core a su propio artefacto. Las versiones las fija el BOM de
 		     spring-boot-starter-parent. -->
+		<!-- JWT (SCRUM-13): Nimbus JOSE para firmar (JwtEncoder) y validar (resource
+		     server) tokens HS256. La version la fija el BOM de spring-boot-starter-parent,
+		     asi no hay una libreria JWT extra cuya version seguir a mano. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>
