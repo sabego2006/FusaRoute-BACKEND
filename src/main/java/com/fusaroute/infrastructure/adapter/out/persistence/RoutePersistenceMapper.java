@@ -4,6 +4,7 @@ import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Traduce la entidad JPA a la ruta de dominio. Solo en un sentido: el catalogo es de
@@ -18,12 +19,17 @@ final class RoutePersistenceMapper {
         List<Fare> fares = entity.getFares().stream()
                 .map(f -> new Fare(f.getReferencePoint(), f.getAmount(), f.getOrderIndex(), f.getValidFrom()))
                 .toList();
+        // Ordenar por indice de recorrido; los huecos de la semilla simplemente no aparecen.
+        List<String> neighborhoods = entity.getNeighborhoods().entrySet().stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(Map.Entry::getValue)
+                .toList();
         return new Route(
                 entity.getId(),
                 entity.getName(),
                 entity.getType(),
                 entity.getStatus(),
-                List.copyOf(entity.getNeighborhoods()),
+                neighborhoods,
                 fares);
     }
 }

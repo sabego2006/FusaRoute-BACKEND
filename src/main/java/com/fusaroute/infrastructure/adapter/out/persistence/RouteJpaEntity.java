@@ -13,12 +13,13 @@ import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.OneToMany;
-import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.BatchSize;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * Fila de la tabla {@code routes} con sus barrios y tarifas. Modelo de persistencia,
@@ -49,13 +50,15 @@ public class RouteJpaEntity {
     @Column(nullable = false, length = 20)
     private RouteStatus status;
 
-    // El orden de recorrido lo da order_index (parte de la PK), no el orden de insercion.
+    // Mapa order_index -> nombre, y no List con @OrderColumn: la semilla deja huecos a
+    // proposito (la ruta "100" no tiene indice 2: tramo sin datos) y Hibernate rellena
+    // los huecos de una lista con null. El mapa los conserva; el mapper ordena por indice.
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "route_neighborhoods", joinColumns = @JoinColumn(name = "route_id"))
-    @OrderColumn(name = "order_index")
+    @MapKeyColumn(name = "order_index")
     @Column(name = "neighborhood_name", nullable = false, length = 120)
     @BatchSize(size = 50)
-    private List<String> neighborhoods;
+    private Map<Integer, String> neighborhoods;
 
     @OneToMany(fetch = FetchType.LAZY)
     @JoinColumn(name = "route_id", nullable = false, insertable = false, updatable = false)
@@ -82,7 +85,7 @@ public class RouteJpaEntity {
         return status;
     }
 
-    public List<String> getNeighborhoods() {
+    public Map<Integer, String> getNeighborhoods() {
         return neighborhoods;
     }
 
