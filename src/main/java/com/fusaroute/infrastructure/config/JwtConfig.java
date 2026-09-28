@@ -12,7 +12,6 @@ import org.springframework.security.oauth2.jwt.NimbusJwtEncoder;
 
 import javax.crypto.SecretKey;
 import javax.crypto.spec.SecretKeySpec;
-import java.time.Clock;
 import java.util.Base64;
 
 /**
@@ -53,10 +52,5 @@ public class JwtConfig {
     @Bean
     public JwtDecoder jwtDecoder() {
         return NimbusJwtDecoder.withSecretKey(key).macAlgorithm(MacAlgorithm.HS256).build();
-    }
-
-    @Bean
-    public Clock clock() {
-        return Clock.systemUTC();
     }
 }

@@ -4,6 +4,7 @@ import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
+import com.fusaroute.domain.exception.RouteNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
@@ -12,6 +13,7 @@ import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.List;
@@ -43,6 +45,18 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentials(InvalidCredentialsException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+    }
+
+    /** La ruta no existe o esta suspendida: para el catalogo publico es lo mismo. */
+    @ExceptionHandler(RouteNotFoundException.class)
+    public ProblemDetail handleRouteNotFound(RouteNotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    /** Un id que no es numerico (/api/routes/abc) es un error del cliente, no un 500. */
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, "Parametro de la peticion no valido");
     }
 
     /** JSON malformado o ilegible: 400 con mensaje generico, sin filtrar detalles. */
