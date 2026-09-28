@@ -26,6 +26,7 @@ import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -83,6 +84,18 @@ class AuthControllerTest {
     void un_endpoint_protegido_sin_token_responde_401() throws Exception {
         mockMvc.perform(get("/api/cualquier-cosa-protegida"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void autenticado_una_ruta_inexistente_responde_404_y_no_500() throws Exception {
+        mockMvc.perform(get("/api/no-existe").with(jwt()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void autenticado_un_metodo_no_permitido_responde_405_y_no_500() throws Exception {
+        mockMvc.perform(get("/api/auth/login").with(jwt()))
+                .andExpect(status().isMethodNotAllowed());
     }
 
     @Test
