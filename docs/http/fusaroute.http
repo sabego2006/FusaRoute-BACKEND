@@ -1,0 +1,130 @@
+### FusaRoute API — archivo de respaldo para VS Code REST Client
+### Usa la extensión "REST Client" de Huachao Mao.
+### Variables: ajustar baseUrl y token según el entorno.
+
+@baseUrl = http://localhost:8080
+@token = {{$dotenv JWT_TOKEN}}
+
+### ──────────────── 0. SALUD ────────────────
+
+### Health check
+GET {{baseUrl}}/health
+
+### ──────────────── 1. CATÁLOGO ────────────────
+
+### Listar rutas activas
+GET {{baseUrl}}/api/routes
+
+### Detalle de ruta
+GET {{baseUrl}}/api/routes/1
+
+### Ruta inexistente → 404
+GET {{baseUrl}}/api/routes/99999
+
+### ──────────────── 2. REGISTRO ────────────────
+
+### Registro válido
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Gladys Rodríguez",
+  "email": "gladys.demo@fusaroute.co",
+  "password": "GladysPass1"
+}
+
+### Registro con datos inválidos → 400
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "",
+  "email": "no-es-correo",
+  "password": "abc"
+}
+
+### ──────────────── 3. LOGIN ────────────────
+
+### Login válido → copiar el token de la respuesta
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "gladys.demo@fusaroute.co",
+  "password": "GladysPass1"
+}
+
+### Login con credenciales incorrectas → 401
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "gladys.demo@fusaroute.co",
+  "password": "clave-incorrecta"
+}
+
+### ──────────────── 4. PERFIL ────────────────
+
+### Ver perfil
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{token}}
+
+### Actualizar teléfono
+PUT {{baseUrl}}/api/users/me
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "Gladys Rodríguez",
+  "email": "gladys.demo@fusaroute.co",
+  "phone": "3101234567"
+}
+
+### Actualizar con datos inválidos → 400
+PUT {{baseUrl}}/api/users/me
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "name": "",
+  "email": "no-valido",
+  "phone": "abc"
+}
+
+### Cambiar contraseña → 204
+PUT {{baseUrl}}/api/users/me/password
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "currentPassword": "GladysPass1",
+  "newPassword": "NuevaClave1"
+}
+
+### Contraseña actual incorrecta → 400
+PUT {{baseUrl}}/api/users/me/password
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "currentPassword": "EquivocadaXX1",
+  "newPassword": "OtraClave1"
+}
+
+### ──────────────── 5. ERRORES ────────────────
+
+### Sin token → 401 con cuerpo JSON
+GET {{baseUrl}}/api/users/me
+
+### Token basura → 401
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer no.es.un.jwt
+
+### Content-Type incorrecto → 415 (no 500)
+POST {{baseUrl}}/api/auth/register
+Content-Type: text/plain
+
+no es json
+
+### Método no permitido → 405 (no 500)
+DELETE {{baseUrl}}/api/auth/login

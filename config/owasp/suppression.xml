@@ -53,7 +53,7 @@
             - CVE-2026-47889, CVE-2026-47891: mismo lote MVC/WebFlux/RSocket,
               caracteristicas ausentes.
             - CVE-2026-47890, CVE-2026-59313 (SSE, corrupcion de stream/CRLF):
-              sin endpoints SSE (HealthController es el unico controller hoy).
+              sin endpoints SSE en ningun controller (Health, Auth, Route, User).
             - CVE-2026-47892, CVE-2026-59283 (SpEL safety guard bypass): sin
               evaluacion de SpEL sobre entrada no confiable; Spring/HeroDevs
               documentan ademas que CISA la califico sin considerar que solo es
@@ -106,8 +106,9 @@
             legitimas y reenviar una prueba DPoP interceptada. Solo es alcanzable
             con un resource server OAuth2 con DPoP configurado: el arbol de
             dependencias del escaneo no tiene ningun spring-security-oauth2-*, y
-            SecurityConfig.java es CORS + permitAll en /health + authenticated()
-            en el resto, con CSRF, httpBasic y formLogin desactivados.
+            SecurityConfig.java es CORS + permitAll en /health, /api/auth/**
+            y GET /api/routes/** + authenticated() en el resto, con CSRF,
+            httpBasic y formLogin desactivados.
             Caso aparte en cuanto al fix: aqui SI existe una version corregida de
             la linea 6.5 (la 6.5.12), pero el aviso oficial
             https://spring.io/security/cve-2026-41707 la marca "Enterprise Support

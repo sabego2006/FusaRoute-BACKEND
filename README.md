@@ -1,8 +1,152 @@
 # FusaRoute Backend
 
 API REST para el sistema de información de transporte público de Fusagasugá.
+Arquitectura hexagonal (puertos y adaptadores), Java 25, Spring Boot 3.5, PostgreSQL en Supabase.
+
+## Cómo correr
+
+**Requisitos:** JDK 25 y Maven 3.9+. No requiere PostgreSQL local — DEV apunta al
+proyecto Supabase compartido `fusaroute-dev`.
+
+```bash
+cp .env.example .env
+# Llenar .env con las credenciales (ver .env.example para cada variable).
+# JWT_SECRET es obligatorio: genéralo con  openssl rand -base64 32
+# CORS_ALLOWED_ORIGINS: dejar COMENTADA si usas el default (localhost:4200,8081).
+#   Una línea presente pero vacía rompe CORS.
+mvn spring-boot:run -Dspring-boot.run.profiles=dev
+# Comprobar: GET http://localhost:8080/health  →  {"status":"UP"}
+```
+
+## Arquitectura
+
+### Contexto general
+
+```mermaid
+graph LR
+    U[👤 Usuario] -->|HTTP| A[Angular 21<br/>localhost:4200]
+    A -->|REST JSON| B[Spring Boot 3.5<br/>localhost:8080]
+    B -->|JDBC / SSL| DB[(PostgreSQL 17<br/>Supabase)]
+    B -.->|Directions API<br/>Sprint 4| GM[Google Maps]
+    style GM stroke-dasharray: 5 5
+```
+
+### Hexágono: capas y su mapeo al código
+
+```mermaid
+graph TB
+    subgraph "infrastructure/adapter/in/web"
+        C1[AuthController]
+        C2[RouteController]
+        C3[UserController]
+    end
+
+    subgraph "application/usecase"
+        S1[RegisterUserService]
+        S2[LoginService]
+        S3[GetAllRoutesService]
+        S4[GetRouteByIdService]
+        S5[GetProfileService]
+        S6[UpdateProfileService]
+        S7[ChangePasswordService]
+    end
+
+    subgraph "domain"
+        M["model/<br/>User · Route · Email<br/>PasswordPolicy · PhoneNumber · NameRule"]
+        PI["port/in/<br/>RegisterUserUseCase<br/>LoginUseCase<br/>GetProfileUseCase<br/>UpdateProfileUseCase<br/>ChangePasswordUseCase"]
+        PO["port/out/<br/>UserRepositoryPort<br/>RouteRepositoryPort<br/>PasswordHasherPort<br/>TokenIssuerPort"]
+    end
+
+    subgraph "infrastructure/adapter/out"
+        P1[persistence/<br/>UserPersistenceAdapter<br/>RoutePersistenceAdapter]
+        P2[security/<br/>BcryptPasswordHasher]
+        P3[security/<br/>JwtTokenIssuer]
+    end
+
+    C1 & C2 & C3 -->|"usa (port/in)"| PI
+    S1 & S2 & S3 & S4 & S5 & S6 & S7 -->|implementa| PI
+    S1 & S2 & S5 & S6 & S7 -->|"depende de (port/out)"| PO
+    P1 & P2 & P3 -->|implementa| PO
+    S1 & S2 & S5 & S6 & S7 --> M
+
+    style M fill:#e8f5e9
+    style PI fill:#e8f5e9
+    style PO fill:#e8f5e9
+```
+
+> La dependencia siempre apunta hacia adentro: `domain` no importa Spring, JPA ni Jackson.
+> ArchUnit lo verifica en cada build.
+
+### Secuencia: PUT /api/users/me (actualizar perfil)
+
+```mermaid
+sequenceDiagram
+    participant F as Angular
+    participant SC as SecurityConfig<br/>(JWT filter)
+    participant UC as UserController
+    participant US as UpdateProfileService
+    participant D as User (domain)
+    participant R as UserPersistenceAdapter
+    participant DB as PostgreSQL
+
+    F->>SC: PUT /api/users/me<br/>Authorization: Bearer {jwt}
+    SC->>SC: Validar JWT, extraer sub=userId
+    SC->>UC: request autenticado
+    UC->>UC: Parsear UpdateProfileRequest
+    UC->>US: updateProfile(command)
+    US->>R: findById(userId)
+    R->>DB: SELECT * FROM users
+    DB-->>R: fila
+    R-->>US: User (dominio)
+    US->>D: NameRule.validate, Email.validate, PhoneNumber.validate
+    alt Validación falla
+        US-->>UC: throw InvalidProfileException(errors)
+        UC-->>F: 400 + errors[]
+    end
+    US->>R: existsByEmail(newEmail)
+    alt Correo ya existe (y es otro usuario)
+        US-->>UC: throw EmailAlreadyRegisteredException
+        UC-->>F: 409
+    end
+    US->>D: user.updateProfile(name, email, phone)
+    D-->>US: nuevo User (inmutable)
+    US->>R: save(updatedUser)
+    R->>DB: UPDATE users SET ...
+    R-->>US: User guardado
+    US-->>UC: User
+    UC-->>F: 200 + UserProfileResponse
+```
 
 ## API
+
+### Tabla de endpoints
+
+| Método | Ruta | Auth | Código(s) | Descripción |
+|--------|------|------|-----------|-------------|
+| `GET` | `/health` | No | 200 | Estado del servicio |
+| `POST` | `/api/auth/register` | No | 201 / 400 / 409 | Registro de usuario |
+| `POST` | `/api/auth/login` | No | 200 / 401 | Inicio de sesión (JWT) |
+| `GET` | `/api/routes` | No | 200 | Catálogo de rutas activas |
+| `GET` | `/api/routes/{id}` | No | 200 / 404 | Detalle de una ruta |
+| `GET` | `/api/users/me` | Sí | 200 / 401 | Perfil del usuario autenticado |
+| `PUT` | `/api/users/me` | Sí | 200 / 400 / 401 / 409 | Actualizar perfil |
+| `PUT` | `/api/users/me/password` | Sí | 204 / 400 / 401 | Cambiar contraseña |
+
+### Contrato de error (ProblemDetail, RFC 9457)
+
+Todos los errores devuelven un cuerpo JSON con al menos `status` y `detail`:
+
+```json
+{ "type": "about:blank", "title": "Bad Request", "status": 400, "detail": "Datos de registro invalidos",
+  "errors": [{ "field": "password", "message": "La contrasena debe incluir al menos un numero" }] }
+```
+
+- `errors` solo aparece en `400` de validación (registro, perfil, contraseña).
+- `401` sin token o con token inválido: `detail` = "Autenticacion requerida".
+- `401` en login: `detail` = "Correo o contrasena incorrectos".
+- `409`: `detail` = "Ya existe una cuenta con ese correo".
+- `404`: `detail` = "Ruta no encontrada" / "El usuario no fue encontrado".
+- `415`, `405`: el código HTTP correcto (no 500), con `detail` descriptivo.
 
 ### `POST /api/auth/register` — Registro de usuario (RF-01, SCRUM-12)
 
