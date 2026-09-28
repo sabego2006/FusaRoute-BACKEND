@@ -19,8 +19,22 @@ public class BCryptPasswordHasher implements PasswordHasherPort {
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(COST);
 
+    // Hash de relleno para cuando el correo no existe: hace que matches() gaste el
+    // mismo tiempo de BCrypt que con una cuenta real (mitigacion best-effort de la
+    // enumeracion de usuarios por temporizacion).
+    private final String dummyHash = encoder.encode("relleno-para-igualar-tiempos");
+
     @Override
     public String hash(String raw) {
         return encoder.encode(raw);
+    }
+
+    @Override
+    public boolean matches(String raw, String hashOrNull) {
+        if (hashOrNull == null) {
+            encoder.matches(raw, dummyHash);
+            return false;
+        }
+        return encoder.matches(raw, hashOrNull);
     }
 }

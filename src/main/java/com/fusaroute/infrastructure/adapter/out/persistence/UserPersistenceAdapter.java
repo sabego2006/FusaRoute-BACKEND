@@ -7,6 +7,8 @@ import com.fusaroute.domain.port.out.UserRepositoryPort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
 
+import java.util.Optional;
+
 /**
  * Adaptador de salida que implementa {@link UserRepositoryPort} sobre Spring Data.
  */
@@ -22,6 +24,11 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
     @Override
     public boolean existsByEmail(Email email) {
         return repository.existsByEmail(email.value());
+    }
+
+    @Override
+    public Optional<User> findByEmail(Email email) {
+        return repository.findByEmail(email.value()).map(UserPersistenceMapper::toDomain);
     }
 
     @Override
