@@ -4,8 +4,10 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
+import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -34,10 +36,13 @@ import java.util.List;
  * credenciales habilitadas el comodin ni siquiera es valido, y aunque lo fuera,
  * abrir la API a cualquier origen es regalar la superficie de ataque.
  *
- * El registro (POST /api/auth/register, RF-01) es publico: un usuario nuevo no
- * tiene todavia con que autenticarse. El JWT propiamente dicho (filtro, emision y
- * validacion) llega con SCRUM-13 (login). Este archivo es el piso para que el
- * ambiente DEV arranque, se pueda comprobar y el frontend pueda hablarle.
+ * El registro (POST /api/auth/register, RF-01) y el login (POST /api/auth/login,
+ * RF-02) son publicos: quien los llama todavia no tiene con que autenticarse.
+ *
+ * JWT (SCRUM-13). La API es un resource server: valida el header
+ * "Authorization: Bearer <jwt>" con el JwtDecoder de {@code JwtConfig} y no crea
+ * sesion (STATELESS). Sin token, o con uno invalido o vencido, la respuesta es 401.
+ * Aun no hay conversion de rol a autoridad: llega con el primer endpoint de admin.
  */
 @Configuration
 @EnableWebSecurity
@@ -54,10 +59,12 @@ public class SecurityConfig {
         return http
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
+                .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .anyRequest().authenticated())
+                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .build();

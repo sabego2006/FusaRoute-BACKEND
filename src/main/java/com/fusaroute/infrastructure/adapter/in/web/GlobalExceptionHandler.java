@@ -2,6 +2,7 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
+import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -15,8 +16,7 @@ import java.util.List;
 
 /**
  * Manejo central de errores. Usa {@link ProblemDetail} (RFC 9457, nativo de
- * Spring 6) para que el cuerpo de error sea uniforme en toda la API. SCRUM-13
- * reutiliza este mismo manejador para su 401.
+ * Spring 6) para que el cuerpo de error sea uniforme en toda la API.
  */
 @RestControllerAdvice
 public class GlobalExceptionHandler {
@@ -35,6 +35,12 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
     public ProblemDetail handleEmailAlreadyRegistered(EmailAlreadyRegisteredException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    /** Login rechazado: 401 con el mensaje unico, sin distinguir el motivo. */
+    @ExceptionHandler(InvalidCredentialsException.class)
+    public ProblemDetail handleInvalidCredentials(InvalidCredentialsException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
     }
 
     /** JSON malformado o ilegible: 400 con mensaje generico, sin filtrar detalles. */
