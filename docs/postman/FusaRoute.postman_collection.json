@@ -1,0 +1,598 @@
+{
+  "info": {
+    "name": "FusaRoute API",
+    "description": "Colección completa de la API REST de FusaRoute.\n\nFlujo recomendado: ejecutar con el Collection Runner en orden (0→5).\nEl pre-request de Registro genera un correo único; Login guarda el token automáticamente.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "token",
+      "value": ""
+    },
+    {
+      "key": "testEmail",
+      "value": ""
+    },
+    {
+      "key": "testPassword",
+      "value": "GladysPass1"
+    }
+  ],
+  "item": [
+    {
+      "name": "0-Salud",
+      "item": [
+        {
+          "name": "Health check",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/health"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Cuerpo tiene status UP', () => {",
+                  "  pm.expect(pm.response.json().status).to.eql('UP');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1-Catálogo",
+      "item": [
+        {
+          "name": "Listar rutas activas",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Es un arreglo', () => {",
+                  "  pm.expect(pm.response.json()).to.be.an('array');",
+                  "});",
+                  "pm.test('Cada ruta tiene id, name, type', () => {",
+                  "  const routes = pm.response.json();",
+                  "  if (routes.length > 0) {",
+                  "    pm.expect(routes[0]).to.have.property('id');",
+                  "    pm.expect(routes[0]).to.have.property('name');",
+                  "    pm.expect(routes[0]).to.have.property('type');",
+                  "  }",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Detalle de ruta (id=1)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Tiene neighborhoods y fares', () => {",
+                  "  const r = pm.response.json();",
+                  "  pm.expect(r).to.have.property('neighborhoods');",
+                  "  pm.expect(r).to.have.property('fares');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta inexistente → 404",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/99999"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('ProblemDetail con detail', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Ruta no encontrada');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "2-Registro",
+      "item": [
+        {
+          "name": "Registro válido (correo único)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "exec": [
+                  "const ts = Date.now();",
+                  "const email = `gladys.${ts}@fusaroute.co`;",
+                  "pm.collectionVariables.set('testEmail', email);"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Rol es USER', () => {",
+                  "  pm.expect(pm.response.json().role).to.eql('USER');",
+                  "});",
+                  "pm.test('No expone passwordHash', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gladys Rodríguez\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Registro duplicado → 409",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 409', () => pm.response.to.have.status(409));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gladys Rodríguez\",\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Registro con datos inválidos → 400",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Tiene errors[]', () => {",
+                  "  pm.expect(pm.response.json().errors).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"email\": \"no-es-correo\",\n  \"password\": \"abc\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "3-Login",
+      "item": [
+        {
+          "name": "Login válido (guarda token)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Tiene token Bearer', () => {",
+                  "  const body = pm.response.json();",
+                  "  pm.expect(body.token).to.be.a('string').that.is.not.empty;",
+                  "  pm.expect(body.tokenType).to.eql('Bearer');",
+                  "  pm.collectionVariables.set('token', body.token);",
+                  "});",
+                  "pm.test('No expone passwordHash', () => {",
+                  "  pm.expect(pm.response.json().user).to.not.have.property('passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"{{testPassword}}\"\n}"
+            }
+          }
+        },
+        {
+          "name": "Login con credenciales incorrectas → 401",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Mensaje genérico', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Correo o contrasena incorrectos');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"email\": \"{{testEmail}}\",\n  \"password\": \"clave-incorrecta\"\n}"
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "4-Perfil",
+      "item": [
+        {
+          "name": "Ver perfil",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Tiene name, email, role', () => {",
+                  "  const p = pm.response.json();",
+                  "  pm.expect(p).to.have.property('name');",
+                  "  pm.expect(p).to.have.property('email');",
+                  "  pm.expect(p).to.have.property('role');",
+                  "});",
+                  "pm.test('No expone passwordHash', () => {",
+                  "  pm.expect(pm.response.json()).to.not.have.property('passwordHash');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Actualizar teléfono",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/users/me",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Gladys Rodríguez\",\n  \"email\": \"{{testEmail}}\",\n  \"phone\": \"3101234567\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Teléfono actualizado', () => {",
+                  "  pm.expect(pm.response.json().phone).to.eql('3101234567');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Actualizar con datos inválidos → 400",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/users/me",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"email\": \"no-valido\",\n  \"phone\": \"abc\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Tiene errors[]', () => {",
+                  "  pm.expect(pm.response.json().errors).to.be.an('array').that.is.not.empty;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Cambiar contraseña",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/users/me/password",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"{{testPassword}}\",\n  \"newPassword\": \"NuevaClave1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 204', () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Contraseña actual incorrecta → 400",
+          "request": {
+            "method": "PUT",
+            "url": "{{baseUrl}}/api/users/me/password",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"currentPassword\": \"EquivocadaXX1\",\n  \"newPassword\": \"OtraClave1\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Mensaje de contrasena incorrecta', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('La contrasena actual no es correcta');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "5-Errores",
+      "item": [
+        {
+          "name": "Sin token → 401 JSON",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Cuerpo ProblemDetail', () => {",
+                  "  pm.expect(pm.response.json().detail).to.eql('Autenticacion requerida');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Token basura → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer no.es.un.jwt"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Content-Type incorrecto → 415",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "text/plain"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "no es json"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 415 (no 500)', () => pm.response.to.have.status(415));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Método no permitido → 405",
+          "request": {
+            "method": "DELETE",
+            "url": "{{baseUrl}}/api/auth/login",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 405 (no 500)', () => pm.response.to.have.status(405));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "JSON malformado → 400",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/auth/register",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{ roto"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

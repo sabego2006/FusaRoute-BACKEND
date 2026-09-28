@@ -32,6 +32,11 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
     }
 
     @Override
+    public Optional<User> findById(Long id) {
+        return repository.findById(id).map(UserPersistenceMapper::toDomain);
+    }
+
+    @Override
     public User save(User user) {
         try {
             return UserPersistenceMapper.toDomain(repository.save(UserPersistenceMapper.toEntity(user)));

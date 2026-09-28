@@ -73,4 +73,21 @@ public class User {
     public boolean isActive() {
         return active;
     }
+
+    /**
+     * Actualiza los datos editables del perfil (RF-03). Devuelve un nuevo User
+     * inmutable — el original no se muta. El nombre y el correo ya vienen
+     * validados por el caso de uso; el telefono puede ser null (opcional).
+     */
+    public User updateProfile(String newName, Email newEmail, String newPhone) {
+        return new User(id, newName, newEmail, passwordHash, newPhone, role, active);
+    }
+
+    /**
+     * Devuelve una copia con el hash de contrasena actualizado (RF-03, cambio de
+     * contrasena). El caso de uso ya verifico la contrasena actual y valido la nueva.
+     */
+    public User withPasswordHash(String newPasswordHash) {
+        return new User(id, name, email, newPasswordHash, phone, role, active);
+    }
 }

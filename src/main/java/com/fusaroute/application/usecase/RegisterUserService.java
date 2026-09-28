@@ -4,6 +4,7 @@ import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.model.Email;
+import com.fusaroute.domain.model.NameRule;
 import com.fusaroute.domain.model.PasswordPolicy;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.port.in.RegisterUserCommand;
@@ -21,9 +22,6 @@ import java.util.List;
  */
 public class RegisterUserService implements RegisterUserUseCase {
 
-    private static final int NAME_MAX = 120;
-    private static final String NAME_FIELD = "name";
-
     private final UserRepositoryPort userRepository;
     private final PasswordHasherPort passwordHasher;
 
@@ -37,7 +35,7 @@ public class RegisterUserService implements RegisterUserUseCase {
         // 1. Validar los tres campos acumulando incumplimientos, para devolverlos
         //    juntos en un solo 400.
         List<FieldViolation> violations = new ArrayList<>();
-        validateName(command.name(), violations);
+        NameRule.validate(command.name()).ifPresent(violations::add);
         Email.validate(command.email()).ifPresent(violations::add);
         violations.addAll(PasswordPolicy.validate(command.password()));
         if (!violations.isEmpty()) {
@@ -58,12 +56,4 @@ public class RegisterUserService implements RegisterUserUseCase {
         return userRepository.save(user);
     }
 
-    private void validateName(String name, List<FieldViolation> violations) {
-        String trimmed = name == null ? "" : name.trim();
-        if (trimmed.isEmpty()) {
-            violations.add(new FieldViolation(NAME_FIELD, "El nombre es obligatorio"));
-        } else if (trimmed.length() > NAME_MAX) {
-            violations.add(new FieldViolation(NAME_FIELD, "El nombre supera los " + NAME_MAX + " caracteres"));
-        }
-    }
 }
