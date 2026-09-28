@@ -7,6 +7,7 @@ import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
+import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -29,8 +30,13 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 @WebMvcTest(RouteController.class)
-@Import(SecurityConfig.class)
-@TestPropertySource(properties = "app.cors.allowed-origins=http://localhost:4200")
+@Import({SecurityConfig.class, JwtConfig.class})
+@TestPropertySource(properties = {
+        "app.cors.allowed-origins=http://localhost:4200",
+        // SecurityConfig es resource server y necesita el JwtDecoder de JwtConfig;
+        // 32 bytes en Base64, el minimo que exige.
+        "app.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY="
+})
 class RouteControllerTest {
 
     @Autowired

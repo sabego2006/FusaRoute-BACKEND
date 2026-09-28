@@ -3,6 +3,8 @@ package com.fusaroute.domain.port.out;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.User;
 
+import java.util.Optional;
+
 /**
  * Puerto de salida hacia el almacen de usuarios. El dominio lo necesita, pero no
  * sabe si detras hay JPA, otra base o un mock de test.
@@ -10,6 +12,8 @@ import com.fusaroute.domain.model.User;
 public interface UserRepositoryPort {
 
     boolean existsByEmail(Email email);
+
+    Optional<User> findByEmail(Email email);
 
     /**
      * Persiste el usuario y devuelve la version con id asignado.

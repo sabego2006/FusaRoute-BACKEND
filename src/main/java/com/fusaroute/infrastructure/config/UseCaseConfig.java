@@ -2,12 +2,15 @@ package com.fusaroute.infrastructure.config;
 
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
+import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegisterUserService;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
+import com.fusaroute.domain.port.in.LoginUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
+import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -48,5 +51,12 @@ public class UseCaseConfig {
     public RegisterUserUseCase registerUserUseCase(UserRepositoryPort userRepository,
                                                    PasswordHasherPort passwordHasher) {
         return new RegisterUserService(userRepository, passwordHasher);
+    }
+
+    @Bean
+    public LoginUseCase loginUseCase(UserRepositoryPort userRepository,
+                                     PasswordHasherPort passwordHasher,
+                                     TokenIssuerPort tokenIssuer) {
+        return new LoginService(userRepository, passwordHasher, tokenIssuer);
     }
 }
