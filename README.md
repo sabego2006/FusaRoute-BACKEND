@@ -40,3 +40,44 @@ inmediato (sin verificación por correo este semestre).
 - **`409`** el correo ya tiene cuenta: `detail` = "Ya existe una cuenta con ese correo".
 
 El login y el JWT llegan con SCRUM-13.
+
+### `GET /api/routes` y `GET /api/routes/{id}` — Catálogo público de rutas (RF-15, SCRUM-19)
+
+Endpoints públicos (sin token ni sesión), de solo lectura. Cualquier otro método sobre
+`/api/routes` sigue exigiendo autenticación.
+
+**`GET /api/routes`** — `200 OK`. Solo rutas **activas** (las suspendidas no aparecen),
+ordenadas por nombre. Sin rutas activas devuelve `[]`.
+
+**`GET /api/routes/{id}`** — `200 OK` con una sola ruta, del mismo formato.
+
+```json
+{
+  "id": 8,
+  "name": "Fusagasugá - Pasca",
+  "type": "INTERMUNICIPAL",
+  "neighborhoods": ["Fusagasugá", "Corregimiento", "Alaska", "Pasca"],
+  "fares": [
+    { "referencePoint": "Alaska", "amount": 3550.00, "validFrom": "2026-02-05" },
+    { "referencePoint": "Pasca", "amount": 4300.00, "validFrom": "2025-01-16" }
+  ]
+}
+```
+
+- `type`: `URBANA` o `INTERMUNICIPAL`.
+- `neighborhoods`: barrios en orden de recorrido. Son nombres, no paradas: en Fusagasugá se
+  para la buseta con la mano.
+- `fares`: solo las tarifas **vigentes**. Por cada `referencePoint` se toma la fila con el
+  `validFrom` más reciente que no sea futuro; una tarifa anunciada para después de hoy no
+  aparece todavía. Van de menor a mayor `amount`.
+  - Ruta urbana: una sola tarifa con `referencePoint: null`.
+  - Ruta intermunicipal: una tarifa por punto de referencia de bajada.
+  - `validFrom` es la fecha de la última actualización de ese precio; puede ser de años
+    distintos dentro de una misma ruta (ver V3).
+- "Hoy" se calcula en la zona `America/Bogota`.
+
+**Errores** (cuerpo `ProblemDetail`, RFC 9457):
+
+- **`404`** la ruta no existe **o está suspendida** (`detail` = "Ruta no encontrada"): el
+  catálogo público no revela que existe una ruta suspendida.
+- **`400`** el `id` no es numérico (`/api/routes/abc`).

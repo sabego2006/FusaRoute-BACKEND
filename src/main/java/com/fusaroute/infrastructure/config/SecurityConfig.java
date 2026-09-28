@@ -36,7 +36,9 @@ import java.util.List;
  *
  * El registro (POST /api/auth/register, RF-01) es publico: un usuario nuevo no
  * tiene todavia con que autenticarse. El JWT propiamente dicho (filtro, emision y
- * validacion) llega con SCRUM-13 (login). Este archivo es el piso para que el
+ * validacion) llega con SCRUM-13 (login). El catalogo de rutas (GET /api/routes y
+ * /api/routes/{id}, RF-15) tambien es publico: se consulta sin sesion, y solo por GET,
+ * asi que toda escritura sobre rutas sigue exigiendo autenticacion. Este archivo es el piso para que el
  * ambiente DEV arranque, se pueda comprobar y el frontend pueda hablarle.
  */
 @Configuration
@@ -57,6 +59,7 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*").permitAll()
                         .anyRequest().authenticated())
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
