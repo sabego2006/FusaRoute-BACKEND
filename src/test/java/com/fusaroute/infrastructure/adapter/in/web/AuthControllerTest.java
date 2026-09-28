@@ -81,9 +81,11 @@ class AuthControllerTest {
     }
 
     @Test
-    void un_endpoint_protegido_sin_token_responde_401() throws Exception {
+    void un_endpoint_protegido_sin_token_responde_401_con_cuerpo_json() throws Exception {
         mockMvc.perform(get("/api/cualquier-cosa-protegida"))
-                .andExpect(status().isUnauthorized());
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").value("Autenticacion requerida"));
     }
 
     @Test

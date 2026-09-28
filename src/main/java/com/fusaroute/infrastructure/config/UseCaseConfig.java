@@ -1,13 +1,19 @@
 package com.fusaroute.infrastructure.config;
 
+import com.fusaroute.application.usecase.ChangePasswordService;
+import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegisterUserService;
+import com.fusaroute.application.usecase.UpdateProfileService;
+import com.fusaroute.domain.port.in.ChangePasswordUseCase;
+import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
+import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
@@ -58,5 +64,21 @@ public class UseCaseConfig {
                                      PasswordHasherPort passwordHasher,
                                      TokenIssuerPort tokenIssuer) {
         return new LoginService(userRepository, passwordHasher, tokenIssuer);
+    }
+
+    @Bean
+    public GetProfileUseCase getProfileUseCase(UserRepositoryPort userRepository) {
+        return new GetProfileService(userRepository);
+    }
+
+    @Bean
+    public UpdateProfileUseCase updateProfileUseCase(UserRepositoryPort userRepository) {
+        return new UpdateProfileService(userRepository);
+    }
+
+    @Bean
+    public ChangePasswordUseCase changePasswordUseCase(UserRepositoryPort userRepository,
+                                                        PasswordHasherPort passwordHasher) {
+        return new ChangePasswordService(userRepository, passwordHasher);
     }
 }

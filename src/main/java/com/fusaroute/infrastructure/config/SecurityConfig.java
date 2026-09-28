@@ -4,7 +4,6 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.http.SessionCreationPolicy;
@@ -16,36 +15,23 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import java.util.List;
 
 /**
- * Configuracion minima de seguridad y de CORS.
+ * Configuracion de seguridad y CORS.
  *
- * SEGURIDAD. Existe porque al agregar spring-boot-starter-security, Spring cierra
- * TODOS los endpoints por defecto detras de autenticacion basica, y /health
- * dejaria de responder. La regla es la conservadora: se abre /health, que es
- * publico a proposito porque lo consulta el healthcheck externo de la metrica de
- * fiabilidad, y todo lo demas exige autenticacion.
+ * SEGURIDAD. Al agregar spring-boot-starter-security, Spring cierra TODOS los
+ * endpoints por defecto. La regla es conservadora: se abren los publicos
+ * (/health, registro, login, catalogo de rutas) y todo lo demas exige JWT.
  *
- * CSRF se desactiva porque la API es sin estado y se autentica con JWT en el
- * header Authorization, no con cookie de sesion: sin cookie no hay vector CSRF.
+ * CSRF desactivado: la API es sin estado y se autentica con JWT en el header
+ * Authorization, no con cookie de sesion.
  *
- * CORS. El frontend corre en un origen distinto del backend (4200 contra 8080 en
- * DEV), asi que sin esto el navegador bloquea toda llamada del Angular a la API.
- * Los origenes permitidos salen de una variable de entorno, no de una lista
- * escrita a mano: en DEV es localhost:4200 y en PRE/PROD sera el dominio real.
+ * CORS. El frontend corre en un origen distinto (4200 contra 8080 en DEV).
+ * Los origenes salen de una variable de entorno; nunca se usa "*".
  *
- * Nota deliberada: se enumeran los origenes uno por uno y NO se usa "*". Con
- * credenciales habilitadas el comodin ni siquiera es valido, y aunque lo fuera,
- * abrir la API a cualquier origen es regalar la superficie de ataque.
+ * BEARER TOKEN RESOLVER personalizado: ignora el token en rutas publicas, para
+ * que un token expirado en localStorage no rompa el catalogo ni /health.
  *
- * El registro (POST /api/auth/register, RF-01) y el login (POST /api/auth/login,
- * RF-02) son publicos: quien los llama todavia no tiene con que autenticarse. El
- * catalogo de rutas (GET /api/routes y /api/routes/{id}, RF-15) tambien es publico:
- * se consulta sin sesion, y solo por GET, asi que toda escritura sobre rutas sigue
- * exigiendo autenticacion.
- *
- * JWT (SCRUM-13). La API es un resource server: valida el header
- * "Authorization: Bearer <jwt>" con el JwtDecoder de {@code JwtConfig} y no crea
- * sesion (STATELESS). Sin token, o con uno invalido o vencido, la respuesta es 401.
- * Aun no hay conversion de rol a autoridad: llega con el primer endpoint de admin.
+ * ENTRY POINT y ACCESS DENIED HANDLER en JSON: evitan respuestas 401/403 con
+ * cuerpo vacio.
  */
 @Configuration
 @EnableWebSecurity
@@ -68,7 +54,11 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*").permitAll()
                         .anyRequest().authenticated())
-                .oauth2ResourceServer(oauth2 -> oauth2.jwt(Customizer.withDefaults()))
+                .oauth2ResourceServer(oauth2 -> oauth2
+                        .bearerTokenResolver(new PublicEndpointBearerTokenResolver())
+                        .authenticationEntryPoint(new JsonAuthenticationEntryPoint())
+                        .accessDeniedHandler(new JsonAccessDeniedHandler())
+                        .jwt(jwt -> {}))
                 .httpBasic(basic -> basic.disable())
                 .formLogin(form -> form.disable())
                 .build();
