@@ -11,6 +11,8 @@ import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Optional;
+import io.micrometer.core.instrument.MeterRegistry;
+import io.micrometer.core.instrument.Timer;
 
 /**
  * Implementación del caso de uso de búsqueda de ruta.
@@ -20,35 +22,41 @@ public class SearchRouteService implements SearchRouteUseCase {
 
     private final RouteRepositoryPort routeRepository;
     private final TravelTimePort travelTimePort;
+    private final MeterRegistry meterRegistry;
 
-    public SearchRouteService(RouteRepositoryPort routeRepository, TravelTimePort travelTimePort) {
+    public SearchRouteService(RouteRepositoryPort routeRepository, TravelTimePort travelTimePort, MeterRegistry meterRegistry) {
         this.routeRepository = routeRepository;
         this.travelTimePort = travelTimePort;
+        this.meterRegistry = meterRegistry;
     }
 
     @Override
     public Route findBestRoute(String originNeighborhood, Coordinate originCoord,
                                String destNeighborhood, Coordinate destCoord) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            // 1. Obtener todas las rutas activas
+            List<Route> activeRoutes = routeRepository.findAll().stream()
+                    .filter(Route::isActive)
+                    .toList();
 
-        // 1. Obtener todas las rutas activas
-        List<Route> activeRoutes = routeRepository.findAll().stream()
-                .filter(Route::isActive)
-                .toList();
+            // 2. Filtrar rutas candidatas (que conecten origen y destino en el orden correcto)
+            List<Route> candidates = activeRoutes.stream()
+                    .filter(route -> connects(route, originNeighborhood, destNeighborhood))
+                    .toList();
 
-        // 2. Filtrar rutas candidatas (que conecten origen y destino en el orden correcto)
-        List<Route> candidates = activeRoutes.stream()
-                .filter(route -> connects(route, originNeighborhood, destNeighborhood))
-                .toList();
+            if (candidates.isEmpty()) {
+                throw new NoRouteAvailableException(originNeighborhood, destNeighborhood);
+            }
 
-        if (candidates.isEmpty()) {
-            throw new NoRouteAvailableException(originNeighborhood, destNeighborhood);
+            // 3. Calcular tiempo para cada candidata y seleccionar la mínima
+            return candidates.stream()
+                    .min(Comparator.comparing(route ->
+                        travelTimePort.getTravelTime(originCoord, destCoord, route.path())))
+                    .orElseThrow(() -> new NoRouteAvailableException(originNeighborhood, destNeighborhood));
+        } finally {
+            sample.stop(meterRegistry.timer("fusaroute.search.route.latency"));
         }
-
-        // 3. Calcular tiempo para cada candidata y seleccionar la mínima
-        return candidates.stream()
-                .min(Comparator.comparing(route ->
-                    travelTimePort.getTravelTime(originCoord, destCoord, route.path())))
-                .orElseThrow(() -> new NoRouteAvailableException(originNeighborhood, destNeighborhood));
     }
 
     private boolean connects(Route route, String origin, String destination) {
