@@ -99,8 +99,8 @@ Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credencial
 | Ambiente | Usuario | Esquema/base |
 |---|---|---|
 | DEV | `fusaroute_dev` (sin `rolsuper`/`rolcreaterole`/`rolbypassrls`) | esquema `fusaroute` en la base `postgres` del proyecto Supabase `fusaroute-dev`, compartido por el equipo |
-| PRE | usuario propio del proyecto Supabase de PRE | la de ese proyecto |
-| PROD | usuario propio del proyecto Supabase de PROD | la de ese proyecto |
+| PRE | — (diferido, ver tabla de ambientes) | — |
+| PROD | `fusaroute_prod` (mismas restricciones que `fusaroute_dev`) | esquema `fusaroute` en la base `postgres` del proyecto Supabase `fusaroute-prod` |
 
 La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a ese esquema; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
 
@@ -115,15 +115,15 @@ La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limi
 | Ambiente | Qué es | Estado hoy |
 |---|---|---|
 | **DEV** | proyecto Supabase compartido `fusaroute-dev` (rol `fusaroute_dev`, esquema `fusaroute`). Ya no es PostgreSQL local por integrante. | **activo** |
-| **PRE** | proyecto Supabase con datos de prueba. El ensayo general. | se monta en el Sprint 3 |
-| **PROD** | proyecto Supabase con las rutas reales; frontend en **Vercel**, backend en **Render** (tier gratis). Lo que ve el comité. | decidido el 2026-09-14, **por desplegar en el Sprint 3** · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
+| **PRE** | el ensayo general, con datos de prueba. | **diferido** (decisión del 2026-10-01): el plan gratis de Supabase permite 2 proyectos activos por organización —ya los ocupan DEV y PROD— y las 750 h/mes gratis de Render alcanzan para un solo servicio 24/7. El perfil existe en estructura, sin dónde montarlo |
+| **PROD** | proyecto Supabase `fusaroute-prod` (rol `fusaroute_prod`, esquema `fusaroute`) con las rutas reales; backend en **Render** (tier gratis, Docker, ver `render.yaml`), frontend en **Vercel**. Lo que ve el comité. | **desplegándose en el Sprint 3** (SCRUM-128): proyecto Supabase creado el 2026-10-01 · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
 
 ```
 src/main/resources/
 ├── application.properties        # común · spring.profiles.active=${SPRING_PROFILE:dev}
 ├── application-dev.properties    # Supabase fusaroute-dev, rol fusaroute_dev
-├── application-pre.properties    # claves declaradas y vacías hasta el Sprint 3
-├── application-prod.properties   # claves declaradas y vacías hasta el Sprint 3
+├── application-pre.properties    # PRE diferido: claves declaradas, sin ambiente
+├── application-prod.properties   # Supabase fusaroute-prod, rol fusaroute_prod (valores en Render)
 └── db/migration/                 # migraciones de Flyway, en orden V1, V2, ...
 ```
 

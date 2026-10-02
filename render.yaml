@@ -1,0 +1,45 @@
+# Blueprint de Render para el backend en PROD (SCRUM-128).
+# Es la documentacion ejecutable del servicio: lo que Render tiene configurado y lo
+# que dice este archivo no deben diferir. Los secretos NO van aqui: las claves con
+# sync: false se llenan a mano en el dashboard de Render, una sola vez.
+#
+# Sin "branch" a proposito: el servicio usa la rama elegida al crear el Blueprint.
+# El primer despliegue se hace desde la rama del PR para probarlo antes del merge;
+# despues del merge se cambia a main en el dashboard.
+services:
+  - type: web
+    name: fusaroute-backend
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    plan: free
+    # Virginia, la misma region que el proyecto Supabase (us-east-1): cada consulta
+    # cruza menos red, y eso cuenta para el p95 de RNF-01.
+    region: virginia
+    healthCheckPath: /health
+    # Solo despliega un commit cuyos checks de GitHub (el CI) pasaron. Un build rojo
+    # nunca llega a PROD.
+    autoDeployTrigger: checksPass
+    envVars:
+      - key: SPRING_PROFILE
+        value: prod
+      - key: DB_SCHEMA
+        value: fusaroute
+      # Session pooler de Supabase (puerto 5432), no el host directo: el host directo
+      # es solo IPv6 y Render no sale por IPv6. El 6543 (transaction pooler) rompe los
+      # prepared statements de Hibernate.
+      - key: DB_URL
+        sync: false
+      # fusaroute_prod.<project-ref>, nunca postgres.
+      - key: DB_USERNAME
+        sync: false
+      - key: DB_PASSWORD
+        sync: false
+      # Base64 de >= 32 bytes, distinto del de DEV: openssl rand -base64 32
+      - key: JWT_SECRET
+        sync: false
+      # URL exacta del frontend en Vercel, sin "*".
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Aun sin consumidor (llega con la busqueda de rutas); puede quedar vacia.
+      - key: GOOGLE_MAPS_API_KEY
+        sync: false

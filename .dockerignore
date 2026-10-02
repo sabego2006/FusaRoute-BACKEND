@@ -1,0 +1,14 @@
+# Lo que no entra al contexto de build de Docker. Lo critico es .env: las
+# credenciales viven en las variables de entorno de Render, nunca en la imagen.
+.env
+.env.*
+application-local.*
+target/
+.git/
+.github/
+.idea/
+.vscode/
+.claude/
+docs/
+*.md
+*.html

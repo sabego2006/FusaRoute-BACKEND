@@ -18,6 +18,27 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 # Comprobar: GET http://localhost:8080/health  →  {"status":"UP"}
 ```
 
+## Despliegue (PROD)
+
+| Pieza | Dónde | Configuración versionada |
+|---|---|---|
+| Backend | Render, tier gratis, región Virginia, contenedor Docker | `Dockerfile`, `render.yaml` |
+| Base de datos | Supabase `fusaroute-prod` (us-east-1), rol `fusaroute_prod`, esquema `fusaroute` | `db/migration/` (Flyway migra al arrancar) |
+| Frontend | Vercel | repo `FusaRoute-FRONTEND` |
+
+- **Render despliega solo commits de `main` con el CI en verde** (`autoDeployTrigger: checksPass`).
+  La imagen no corre tests: la compuerta es el CI.
+- **Variables:** las de `render.yaml` con `sync: false` se llenan en el dashboard de Render
+  y nunca en el repo. `SPRING_PROFILE=prod`.
+- **Conexión a Supabase por el session pooler**
+  (`jdbc:postgresql://aws-0-us-east-1.pooler.supabase.com:5432/postgres?sslmode=require`,
+  usuario `fusaroute_prod.<project-ref>`). El host directo es solo IPv6 y Render no sale
+  por IPv6; el puerto 6543 rompe los prepared statements de Hibernate.
+- **`CORS_ALLOWED_ORIGINS`** = URL exacta del frontend en Vercel. Sin la variable, el
+  arranque falla (a propósito); presente pero vacía, el navegador bloquea todas las
+  llamadas. Las URL de preview de Vercel no están permitidas.
+- **Cold start:** la instancia gratis se duerme tras 15 min sin tráfico. Ver RNF-02.
+
 ## Arquitectura
 
 ### Contexto general
