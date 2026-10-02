@@ -200,8 +200,8 @@ Las reglas de ArchUnit se escriben **contra nombres de paquete**. Por eso los no
 
 - `main` protegida. Ramas `feature/SCRUM-N-nombre` o `fix/SCRUM-N-nombre`.
 - **Pull Request obligatorio**, revisado por el otro integrante; nadie mergea su propio PR sin revisión. Es donde ambos aprenden el código del otro, que es justo lo que el docente busca.
-- **Bloque de ejecución manual por sprint:** cada integrante resuelve al menos una Subtask propia sin que un agente escriba el código ni corra el comando — Claude puede guiar, no ejecutar.
-- **Ningún commit ni PR lleva atribución a Claude** (`Co-Authored-By: Claude...`, `Claude-Session: ...`), en ningún caso — no solo en el bloque de ejecución manual. Regla general de los 3 repos, en el `CLAUDE.md` de la carpeta del curso, sección Git.
+- **Regla OBLIGATORIA del 30 % manual (desde el 2026-10-01):** al menos el 30 % de los ítems de cada integrante en el sprint se hacen a mano. Esos issues llevan la etiqueta `manual` y Original Estimate en Jira, y el worklog registra el tiempo real. **Si el issue tiene la etiqueta `manual`, Claude solo guía: no escribe el código ni corre los comandos, aunque se lo pidan.** El PR lleva la casilla `[x] Hecho a mano (SCRUM-N, est. X / real Y)`, y el revisor pide que se le explique el código antes de aprobar. Regla completa en el `CLAUDE.md` de la carpeta del curso.
+- **Ningún commit ni PR lleva atribución a Claude** (`Co-Authored-By: Claude...`, `Claude-Session: ...`), en ningún caso. Regla general de los 3 repos, en el `CLAUDE.md` de la carpeta del curso, sección Git.
 - Conventional Commits en español con key de Jira: `feat(SCRUM-N): descripción`, `fix(SCRUM-N): descripción`, etc.
 - CI en GitHub Actions: build + tests en cada PR. Si el CI falla, no se mergea.
 - Backlog en Jira; cada sustentación quincenal ante el comité cierra un hito.
