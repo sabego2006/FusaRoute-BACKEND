@@ -6,6 +6,8 @@ import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileCommand;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -40,6 +42,9 @@ public class UserController {
         this.changePassword = changePassword;
     }
 
+    @Operation(summary = "Obtener perfil", description = "Retorna la información del usuario autenticado")
+    @ApiResponse(responseCode = "200", description = "Perfil recuperado exitosamente")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
     @GetMapping
     public UserProfileResponse me(@AuthenticationPrincipal Jwt jwt) {
         Long userId = Long.parseLong(jwt.getSubject());
@@ -47,6 +52,10 @@ public class UserController {
         return UserProfileResponse.from(user);
     }
 
+    @Operation(summary = "Actualizar perfil", description = "Actualiza el nombre, correo y teléfono del usuario")
+    @ApiResponse(responseCode = "200", description = "Perfil actualizado exitosamente")
+    @ApiResponse(responseCode = "400", description = "Datos de actualización inválidos")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
     @PutMapping
     public UserProfileResponse update(@AuthenticationPrincipal Jwt jwt,
                                       @RequestBody UpdateProfileRequest request) {
@@ -56,6 +65,10 @@ public class UserController {
         return UserProfileResponse.from(user);
     }
 
+    @Operation(summary = "Cambiar contraseña", description = "Cambia la contraseña del usuario exigiendo la contraseña actual")
+    @ApiResponse(responseCode = "204", description = "Contraseña cambiada exitosamente")
+    @ApiResponse(responseCode = "400", description = "Contraseña actual incorrecta o nueva contraseña inválida")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
     @PutMapping("/password")
     public ResponseEntity<Void> changePassword(@AuthenticationPrincipal Jwt jwt,
                                                 @RequestBody ChangePasswordRequest request) {

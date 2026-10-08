@@ -52,7 +52,9 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*", "/swagger-ui/**",
+                                "/v3/api-docs/**", "/swagger-ui.html")
+                        .permitAll()
                         .anyRequest().authenticated())
                 .oauth2ResourceServer(oauth2 -> oauth2
                         .bearerTokenResolver(new PublicEndpointBearerTokenResolver())
