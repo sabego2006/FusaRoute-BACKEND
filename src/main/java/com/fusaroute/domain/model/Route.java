@@ -22,7 +22,6 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
         fares = List.copyOf(fares);
         path = List.copyOf(path);
     }
-    }
 
     public boolean isActive() {
         return status == RouteStatus.ACTIVA;
