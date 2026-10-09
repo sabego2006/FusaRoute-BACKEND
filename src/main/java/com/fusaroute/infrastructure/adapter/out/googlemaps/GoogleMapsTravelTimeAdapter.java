@@ -7,7 +7,6 @@ import org.springframework.stereotype.Component;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Adaptador de infraestructura que implementa la obtención de tiempos de viaje mediante Google Maps.
