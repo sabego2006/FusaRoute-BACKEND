@@ -7,10 +7,8 @@ import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 
-import java.time.Duration;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Optional;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 

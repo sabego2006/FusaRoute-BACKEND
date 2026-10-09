@@ -17,7 +17,7 @@ class RouteTest {
     }
 
     private static Route route(RouteType type, RouteStatus status, List<Fare> fares) {
-        return new Route(1L, "Ruta", type, status, List.of("A", "B"), fares);
+        return new Route(1L, "Ruta", type, status, List.of("A", "B"), fares, List.of());
     }
 
     @Test
