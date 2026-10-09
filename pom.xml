@@ -1,234 +1,216 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>3.5.16</version>
-		<relativePath/> <!-- lookup parent from repository -->
-	</parent>
-	<groupId>com.fusaroute</groupId>
-	<artifactId>fusaroute-backend</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
-	<name>FusaRoute Backend</name>
-	<description>Backend for FusaRoute project</description>
-	<properties>
-		<java.version>25</java.version>
-		<!-- Overrides puntuales sobre lo que gestiona el BOM de spring-boot-starter-parent
-		     3.5.16 (el patch mas reciente disponible hoy en Maven Central): CVE-2026-54291
-		     (postgresql, downgrade silencioso de channel-binding SCRAM) y CVE-2026-65905
-		     y otras de Tomcat DIGEST, ambas con CVSS >=7 y fix ya publicado. No se tocan
-		     spring-framework (6.2.19) ni spring-security (6.5.11): sus CVEs tambien
-		     detectadas por el escaneo no tienen todavia una version parcheada publicada
-		     en Maven Central para esa linea. -->
-		<postgresql.version>42.7.13</postgresql.version>
-		<tomcat.version>10.1.60</tomcat.version>
-		<!-- log4j2: CVE-2026-34479 (CVSS 7.5) esta corregida desde 2.25.4; 2.25.5
-		     es la ultima de esa linea. El fallo real vive en log4j-1.2-api, que
-		     este proyecto NO trae (solo log4j-api y log4j-to-slf4j), y OWASP la
-		     asocia por el CPE generico cpe:2.3:a:apache:log4j. Se sube igual en
-		     vez de suprimirla: hay fix publicado, y actualizar es mas facil de
-		     defender que argumentar un falso positivo. -->
-		<log4j2.version>2.25.5</log4j2.version>
-	</properties>
-	<dependencies>
-		<dependency>
+		xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+		<modelVersion>4.0.0</modelVersion>
+		<parent>
 			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-data-jpa</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-security</artifactId>
-		</dependency>
-		<!-- Flyway es el dueno del esquema: cada cambio viaja en un .sql revisable en el
-		     PR y se aplica igual en DEV, PRE y PROD. Hibernate solo valida (ddl-auto=validate).
-		     flyway-database-postgresql es obligatorio desde Flyway 10: el soporte de cada
-		     motor salio del core a su propio artefacto. Las versiones las fija el BOM de
-		     spring-boot-starter-parent. -->
-		<!-- JWT (SCRUM-13): Nimbus JOSE para firmar (JwtEncoder) y validar (resource
-		     server) tokens HS256. La version la fija el BOM de spring-boot-starter-parent,
-		     asi no hay una libreria JWT extra cuya version seguir a mano. -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-core</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.flywaydb</groupId>
-			<artifactId>flyway-database-postgresql</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.postgresql</groupId>
-			<artifactId>postgresql</artifactId>
-			<scope>runtime</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.security</groupId>
-			<artifactId>spring-security-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>com.tngtech.archunit</groupId>
-			<artifactId>archunit-junit5</artifactId>
-			<version>1.5.0</version>
-			<scope>test</scope>
-		</dependency>
-		<!-- Testcontainers: solo para el IT del adaptador de persistencia, que
-		     levanta un Postgres real y deja a Flyway aplicar V1..V4. Las versiones
-		     las fija el BOM de spring-boot-starter-parent. -->
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-testcontainers</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>postgresql</artifactId>
-			<scope>test</scope>
-		</dependency>
-		<dependency>
-			<groupId>org.testcontainers</groupId>
-			<artifactId>junit-jupiter</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
-	<build>
-		<plugins>
-			<plugin>
+			<artifactId>spring-boot-starter-parent</artifactId>
+			<version>3.5.16</version>
+			<relativePath/> <!-- lookup parent from repository -->
+		</parent>
+		<groupId>com.fusaroute</groupId>
+		<artifactId>fusaroute-backend</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+		<name>FusaRoute Backend</name>
+		<description>Backend for FusaRoute project</description>
+		<properties>
+			<java.version>25</java.version>
+			<postgresql.version>42.7.13</postgresql.version>
+			<tomcat.version>10.1.60</tomcat.version>
+			<log4j2.version>2.25.5</log4j2.version>
+		</properties>
+		<dependencies>
+			<dependency>
 				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>org.jacoco</groupId>
-				<artifactId>jacoco-maven-plugin</artifactId>
-				<version>0.8.14</version>
-				<executions>
-					<execution>
-						<id>prepare-agent</id>
-						<goals>
-							<goal>prepare-agent</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>report</id>
-						<phase>test</phase>
-						<goals>
-							<goal>report</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>check</id>
-						<goals>
-							<goal>check</goal>
-						</goals>
-						<configuration>
-							<rules>
-								<rule>
-									<element>PACKAGE</element>
-									<limits>
-										<limit>
-											<counter>INSTRUCTION</counter>
-											<value>COVEREDRATIO</value>
-											<minimum>0.70</minimum>
-										</limit>
-									</limits>
-									<includes>
-										<include>com.fusaroute.domain.*</include>
-										<include>com.fusaroute.application.*</include>
-									</includes>
-								</rule>
-							</rules>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-checkstyle-plugin</artifactId>
-				<version>3.6.0</version>
-				<dependencies>
-					<dependency>
-						<groupId>com.puppycrawl.tools</groupId>
-						<artifactId>checkstyle</artifactId>
-						<version>10.26.1</version>
-					</dependency>
-				</dependencies>
-				<configuration>
-					<configLocation>config/checkstyle/checkstyle.xml</configLocation>
-					<consoleOutput>true</consoleOutput>
-					<failOnViolation>true</failOnViolation>
-					<violationSeverity>error</violationSeverity>
-					<includeTestSourceDirectory>true</includeTestSourceDirectory>
-					<linkXRef>false</linkXRef>
-				</configuration>
-				<executions>
-					<execution>
-						<id>checkstyle-validate</id>
-						<phase>validate</phase>
-						<goals>
-							<goal>check</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
-	<profiles>
-		<profile>
-			<!-- mvn -Psecurity verify: escaneo de dependencias, aparte del build normal
-			     porque exige NVD_API_KEY y puede tardar minutos descargando la base NVD. -->
-			<id>security</id>
-			<build>
-				<plugins>
-					<plugin>
-						<groupId>org.owasp</groupId>
-						<artifactId>dependency-check-maven</artifactId>
-						<version>12.1.3</version>
-						<configuration>
-							<!-- La key llega por variable de entorno; jamás se escribe aquí. -->
-							<nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
-							<failBuildOnCVSS>7</failBuildOnCVSS>
-							<!-- El OSS Index de Sonatype falla en todos los artefactos
-							     ("Failed to request component-reports") porque sin cuenta
-							     esta limitado por tasa: no aporta un solo hallazgo y llena
-							     el log de warnings que esconden los mensajes que si
-							     importan. Se apaga; la NVD sigue siendo la fuente. -->
-							<ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
-							<formats>
-								<format>HTML</format>
-								<format>JSON</format>
-							</formats>
-							<!-- CVEs puntuales sin fix publicado, con justificación de
-							     inalcanzabilidad documentada por CVE. Ver el archivo. -->
-							<suppressionFiles>
-								<suppressionFile>config/owasp/suppression.xml</suppressionFile>
-							</suppressionFiles>
-						</configuration>
-						<executions>
-							<execution>
-								<id>owasp-check</id>
-								<phase>verify</phase>
-								<goals>
-									<goal>check</goal>
-								</goals>
-							</execution>
-						</executions>
-					</plugin>
-				</plugins>
-			</build>
-		</profile>
-	</profiles>
-</project>
+				<artifactId>spring-boot-starter-web</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-cache</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>com.github.ben-manes.caffeine</groupId>
+				<artifactId>caffeine</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-actuator</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>io.micrometer</groupId>
+				<artifactId>micrometer-registry-prometheus</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-data-jpa</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-security</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.flywaydb</groupId>
+				<artifactId>flyway-core</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.flywaydb</groupId>
+				<artifactId>flyway-database-postgresql</artifactId>
+			</dependency>
+			<dependency>
+				<groupId>org.postgresql</groupId>
+				<artifactId>postgresql</artifactId>
+				<scope>runtime</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-starter-test</artifactId>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.security</groupId>
+				<artifactId>spring-security-test</artifactId>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>com.tngtech.archunit</groupId>
+				<artifactId>archunit-junit5</artifactId>
+				<version>1.5.0</version>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.springframework.boot</groupId>
+				<artifactId>spring-boot-testcontainers</artifactId>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>postgresql</artifactId>
+				<scope>test</scope>
+			</dependency>
+			<dependency>
+				<groupId>org.testcontainers</groupId>
+				<artifactId>junit-jupiter</artifactId>
+				<scope>test</scope>
+			</dependency>
+		</dependencies>
+		<build>
+			<plugins>
+				<plugin>
+					<groupId>org.springframework.boot</groupId>
+					<artifactId>spring-boot-maven-plugin</artifactId>
+				</plugin>
+				<plugin>
+					<groupId>org.jacoco</groupId>
+					<artifactId>jacoco-maven-plugin</artifactId>
+					<version>0.8.14</version>
+					<executions>
+						<execution>
+							<id>prepare-agent</id>
+							<goals>
+								<goal>prepare-agent</goal>
+							</goals>
+						</execution>
+						<execution>
+							<id>report</id>
+							<phase>test</phase>
+							<goals>
+								<goal>report</goal>
+							</goals>
+						</execution>
+						<execution>
+							<id>check</id>
+							<goals>
+								<goal>check</goal>
+							</goals>
+							<configuration>
+								<rules>
+									<rule>
+										<element>PACKAGE</element>
+										<limits>
+											<limit>
+												<counter>INSTRUCTION</counter>
+												<value>COVEREDRATIO</value>
+												<minimum>0.70</minimum>
+											</limit>
+										</limits>
+										<includes>
+											<include>com.fusaroute.domain.*</include>
+											<include>com.fusaroute.application.*</include>
+										</includes>
+									</rule>
+								</rules>
+							</configuration>
+						</execution>
+					</executions>
+				</plugin>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-checkstyle-plugin</artifactId>
+					<version>3.6.0</version>
+					<dependencies>
+						<dependency>
+							<groupId>com.puppycrawl.tools</groupId>
+							<artifactId>checkstyle</artifactId>
+							<version>10.26.1</version>
+						</dependency>
+					</dependencies>
+					<configuration>
+						<configLocation>config/checkstyle/checkstyle.xml</configLocation>
+						<consoleOutput>true</consoleOutput>
+						<failOnViolation>true</failOnViolation>
+						<violationSeverity>error</violationSeverity>
+						<includeTestSourceDirectory>true</includeTestSourceDirectory>
+						<linkXRef>false</linkXRef>
+					</configuration>
+					<executions>
+						<execution>
+							<id>checkstyle-validate</id>
+							<phase>validate</phase>
+							<goals>
+								<goal>check</goal>
+							</goals>
+						</execution>
+					</executions>
+				</plugin>
+			</plugins>
+		</build>
+		<profiles>
+			<profile>
+				<id>security</id>
+				<build>
+					<plugins>
+						<plugin>
+							<groupId>org.owasp</groupId>
+							<artifactId>dependency-check-maven</artifactId>
+							<version>12.1.3</version>
+							<configuration>
+								<nvdApiKey>${env.NVD_API_KEY}</nvdApiKey>
+								<failBuildOnCVSS>7</failBuildOnCVSS>
+								<ossindexAnalyzerEnabled>false</ossindexAnalyzerEnabled>
+								<formats>
+									<format>HTML</format>
+									<format>JSON</format>
+								</formats>
+								<suppressionFiles>
+									<suppressionFile>config/owasp/suppression.xml</suppressionFile>
+								</suppressionFiles>
+							</configuration>
+							<executions>
+								<execution>
+									<id>owasp-check</id>
+									<phase>verify</phase>
+									<goals>
+										<goal>check</goal>
+									</goals>
+								</execution>
+							</executions>
+						</plugin>
+					</plugins>
+				</build>
+			</profile>
+		</profiles>
+	</project>
