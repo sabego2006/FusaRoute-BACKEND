@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Base de datos PostgreSQL para desarrollo local.
+  # Se usa la imagen oficial de Postgres.
+  db:
+    image: postgres:16-alpine
+    container_name: fusaroute-db
+    restart: always
+    environment:
+      - POSTGRES_USER=fusaroute_dev
+      - POSTGRES_PASSWORD=dev_password
+      - POSTGRES_DB=postgres
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fusaroute_dev -d postgres"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Aplicación Backend de FusaRoute
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fusaroute-backend
+    restart: on-failure
+    ports:
+      - "8080:8080"
+    environment:
+      - SPRING_PROFILES_ACTIVE=dev
+      - DB_URL=jdbc:postgresql://db:5432/postgres?currentSchema=fusaroute
+      - DB_USERNAME=fusaroute_dev
+      - DB_PASSWORD=dev_password
+      - DB_SCHEMA=fusaroute
+      - PORT=8080
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - fusaroute-network
+
+networks:
+  fusaroute-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
