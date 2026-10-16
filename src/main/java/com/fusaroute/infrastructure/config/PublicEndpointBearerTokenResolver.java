@@ -9,9 +9,10 @@ import java.util.List;
 
 /**
  * Resuelve el Bearer token solo en rutas protegidas. En rutas publicas
- * ({@code /health}, {@code /api/auth/**}, {@code GET /api/routes/**}) ignora
- * el header Authorization, de modo que un token expirado o invalido no cause
- * un 401 en endpoints que el usuario puede consultar sin sesion.
+ * ({@code /health}, {@code /actuator/health}, {@code /api/auth/**},
+ * {@code GET /api/routes/**}) ignora el header Authorization, de modo que un
+ * token expirado o invalido no cause un 401 en endpoints que el usuario o un
+ * monitor externo puede consultar sin sesion.
  *
  * Sin esto, el resource server valida el token en TODA peticion que lo traiga,
  * y el interceptor del frontend (que adjunta el token guardado en localStorage)
@@ -23,6 +24,7 @@ public class PublicEndpointBearerTokenResolver implements BearerTokenResolver {
 
     private static final List<String> PUBLIC_PATTERNS = List.of(
             "/health",
+            "/actuator/health",
             "/api/auth/**",
             "/api/routes",
             "/api/routes/**"
@@ -51,8 +53,8 @@ public class PublicEndpointBearerTokenResolver implements BearerTokenResolver {
     }
 
     private boolean isPublicMethodForPattern(String method, String pattern) {
-        // /health acepta cualquier metodo (pero en la practica es GET)
-        if ("/health".equals(pattern)) {
+        // /health y /actuator/health aceptan cualquier metodo (en la practica, GET)
+        if ("/health".equals(pattern) || "/actuator/health".equals(pattern)) {
             return true;
         }
         // /api/auth/** acepta POST (register y login)

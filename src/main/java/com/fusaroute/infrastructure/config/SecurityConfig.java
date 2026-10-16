@@ -32,6 +32,11 @@ import java.util.List;
  *
  * ENTRY POINT y ACCESS DENIED HANDLER en JSON: evitan respuestas 401/403 con
  * cuerpo vacio.
+ *
+ * ACTUATOR (RNF-01, SCRUM-127): /actuator/health es publico porque un balanceador
+ * o UptimeRobot lo consulta sin credenciales (RNF-02); el resto de /actuator/**
+ * (metrics, prometheus) exige JWT porque expone datos operativos internos.
+ * El probe interno de /api/_internal/** exige JWT por la misma razon.
  */
 @Configuration
 @EnableWebSecurity
@@ -50,7 +55,7 @@ public class SecurityConfig {
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
-                        .requestMatchers("/health").permitAll()
+                        .requestMatchers("/health", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*").permitAll()
                         .anyRequest().authenticated())
