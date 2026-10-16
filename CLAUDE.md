@@ -104,7 +104,7 @@ Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credencial
 
 La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a ese esquema; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
 
-**API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota.
+**API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota. Implementado en `GoogleMapsClient` (SCRUM-127): el bean del caché se llama `googleMapsTravelTime` (Caffeine, TTL fijado en `spring.cache.caffeine.spec`), y un fallo de Google nunca se cachea. Ver "Métricas y p95" en el README.
 
 **Errores explícitos.** Nada de `catch` vacíos ni de devolver `null` para disimular un fallo. Códigos HTTP correctos (`400` validación, `401` sin autenticar, `403` sin permiso, `404` no existe) y un cuerpo de error consistente. El docente evalúa fiabilidad con métrica.
 
