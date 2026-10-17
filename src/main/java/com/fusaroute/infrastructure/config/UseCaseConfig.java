@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.config;
 import com.fusaroute.application.usecase.ChangePasswordService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
+import com.fusaroute.application.usecase.GetRouteFareService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegisterUserService;
@@ -10,6 +11,7 @@ import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
+import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
@@ -51,6 +53,11 @@ public class UseCaseConfig {
     @Bean
     public GetRouteDetailUseCase getRouteDetailUseCase(RouteRepositoryPort routeRepository, Clock clock) {
         return new GetRouteDetailService(routeRepository, clock);
+    }
+
+    @Bean
+    public GetRouteFareUseCase getRouteFareUseCase(RouteRepositoryPort routeRepository, Clock clock) {
+        return new GetRouteFareService(routeRepository, clock);
     }
 
     @Bean

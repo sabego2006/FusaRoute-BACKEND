@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -113,5 +114,40 @@ class RouteTest {
         assertThat(current.neighborhoods()).containsExactly("A", "B");
         assertThat(current.isActive()).isFalse();
         assertThat(route(RouteType.URBANA, RouteStatus.ACTIVA, List.of()).isActive()).isTrue();
+    }
+
+    @Test
+    void sin_tarifas_la_ultima_actualizacion_queda_vacia() {
+        Route route = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of());
+
+        assertThat(route.lastFareUpdate()).isEmpty();
+    }
+
+    @Test
+    void con_una_tarifa_la_ultima_actualizacion_es_su_validFrom() {
+        Route route = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of(fare(null, 2600, 0, "2026-02-05")));
+
+        assertThat(route.lastFareUpdate()).isEqualTo(Optional.of(LocalDate.of(2026, 2, 5)));
+    }
+
+    @Test
+    void con_varias_tarifas_la_ultima_actualizacion_es_el_validFrom_mas_reciente() {
+        Route route = route(RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA, List.of(
+                fare("Alaska", 3550, 0, "2026-02-05"),
+                fare("Pasca", 4300, 7, "2025-01-16")));
+
+        assertThat(route.lastFareUpdate()).isEqualTo(Optional.of(LocalDate.of(2026, 2, 5)));
+    }
+
+    @Test
+    void la_ultima_actualizacion_ignora_tarifas_futuras_si_se_pide_tras_filtrar_vigentes() {
+        Route route = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of(
+                fare(null, 2600, 0, "2026-02-05"),
+                fare(null, 2800, 0, "2026-09-28")));
+
+        Route vigente = route.withCurrentFares(TODAY);
+
+        assertThat(vigente.lastFareUpdate()).isEqualTo(Optional.of(LocalDate.of(2026, 2, 5)));
+        assertThat(route.lastFareUpdate()).isEqualTo(Optional.of(LocalDate.of(2026, 9, 28)));
     }
 }

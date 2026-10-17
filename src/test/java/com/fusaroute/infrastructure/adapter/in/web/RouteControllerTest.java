@@ -6,6 +6,8 @@ import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
+import com.fusaroute.domain.port.in.GetRouteFareUseCase;
+import com.fusaroute.domain.port.in.GetRouteFareUseCase.RouteFare;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
@@ -47,6 +49,9 @@ class RouteControllerTest {
 
     @MockitoBean
     private GetRouteDetailUseCase getRouteDetailUseCase;
+
+    @MockitoBean
+    private GetRouteFareUseCase getRouteFareUseCase;
 
     private static Route urbana() {
         return new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
@@ -117,6 +122,33 @@ class RouteControllerTest {
         when(getRouteDetailUseCase.getById(99L)).thenThrow(new RouteNotFoundException());
 
         mockMvc.perform(get("/api/routes/99"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("Ruta no encontrada"));
+    }
+
+    @Test
+    void costo_del_pasaje_es_publico_y_devuelve_tarifas_y_ultima_actualizacion() throws Exception {
+        RouteFare fare = new RouteFare(2L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL,
+                List.of(new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
+                        new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16))),
+                LocalDate.of(2026, 2, 5));
+        when(getRouteFareUseCase.getByRouteId(2L)).thenReturn(fare);
+
+        mockMvc.perform(get("/api/routes/2/fare"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(2))
+                .andExpect(jsonPath("$.type").value("INTERMUNICIPAL"))
+                .andExpect(jsonPath("$.lastUpdatedAt").value("2026-02-05"))
+                .andExpect(jsonPath("$.fares[0].referencePoint").value("Alaska"))
+                .andExpect(jsonPath("$.fares[0].amount").value(3550.0))
+                .andExpect(jsonPath("$.fares[1].referencePoint").value("Pasca"));
+    }
+
+    @Test
+    void costo_del_pasaje_de_ruta_inexistente_o_suspendida_responde_404() throws Exception {
+        when(getRouteFareUseCase.getByRouteId(99L)).thenThrow(new RouteNotFoundException());
+
+        mockMvc.perform(get("/api/routes/99/fare"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("Ruta no encontrada"));
     }
