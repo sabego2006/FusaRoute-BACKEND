@@ -17,6 +17,8 @@ import jakarta.persistence.MapKeyColumn;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import org.hibernate.annotations.BatchSize;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 import java.util.List;
 import java.util.Map;
@@ -25,8 +27,12 @@ import java.util.Map;
  * Fila de la tabla {@code routes} con sus barrios y tarifas. Modelo de persistencia,
  * distinto de {@code domain.model.Route} a proposito. Solo lectura.
  *
- * {@code path_geojson}, {@code created_at} y {@code updated_at} no se mapean: el
- * catalogo publico no usa el trazado (lo usan el mapa y el modo offline).
+ * {@code created_at} y {@code updated_at} no se mapean: nada en el dominio los usa hoy.
+ *
+ * {@code path_geojson} SI se mapea (como texto JSON crudo; {@code RoutePersistenceMapper}
+ * lo parsea a {@code List<Coordinate>}): aunque el catalogo publico no lo necesita, desde
+ * SCRUM-47/48-50 el buscador de ruta (RF-04) si lo usa, via {@code route.path()} hacia
+ * {@code TravelTimePort}.
  *
  * Las dos colecciones son LAZY con {@code @BatchSize}: dos listas (bags) no se pueden
  * traer con JOIN FETCH a la vez, y sin batch serian 1+2N consultas contra una base remota.
@@ -65,6 +71,13 @@ public class RouteJpaEntity {
     @BatchSize(size = 50)
     private List<FareJpaEntity> fares;
 
+    // Texto JSON crudo (LineString de GeoJSON), NULL en las rutas sin trazado todavia.
+    // String y no un objeto propio: el unico consumidor es RoutePersistenceMapper, que
+    // ya lo parsea a List<Coordinate> del lado del dominio.
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "path_geojson")
+    private String pathGeoJson;
+
     protected RouteJpaEntity() {
         // Requerido por JPA.
     }
@@ -91,5 +104,9 @@ public class RouteJpaEntity {
 
     public List<FareJpaEntity> getFares() {
         return fares;
+    }
+
+    public String getPathGeoJson() {
+        return pathGeoJson;
     }
 }
