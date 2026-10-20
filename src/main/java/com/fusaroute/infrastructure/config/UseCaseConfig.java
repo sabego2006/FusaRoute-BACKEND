@@ -7,6 +7,7 @@ import com.fusaroute.application.usecase.GetRouteFareService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegisterUserService;
+import com.fusaroute.application.usecase.SearchRouteService;
 import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
@@ -15,11 +16,14 @@ import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
+import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
+import com.fusaroute.domain.port.out.TravelTimePort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
+import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -58,6 +62,13 @@ public class UseCaseConfig {
     @Bean
     public GetRouteFareUseCase getRouteFareUseCase(RouteRepositoryPort routeRepository, Clock clock) {
         return new GetRouteFareService(routeRepository, clock);
+    }
+
+    @Bean
+    public SearchRouteUseCase searchRouteUseCase(RouteRepositoryPort routeRepository,
+                                                  TravelTimePort travelTimePort,
+                                                  MeterRegistry meterRegistry) {
+        return new SearchRouteService(routeRepository, travelTimePort, meterRegistry);
     }
 
     @Bean

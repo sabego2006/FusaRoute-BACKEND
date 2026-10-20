@@ -6,6 +6,7 @@ import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
+import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
 import com.fusaroute.domain.exception.UserNotFoundException;
 import org.slf4j.Logger;
@@ -81,6 +82,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** La ruta no existe o esta suspendida: para el catalogo publico es lo mismo. */
     @ExceptionHandler(RouteNotFoundException.class)
     public ProblemDetail handleRouteNotFound(RouteNotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    /** Ninguna ruta candidata conecta el origen con el destino solicitados (RF-04). */
+    @ExceptionHandler(NoRouteAvailableException.class)
+    public ProblemDetail handleNoRouteAvailable(NoRouteAvailableException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
     }
 
