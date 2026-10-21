@@ -77,6 +77,29 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
+		<!-- RNF-01 (SCRUM-127): Actuator expone /actuator/metrics y /actuator/prometheus
+		     con el percentil 95 por endpoint, el instrumento que exige el RNF de
+		     rendimiento. micrometer-registry-prometheus es el formato que ese
+		     endpoint sirve; sin el no hay /actuator/prometheus, solo /actuator/metrics. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
+		<!-- Cache del tiempo de viaje por Google Maps, TTL 5 min (RNF-01): Caffeine en
+		     vez de un cache distribuido porque el backend corre en una sola instancia
+		     de Render; no hay otro nodo con el que sincronizar entradas. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>

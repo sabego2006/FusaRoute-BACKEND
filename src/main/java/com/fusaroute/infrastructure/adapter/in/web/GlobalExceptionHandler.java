@@ -7,6 +7,7 @@ import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
+import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.exception.UserNotFoundException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -82,6 +83,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(RouteNotFoundException.class)
     public ProblemDetail handleRouteNotFound(RouteNotFoundException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    /** Google Maps no respondio (RNF-01): 503, no 500, porque el fallo es del proveedor externo. */
+    @ExceptionHandler(TravelTimeUnavailableException.class)
+    public ProblemDetail handleTravelTimeUnavailable(TravelTimeUnavailableException e) {
+        log.warn("Tiempo de viaje no disponible: {}", e.getMessage());
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
     }
 
     /** Un id que no es numerico (/api/routes/abc) es un error del cliente, no un 500. */
