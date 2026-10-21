@@ -16,9 +16,20 @@ jobs:
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          pg_dump -h ${{ secrets.SUPABASE_DB_HOST }} \
-                 -U postgres \
-                 -d postgres \
+          # Resolve IPv4 address using getent
+          DB_HOST_DNS=${{ secrets.SUPABASE_DB_HOST }}
+          DB_HOST_IPV4=$(getent hosts $DB_HOST_DNS | awk '{ print $1 }' | grep -E '^[0-9.]+$' | head -n 1)
+
+          if [ -z "$DB_HOST_IPV4" ]; then
+            echo "Using DNS host as fallback: $DB_HOST_DNS"
+            FINAL_HOST=$DB_HOST_DNS
+          else
+            echo "Using resolved IPv4 address: $DB_HOST_IPV4"
+            FINAL_HOST=$DB_HOST_IPV4
+          fi
+
+          # Use connection string to force SSL and specific host
+          pg_dump "sslmode=require host=$FINAL_HOST port=5432 user=postgres dbname=postgres" \
                  -F c \
                  -f backup_$(date +%Y%m%d).dump
 
