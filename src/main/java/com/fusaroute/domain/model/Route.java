@@ -6,13 +6,14 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Ruta de buseta: un recorrido directo de un solo tramo, con sus barrios en orden
  * de recorrido y sus tarifas. Ida y vuelta son dos rutas independientes.
  */
 public record Route(Long id, String name, RouteType type, RouteStatus status,
-                    List<String> neighborhoods, List<Fare> fares) {
+                    List<String> neighborhoods, List<Fare> fares, List<Coordinate> path) {
 
     public Route {
         Objects.requireNonNull(name, "name");
@@ -20,6 +21,7 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
         Objects.requireNonNull(status, "status");
         neighborhoods = List.copyOf(neighborhoods);
         fares = List.copyOf(fares);
+        path = List.copyOf(path);
     }
 
     public boolean isActive() {
@@ -48,6 +50,16 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
         List<Fare> current = latestByPoint.values().stream()
                 .sorted(Comparator.comparing(Fare::amount).thenComparingInt(Fare::orderIndex))
                 .toList();
-        return new Route(id, name, type, status, neighborhoods, current);
+        return new Route(id, name, type, status, neighborhoods, current, path);
+    }
+
+    /**
+     * Fecha de ultima actualizacion del pasaje (RF-06): la mas reciente entre los
+     * {@code validFrom} de las tarifas presentes en esta instancia. Llamar despues
+     * de {@link #withCurrentFares} para que refleje solo lo vigente, no anuncios
+     * futuros.
+     */
+    public Optional<LocalDate> lastFareUpdate() {
+        return fares.stream().map(Fare::validFrom).max(Comparator.naturalOrder());
     }
 }
