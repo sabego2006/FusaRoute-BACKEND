@@ -1,0 +1,30 @@
+name: database-backup
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily at midnight UTC
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Run pg_dump
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          pg_dump -h ${{ secrets.SUPABASE_DB_HOST }} \
+                 -U postgres \
+                 -d postgres \
+                 -F c \
+                 -f backup_$(date +%Y%m%d).dump
+
+      - name: Upload Backup to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup
+          path: backup_*.dump
+          retention-days: 7
