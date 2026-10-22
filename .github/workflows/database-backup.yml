@@ -32,6 +32,12 @@ jobs:
                  -F c \
                  -f backup_$(date +%Y%m%d).dump
 
+      # NOTA: el run puede mostrar un warning "Node.js 20 is deprecated... forced
+      # to run on Node.js 24" para actions/upload-artifact@v4. Es un aviso interno
+      # de GitHub sobre el runtime con el que está empaquetada la action (no algo
+      # que controlemos desde este workflow) y no afecta el resultado del backup.
+      # Se resolverá solo cuando GitHub/el mantenedor de la action actualice su
+      # action.yml a node24; no requiere cambios aquí mientras siga en @v4.
       - name: Upload Backup to Artifacts
         uses: actions/upload-artifact@v4
         with:
