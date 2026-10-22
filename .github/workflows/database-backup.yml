@@ -9,19 +9,21 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Disable IPv6
+      - name: Resolve Host to IPv4 and Force Connection
         run: |
-          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
-          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
-
-      - name: Install PostgreSQL Client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+          # Resolve the hostname to an IPv4 address to bypass IPv6 routing issues
+          IP=$(dig +short A ${{ secrets.SUPABASE_DB_HOST }} | tail -n1)
+          if [ -z "$IP" ]; then
+            echo "Could not resolve host to IPv4"
+            exit 1
+          fi
+          echo "Resolved ${{ secrets.SUPABASE_DB_HOST }} to $IP"
+          echo "$IP ${{ secrets.SUPABASE_DB_HOST }}" | sudo tee -a /etc/hosts
 
       - name: Run pg_dump
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          # With IPv6 disabled, this will resolve to IPv4 automatically
           pg_dump "sslmode=require host=${{ secrets.SUPABASE_DB_HOST }} port=5432 user=postgres dbname=postgres" \
                  -F c \
                  -f backup_$(date +%Y%m%d).dump
