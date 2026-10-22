@@ -9,34 +9,32 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Resolve Host to IPv4 and Force Connection
+      - name: Disable IPv6
         run: |
-          echo "Attempting to resolve ${{ secrets.SUPABASE_DB_HOST }}..."
-          # Try multiple tools to resolve IPv4
-          IP=$(nslookup ${{ secrets.SUPABASE_DB_HOST }} | grep -A 1 "Name:" | grep "Address" | awk '{print $2}' | head -n1)
+          sudo sysctl -w net.ipv6.conf.all.disable_ipv6=1
+          sudo sysctl -w net.ipv6.conf.default.disable_ipv6=1
 
-          if [ -z "$IP" ]; then
-            IP=$(dig +short A ${{ secrets.SUPABASE_DB_HOST }} | grep -E '^[0-9.]+$' | head -n1)
-          fi
-
-          if [ -z "$IP" ]; then
-            echo "Automatic resolution failed. Checking for SUPABASE_DB_IP secret..."
-            IP=${{ secrets.SUPABASE_DB_IP }}
-          fi
-
-          if [ -z "$IP" ]; then
-            echo "Error: Could not resolve host to IPv4 and no SUPABASE_DB_IP secret provided."
-            exit 1
-          fi
-
-          echo "Using IP: $IP"
-          echo "$IP ${{ secrets.SUPABASE_DB_HOST }}" | sudo tee -a /etc/hosts
+      - name: Install PostgreSQL Client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client dnsutils
 
       - name: Run pg_dump
         env:
           PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
         run: |
-          pg_dump "sslmode=require host=${{ secrets.SUPABASE_DB_HOST }} port=5432 user=postgres dbname=postgres" \
+          # El DNS del runner no resuelve el host de forma confiable (ni con IPv6
+          # deshabilitado); se consulta explícitamente contra un resolver público
+          # para obtener la IPv4 y se usa esa IP directa en la conexión.
+          IP=$(dig +short A @8.8.8.8 ${{ secrets.SUPABASE_DB_HOST }} | tail -n1)
+          if [ -z "$IP" ]; then
+            IP=$(dig +short A @1.1.1.1 ${{ secrets.SUPABASE_DB_HOST }} | tail -n1)
+          fi
+          if [ -z "$IP" ]; then
+            echo "Error: no se pudo resolver ${{ secrets.SUPABASE_DB_HOST }} ni con 8.8.8.8 ni con 1.1.1.1"
+            exit 1
+          fi
+          echo "Resuelto a $IP"
+
+          pg_dump "sslmode=require host=$IP port=5432 user=postgres dbname=postgres" \
                  -F c \
                  -f backup_$(date +%Y%m%d).dump
 
