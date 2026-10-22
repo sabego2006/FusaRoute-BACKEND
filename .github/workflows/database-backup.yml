@@ -11,13 +11,25 @@ jobs:
     steps:
       - name: Resolve Host to IPv4 and Force Connection
         run: |
-          # Resolve the hostname to an IPv4 address to bypass IPv6 routing issues
-          IP=$(dig +short A ${{ secrets.SUPABASE_DB_HOST }} | tail -n1)
+          echo "Attempting to resolve ${{ secrets.SUPABASE_DB_HOST }}..."
+          # Try multiple tools to resolve IPv4
+          IP=$(nslookup ${{ secrets.SUPABASE_DB_HOST }} | grep -A 1 "Name:" | grep "Address" | awk '{print $2}' | head -n1)
+
           if [ -z "$IP" ]; then
-            echo "Could not resolve host to IPv4"
+            IP=$(dig +short A ${{ secrets.SUPABASE_DB_HOST }} | grep -E '^[0-9.]+$' | head -n1)
+          fi
+
+          if [ -z "$IP" ]; then
+            echo "Automatic resolution failed. Checking for SUPABASE_DB_IP secret..."
+            IP=${{ secrets.SUPABASE_DB_IP }}
+          fi
+
+          if [ -z "$IP" ]; then
+            echo "Error: Could not resolve host to IPv4 and no SUPABASE_DB_IP secret provided."
             exit 1
           fi
-          echo "Resolved ${{ secrets.SUPABASE_DB_HOST }} to $IP"
+
+          echo "Using IP: $IP"
           echo "$IP ${{ secrets.SUPABASE_DB_HOST }}" | sudo tee -a /etc/hosts
 
       - name: Run pg_dump
