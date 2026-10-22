@@ -9,8 +9,16 @@ jobs:
   backup:
     runs-on: ubuntu-latest
     steps:
-      - name: Install PostgreSQL Client
-        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+      - name: Install PostgreSQL Client 17
+        run: |
+          # El pg_dump 16 de Ubuntu no puede volcar un servidor Postgres 17
+          # (version del servidor en Supabase). Se instala el cliente 17 desde
+          # el repositorio oficial de PostgreSQL (PGDG).
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
 
       - name: Run pg_dump via Supavisor pooler (IPv4)
         env:
@@ -20,7 +28,7 @@ jobs:
           # desde 2024, y los runners de GitHub Actions no tienen ruta IPv6 utilizable
           # hacia Supabase. El pooler Supavisor en modo Session (puerto 5432) si
           # expone IPv4 y soporta las operaciones de sesion que pg_dump necesita.
-          pg_dump "sslmode=require host=${{ secrets.SUPABASE_DB_HOST }} port=5432 user=${{ secrets.SUPABASE_DB_USER }} dbname=postgres" \
+          /usr/lib/postgresql/17/bin/pg_dump "sslmode=require host=${{ secrets.SUPABASE_DB_HOST }} port=5432 user=${{ secrets.SUPABASE_DB_USER }} dbname=postgres" \
                  -F c \
                  -f backup_$(date +%Y%m%d).dump
 
