@@ -1,25 +1,35 @@
 package com.fusaroute.infrastructure.config;
 
 import com.fusaroute.application.usecase.ChangePasswordService;
+import com.fusaroute.application.usecase.ConfirmTotpService;
+import com.fusaroute.application.usecase.EnrollTotpService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
+import com.fusaroute.application.usecase.GetTotpStatusService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegisterUserService;
 import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
+import com.fusaroute.domain.port.in.ConfirmTotpUseCase;
+import com.fusaroute.domain.port.in.EnrollTotpUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
+import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
+import com.fusaroute.domain.port.out.RecoveryCodePort;
+import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
+import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -69,8 +79,12 @@ public class UseCaseConfig {
     @Bean
     public LoginUseCase loginUseCase(UserRepositoryPort userRepository,
                                      PasswordHasherPort passwordHasher,
-                                     TokenIssuerPort tokenIssuer) {
-        return new LoginService(userRepository, passwordHasher, tokenIssuer);
+                                     TokenIssuerPort tokenIssuer,
+                                     TotpPort totp,
+                                     RecoveryCodePort recoveryCodes,
+                                     RecoveryCodeRepositoryPort recoveryCodeRepository) {
+        return new LoginService(userRepository, passwordHasher, tokenIssuer, totp,
+                recoveryCodes, recoveryCodeRepository);
     }
 
     @Bean
@@ -87,5 +101,27 @@ public class UseCaseConfig {
     public ChangePasswordUseCase changePasswordUseCase(UserRepositoryPort userRepository,
                                                         PasswordHasherPort passwordHasher) {
         return new ChangePasswordService(userRepository, passwordHasher);
+    }
+
+    @Bean
+    public EnrollTotpUseCase enrollTotpUseCase(UserRepositoryPort userRepository,
+                                               TotpPort totp,
+                                               @Value("${app.totp.issuer:FusaRoute}") String issuer) {
+        return new EnrollTotpService(userRepository, totp, issuer);
+    }
+
+    @Bean
+    public ConfirmTotpUseCase confirmTotpUseCase(UserRepositoryPort userRepository,
+                                                 TotpPort totp,
+                                                 RecoveryCodePort recoveryCodes,
+                                                 RecoveryCodeRepositoryPort recoveryCodeRepository,
+                                                 TokenIssuerPort tokenIssuer) {
+        return new ConfirmTotpService(userRepository, totp, recoveryCodes,
+                recoveryCodeRepository, tokenIssuer);
+    }
+
+    @Bean
+    public GetTotpStatusUseCase getTotpStatusUseCase(UserRepositoryPort userRepository) {
+        return new GetTotpStatusService(userRepository);
     }
 }

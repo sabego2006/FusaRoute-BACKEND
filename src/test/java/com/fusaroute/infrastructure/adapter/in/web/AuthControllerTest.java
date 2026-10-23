@@ -4,6 +4,9 @@ import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
+import com.fusaroute.domain.exception.InvalidTotpException;
+import com.fusaroute.domain.exception.TotpEnrollmentRequiredException;
+import com.fusaroute.domain.exception.TotpRequiredException;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.IssuedToken;
 import com.fusaroute.domain.model.User;
@@ -77,7 +80,45 @@ class AuthControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"ana@x.co\",\"password\":\"mala\"}"))
                 .andExpect(status().isUnauthorized())
-                .andExpect(jsonPath("$.detail").value("Correo o contrasena incorrectos"));
+                .andExpect(jsonPath("$.detail").value("Correo o contrasena incorrectos"))
+                .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
+    void sin_totp_enrolado_responde_401_con_error_y_enrollment_token() throws Exception {
+        when(loginUseCase.login(any())).thenThrow(
+                new TotpEnrollmentRequiredException(
+                        new IssuedToken("enroll.jwt", Instant.parse("2026-10-05T12:10:00Z"))));
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"ana@x.co\",\"password\":\"Abcdef12\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("TOTP_ENROLLMENT_REQUIRED"))
+                .andExpect(jsonPath("$.enrollmentToken").value("enroll.jwt"))
+                .andExpect(jsonPath("$.expiresAt").value("2026-10-05T12:10:00Z"));
+    }
+
+    @Test
+    void totp_requerido_responde_401_con_error_totp_required() throws Exception {
+        when(loginUseCase.login(any())).thenThrow(new TotpRequiredException());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"ana@x.co\",\"password\":\"Abcdef12\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("TOTP_REQUIRED"));
+    }
+
+    @Test
+    void totp_invalido_responde_401_con_error_invalid_totp() throws Exception {
+        when(loginUseCase.login(any())).thenThrow(new InvalidTotpException());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"ana@x.co\",\"password\":\"Abcdef12\",\"totpCode\":\"000000\"}"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.error").value("INVALID_TOTP"));
     }
 
     @Test
@@ -90,13 +131,15 @@ class AuthControllerTest {
 
     @Test
     void autenticado_una_ruta_inexistente_responde_404_y_no_500() throws Exception {
-        mockMvc.perform(get("/api/no-existe").with(jwt()))
+        // Con SCRUM-179 el "autenticado" normal exige scope=full: un token sin el
+        // claim NO sirve para alcanzar endpoints protegidos.
+        mockMvc.perform(get("/api/no-existe").with(jwt().jwt(j -> j.claim("scope", "full"))))
                 .andExpect(status().isNotFound());
     }
 
     @Test
     void autenticado_un_metodo_no_permitido_responde_405_y_no_500() throws Exception {
-        mockMvc.perform(get("/api/auth/login").with(jwt()))
+        mockMvc.perform(get("/api/auth/login").with(jwt().jwt(j -> j.claim("scope", "full"))))
                 .andExpect(status().isMethodNotAllowed());
     }
 

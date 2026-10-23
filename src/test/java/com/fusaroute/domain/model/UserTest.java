@@ -8,7 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 class UserTest {
 
     @Test
-    void register_crea_usuario_activo_con_rol_user() {
+    void register_crea_usuario_activo_con_rol_user_y_sin_totp() {
         User user = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash");
 
         assertThat(user.getId()).isNull();
@@ -19,6 +19,8 @@ class UserTest {
         assertThat(user.getRole()).isEqualTo(UserRole.USER);
         assertThat(user.isActive()).isTrue();
         assertThat(user.getFailedLoginAttempts()).isZero();
+        assertThat(user.isTotpEnabled()).isFalse();
+        assertThat(user.getTotpSecret()).isNull();
     }
 
     @Test
@@ -92,5 +94,81 @@ class UserTest {
         assertThat(updated.getName()).isEqualTo("Ana");
         assertThat(updated.getPhone()).isEqualTo("3101234567");
         assertThat(original.getPasswordHash()).isEqualTo("$2a$12$viejo");
+    }
+
+    // --- Segundo factor TOTP (SCRUM-179). ----------------------------------------
+
+    @Test
+    void startTotpEnrollment_guarda_secreto_y_deja_el_segundo_factor_apagado() {
+        User original = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash");
+
+        User enrolling = original.startTotpEnrollment("JBSWY3DPEHPK3PXP");
+
+        assertThat(enrolling.getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
+        assertThat(enrolling.isTotpEnabled()).isFalse();
+        // El original no se muto
+        assertThat(original.getTotpSecret()).isNull();
+    }
+
+    @Test
+    void startTotpEnrollment_con_secreto_nulo_o_vacio_lanza() {
+        User user = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash");
+
+        assertThatThrownBy(() -> user.startTotpEnrollment(null))
+                .isInstanceOf(IllegalArgumentException.class);
+        assertThatThrownBy(() -> user.startTotpEnrollment("   "))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void confirmTotp_activa_el_segundo_factor_cuando_hay_secreto() {
+        User enrolling = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash")
+                .startTotpEnrollment("JBSWY3DPEHPK3PXP");
+
+        User confirmed = enrolling.confirmTotp();
+
+        assertThat(confirmed.isTotpEnabled()).isTrue();
+        assertThat(confirmed.getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
+    }
+
+    @Test
+    void confirmTotp_sin_secreto_lanza_para_evitar_estado_incoherente() {
+        User user = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash");
+
+        assertThatThrownBy(user::confirmTotp)
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void resetTotp_borra_el_secreto_y_apaga() {
+        User activated = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash")
+                .startTotpEnrollment("JBSWY3DPEHPK3PXP")
+                .confirmTotp();
+
+        User reset = activated.resetTotp();
+
+        assertThat(reset.isTotpEnabled()).isFalse();
+        assertThat(reset.getTotpSecret()).isNull();
+    }
+
+    @Test
+    void totp_activo_sin_secreto_se_rechaza_en_el_constructor() {
+        // Protege contra una fila incoherente (totp_enabled=true, totp_secret=null)
+        // que la restriccion ck_users_totp_consistency de V7 ya impide a nivel BD.
+        assertThatThrownBy(() -> new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, 0, true, null))
+                .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    @Test
+    void copias_conservan_el_estado_totp() {
+        User activated = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, 0, true, "JBSWY3DPEHPK3PXP");
+
+        assertThat(activated.registerFailedLogin().isTotpEnabled()).isTrue();
+        assertThat(activated.registerFailedLogin().getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
+        assertThat(activated.resetFailedLogins().isTotpEnabled()).isTrue();
+        assertThat(activated.updateProfile("Ana M", Email.of("ana@x.co"), null).isTotpEnabled()).isTrue();
+        assertThat(activated.withPasswordHash("$2a$12$otro").getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
     }
 }
