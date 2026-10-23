@@ -21,7 +21,8 @@ final class UserPersistenceMapper {
                 user.getPasswordHash(),
                 user.getPhone(),
                 user.getRole(),
-                user.isActive());
+                user.isActive(),
+                user.getFailedLoginAttempts());
     }
 
     static User toDomain(UserJpaEntity entity) {
@@ -32,6 +33,7 @@ final class UserPersistenceMapper {
                 entity.getPasswordHash(),
                 entity.getPhone(),
                 entity.getRole(),
-                entity.isActive());
+                entity.isActive(),
+                entity.getFailedLoginAttempts());
     }
 }

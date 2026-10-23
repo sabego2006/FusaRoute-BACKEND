@@ -34,7 +34,7 @@ class UpdateProfileServiceTest {
     private UpdateProfileService service;
 
     private final User existing = new User(1L, "Ana", Email.of("ana@x.co"),
-            "$2a$12$hash", null, UserRole.USER, true);
+            "$2a$12$hash", null, UserRole.USER, true, 0);
 
     @Test
     void actualizacion_valida_guarda_nombre_correo_y_telefono() {
