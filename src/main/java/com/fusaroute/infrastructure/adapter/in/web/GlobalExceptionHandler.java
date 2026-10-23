@@ -6,7 +6,11 @@ import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
+import com.fusaroute.domain.exception.InvalidTotpException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
+import com.fusaroute.domain.exception.TotpAlreadyEnabledException;
+import com.fusaroute.domain.exception.TotpEnrollmentRequiredException;
+import com.fusaroute.domain.exception.TotpRequiredException;
 import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.exception.UserNotFoundException;
 import org.slf4j.Logger;
@@ -65,6 +69,48 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentials(InvalidCredentialsException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+    }
+
+    /**
+     * Login con contrasena correcta pero segundo factor requerido (SCRUM-179).
+     * 401 con una PISTA machine-readable: el frontend lee {@code error} para
+     * saber que debe pedir el codigo del segundo factor, sin tener que inferirlo
+     * del texto del {@code detail}.
+     */
+    @ExceptionHandler(TotpRequiredException.class)
+    public ProblemDetail handleTotpRequired(TotpRequiredException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+        problem.setProperty("error", "TOTP_REQUIRED");
+        return problem;
+    }
+
+    /**
+     * Login con contrasena correcta pero el usuario aun no enrolo TOTP
+     * (SCRUM-179). Es la rama de bootstrap: se devuelve el {@code enrollmentToken}
+     * de vida corta para que el frontend arranque el flujo de enrolamiento
+     * forzado.
+     */
+    @ExceptionHandler(TotpEnrollmentRequiredException.class)
+    public ProblemDetail handleTotpEnrollmentRequired(TotpEnrollmentRequiredException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+        problem.setProperty("error", "TOTP_ENROLLMENT_REQUIRED");
+        problem.setProperty("enrollmentToken", e.getEnrollmentToken().value());
+        problem.setProperty("expiresAt", e.getEnrollmentToken().expiresAt().toString());
+        return problem;
+    }
+
+    /** Codigo del segundo factor incorrecto (SCRUM-179). */
+    @ExceptionHandler(InvalidTotpException.class)
+    public ProblemDetail handleInvalidTotp(InvalidTotpException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+        problem.setProperty("error", "INVALID_TOTP");
+        return problem;
+    }
+
+    /** TOTP ya estaba activo al pedir enrolamiento (SCRUM-179). */
+    @ExceptionHandler(TotpAlreadyEnabledException.class)
+    public ProblemDetail handleTotpAlreadyEnabled(TotpAlreadyEnabledException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 
     /** La contrasena actual es incorrecta al cambiarla. */

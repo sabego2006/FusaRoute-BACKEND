@@ -83,6 +83,15 @@
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
 		</dependency>
+		<!-- TOTP (SCRUM-179): segundo factor obligatorio tipo Microsoft/Google
+		     Authenticator. dev.samstevens.totp cubre secret generation, URI otpauth://
+		     y verificacion con tolerancia de ventana. Confinada al adaptador
+		     out/security por regla hexagonal; el dominio solo conoce TotpPort. -->
+		<dependency>
+			<groupId>dev.samstevens.totp</groupId>
+			<artifactId>totp</artifactId>
+			<version>1.7.1</version>
+		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>
 			<artifactId>flyway-core</artifactId>
