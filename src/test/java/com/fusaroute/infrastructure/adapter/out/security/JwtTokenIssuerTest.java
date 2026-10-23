@@ -29,7 +29,7 @@ class JwtTokenIssuerTest {
     private static final String OTHER_SECRET = "enl4d3Z1dHNycXBvbm1sa2ppaGdmZWRjYmE5ODc2NTQ=";
     private static final Instant NOW = Instant.parse("2026-09-28T12:00:00Z");
 
-    private final User user = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null, UserRole.USER, true);
+    private final User user = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null, UserRole.USER, true, 0);
 
     private JwtTokenIssuer issuerAt(Instant now, String secret) {
         JwtConfig config = new JwtConfig(secret);

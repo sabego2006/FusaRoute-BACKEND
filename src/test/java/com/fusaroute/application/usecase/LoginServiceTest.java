@@ -12,6 +12,7 @@ import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -46,7 +47,12 @@ class LoginServiceTest {
     private LoginService service;
 
     private static User user(boolean active) {
-        return new User(7L, "Ana", Email.of("ana@x.co"), HASH, null, UserRole.USER, active);
+        return user(active, 0);
+    }
+
+    private static User user(boolean active, int failedAttempts) {
+        return new User(7L, "Ana", Email.of("ana@x.co"), HASH, null, UserRole.USER, active,
+                failedAttempts);
     }
 
     @Test
@@ -131,6 +137,69 @@ class LoginServiceTest {
 
         verifyNoInteractions(userRepository);
         verifyNoInteractions(passwordHasher);
+    }
+
+    @Test
+    void contrasena_errada_de_usuario_existente_incrementa_el_contador() {
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user(true, 2)));
+        when(passwordHasher.matches("mala", HASH)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.login(new LoginCommand("ana@x.co", "mala")))
+                .isInstanceOf(InvalidCredentialsException.class);
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getFailedLoginAttempts()).isEqualTo(3);
+        verifyNoInteractions(tokenIssuer);
+    }
+
+    @Test
+    void correo_inexistente_no_incrementa_ni_guarda() {
+        when(userRepository.findByEmail(any())).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.login(new LoginCommand("nadie@x.co", "mala")))
+                .isInstanceOf(InvalidCredentialsException.class);
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void usuario_inactivo_con_contrasena_correcta_no_cuenta_como_intento_fallido() {
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user(false)));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.login(new LoginCommand("ana@x.co", "Abcdef12")))
+                .isInstanceOf(InvalidCredentialsException.class);
+
+        verify(userRepository, never()).save(any());
+    }
+
+    @Test
+    void login_exitoso_reinicia_el_contador_a_cero() {
+        IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-10-04T00:00:00Z"));
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user(true, 3)));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+        when(tokenIssuer.issue(any(), any())).thenReturn(token);
+
+        LoginResult result = service.login(new LoginCommand("ana@x.co", "Abcdef12"));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getFailedLoginAttempts()).isZero();
+        assertThat(result.user().getFailedLoginAttempts()).isZero();
+    }
+
+    @Test
+    void login_exitoso_sin_intentos_previos_no_guarda() {
+        User user = user(true, 0);
+        IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-10-04T00:00:00Z"));
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+        when(tokenIssuer.issue(user, Duration.ofDays(7))).thenReturn(token);
+
+        service.login(new LoginCommand("ana@x.co", "Abcdef12"));
+
+        verify(userRepository, never()).save(any());
     }
 
     private String messageOf(LoginCommand command) {

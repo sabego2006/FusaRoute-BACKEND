@@ -20,8 +20,9 @@ import java.util.Optional;
  * El bean lo arma {@code UseCaseConfig} en infraestructura.
  *
  * Todo motivo de rechazo lanza la MISMA {@link InvalidCredentialsException}.
- * El contador de intentos fallidos y el bloqueo temporal quedaron fuera de este
- * caso de uso a proposito: se movieron a SCRUM-155 (Sprint 3).
+ * Cuenta los intentos fallidos de un usuario existente (SCRUM-36) y los reinicia
+ * al iniciar sesion bien. El bloqueo temporal al quinto intento sigue fuera de
+ * este caso de uso: es SCRUM-37 (Sprint 4), dentro de SCRUM-155.
  */
 public class LoginService implements LoginUseCase {
 
@@ -56,11 +57,22 @@ public class LoginService implements LoginUseCase {
         boolean passwordMatches = passwordHasher.matches(
                 command.password(), found.map(User::getPasswordHash).orElse(null));
 
+        // 3. Solo una contrasena errada de una cuenta que existe cuenta como intento
+        //    fallido: es el vector de fuerza bruta. Un correo inexistente no tiene
+        //    fila donde contar, y el rechazo sigue siendo identico hacia afuera.
+        if (found.isPresent() && !passwordMatches) {
+            userRepository.save(found.get().registerFailedLogin());
+        }
+
         if (found.isEmpty() || !passwordMatches || !found.get().isActive()) {
             throw new InvalidCredentialsException();
         }
 
         User user = found.get();
+        if (user.getFailedLoginAttempts() > 0) {
+            user = user.resetFailedLogins();
+            userRepository.save(user);
+        }
         IssuedToken token = tokenIssuer.issue(user, TOKEN_VALIDITY);
         return new LoginResult(user, token);
     }

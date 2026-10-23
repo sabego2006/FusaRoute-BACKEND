@@ -54,7 +54,7 @@ class UserControllerTest {
     private ChangePasswordUseCase changePassword;
 
     private final User user = new User(1L, "Ana", Email.of("ana@x.co"),
-            "$2a$12$hash", "3101234567", UserRole.USER, true);
+            "$2a$12$hash", "3101234567", UserRole.USER, true, 0);
 
     // --- GET /api/users/me ---
 
@@ -83,7 +83,7 @@ class UserControllerTest {
     @Test
     void update_valido_responde_200() throws Exception {
         User updated = new User(1L, "Ana Maria", Email.of("nueva@x.co"),
-                "$2a$12$hash", "3109876543", UserRole.USER, true);
+                "$2a$12$hash", "3109876543", UserRole.USER, true, 0);
         when(updateProfile.updateProfile(any())).thenReturn(updated);
 
         mockMvc.perform(put("/api/users/me")

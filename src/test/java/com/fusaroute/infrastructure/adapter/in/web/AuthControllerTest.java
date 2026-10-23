@@ -53,7 +53,7 @@ class AuthControllerTest {
     @Test
     void login_valido_responde_200_con_token_y_sin_hash_y_es_publico() throws Exception {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                com.fusaroute.domain.model.UserRole.USER, true);
+                com.fusaroute.domain.model.UserRole.USER, true, 0);
         when(loginUseCase.login(any())).thenReturn(new LoginResult(user,
                 new IssuedToken("el.jwt.firmado", Instant.parse("2026-10-05T12:00:00Z"))));
 
@@ -110,7 +110,7 @@ class AuthControllerTest {
     @Test
     void registro_valido_responde_201_sin_hash_y_es_publico() throws Exception {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                com.fusaroute.domain.model.UserRole.USER, true);
+                com.fusaroute.domain.model.UserRole.USER, true, 0);
         when(registerUserUseCase.register(any())).thenReturn(user);
 
         mockMvc.perform(post("/api/auth/register")
