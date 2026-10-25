@@ -4,10 +4,13 @@ import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.model.UserRole;
+import com.fusaroute.domain.port.out.SecretCipherPort;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
+import org.springframework.boot.test.context.TestConfiguration;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
@@ -25,12 +28,35 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
  *
  * Con {@code disabledWithoutDocker = true} el IT se salta solo si no hay Docker,
  * asi el build no se rompe en una maquina sin el daemon.
+ *
+ * Desde SCRUM-179 el adaptador exige un {@link SecretCipherPort}. Las pruebas
+ * de este IT trabajan con usuarios sin TOTP, asi que basta con un cipher
+ * identidad para que la cadena arranque; el cifrado real tiene su propio test
+ * unitario en {@code out/security}.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(UserPersistenceAdapter.class)
+@Import({UserPersistenceAdapter.class, UserPersistenceAdapterIT.TestConfig.class})
 @Testcontainers(disabledWithoutDocker = true)
 class UserPersistenceAdapterIT {
+
+    @TestConfiguration
+    static class TestConfig {
+        @Bean
+        SecretCipherPort secretCipher() {
+            return new SecretCipherPort() {
+                @Override
+                public String encrypt(String plaintext) {
+                    return plaintext;
+                }
+
+                @Override
+                public String decrypt(String ciphertext) {
+                    return ciphertext;
+                }
+            };
+        }
+    }
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");

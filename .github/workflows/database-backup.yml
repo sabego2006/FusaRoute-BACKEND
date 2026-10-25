@@ -1,0 +1,46 @@
+name: database-backup
+
+on:
+  schedule:
+    - cron: '0 0 * * *' # Daily at midnight UTC
+  workflow_dispatch: # Allow manual trigger
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL Client 17
+        run: |
+          # El pg_dump 16 de Ubuntu no puede volcar un servidor Postgres 17
+          # (version del servidor en Supabase). Se instala el cliente 17 desde
+          # el repositorio oficial de PostgreSQL (PGDG).
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(. /etc/os-release && echo $VERSION_CODENAME)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client-17
+
+      - name: Run pg_dump via Supavisor pooler (IPv4)
+        env:
+          PGPASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          # La conexion directa (db.<project>.supabase.co) solo resuelve a IPv6
+          # desde 2024, y los runners de GitHub Actions no tienen ruta IPv6 utilizable
+          # hacia Supabase. El pooler Supavisor en modo Session (puerto 5432) si
+          # expone IPv4 y soporta las operaciones de sesion que pg_dump necesita.
+          /usr/lib/postgresql/17/bin/pg_dump "sslmode=require host=${{ secrets.SUPABASE_DB_HOST }} port=5432 user=${{ secrets.SUPABASE_DB_USER }} dbname=postgres" \
+                 -F c \
+                 -f backup_$(date +%Y%m%d).dump
+
+      # NOTA: el run puede mostrar un warning "Node.js 20 is deprecated... forced
+      # to run on Node.js 24" para actions/upload-artifact@v4. Es un aviso interno
+      # de GitHub sobre el runtime con el que está empaquetada la action (no algo
+      # que controlemos desde este workflow) y no afecta el resultado del backup.
+      # Se resolverá solo cuando GitHub/el mantenedor de la action actualice su
+      # action.yml a node24; no requiere cambios aquí mientras siga en @v4.
+      - name: Upload Backup to Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: supabase-backup
+          path: backup_*.dump
+          retention-days: 7

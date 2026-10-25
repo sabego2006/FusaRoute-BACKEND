@@ -128,3 +128,21 @@ no es json
 
 ### Método no permitido → 405 (no 500)
 DELETE {{baseUrl}}/api/auth/login
+
+### ──────────────── 6. RNF-01 — RENDIMIENTO ────────────────
+
+### Actuator health (público)
+GET {{baseUrl}}/actuator/health
+
+### Actuator prometheus (requiere JWT)
+GET {{baseUrl}}/actuator/prometheus
+Authorization: Bearer {{token}}
+
+### Probe de Google Maps: cache + metricas. Solo en dev
+### (fusaroute.internal.maps-probe-enabled). 503 con detail=REQUEST_DENIED si
+### la api key no tiene la Distance Matrix API habilitada en Google Cloud.
+GET {{baseUrl}}/api/_internal/maps-probe?originLat=4.3392&originLon=-74.3647&destLat=4.2889&destLon=-74.2167
+Authorization: Bearer {{token}}
+
+### Probe sin token → 401
+GET {{baseUrl}}/api/_internal/maps-probe?originLat=4.3392&originLon=-74.3647&destLat=4.2889&destLon=-74.2167

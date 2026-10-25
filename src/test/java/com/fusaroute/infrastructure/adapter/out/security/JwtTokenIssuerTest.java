@@ -29,7 +29,7 @@ class JwtTokenIssuerTest {
     private static final String OTHER_SECRET = "enl4d3Z1dHNycXBvbm1sa2ppaGdmZWRjYmE5ODc2NTQ=";
     private static final Instant NOW = Instant.parse("2026-09-28T12:00:00Z");
 
-    private final User user = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null, UserRole.USER, true);
+    private final User user = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null, UserRole.USER, true, 0);
 
     private JwtTokenIssuer issuerAt(Instant now, String secret) {
         JwtConfig config = new JwtConfig(secret);
@@ -41,7 +41,7 @@ class JwtTokenIssuerTest {
     }
 
     @Test
-    void el_token_vale_siete_dias_y_lleva_el_id_del_usuario() {
+    void el_token_vale_siete_dias_lleva_el_id_del_usuario_y_scope_full() {
         IssuedToken token = issuerAt(Instant.now(), SECRET).issue(user, Duration.ofDays(7));
 
         Jwt jwt = decoder().decode(token.value());
@@ -49,8 +49,20 @@ class JwtTokenIssuerTest {
         assertThat(jwt.getSubject()).isEqualTo("7");
         assertThat(jwt.getClaimAsString("role")).isEqualTo("USER");
         assertThat(jwt.getClaimAsString("iss")).isEqualTo("fusaroute");
+        assertThat(jwt.getClaimAsString("scope")).isEqualTo("full");
         assertThat(Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())).isEqualTo(Duration.ofDays(7));
         assertThat(token.expiresAt().getEpochSecond()).isEqualTo(jwt.getExpiresAt().getEpochSecond());
+    }
+
+    @Test
+    void el_token_de_enrolamiento_lleva_scope_totp_enroll_y_vida_corta() {
+        IssuedToken token = issuerAt(Instant.now(), SECRET).issueEnrollmentToken(user, Duration.ofMinutes(10));
+
+        Jwt jwt = decoder().decode(token.value());
+
+        assertThat(jwt.getSubject()).isEqualTo("7");
+        assertThat(jwt.getClaimAsString("scope")).isEqualTo("totp_enroll");
+        assertThat(Duration.between(jwt.getIssuedAt(), jwt.getExpiresAt())).isEqualTo(Duration.ofMinutes(10));
     }
 
     @Test

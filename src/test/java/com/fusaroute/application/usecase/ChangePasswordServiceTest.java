@@ -38,7 +38,7 @@ class ChangePasswordServiceTest {
     private ChangePasswordService service;
 
     private final User existing = new User(1L, "Ana", Email.of("ana@x.co"),
-            "$2a$12$hash", null, UserRole.USER, true);
+            "$2a$12$hash", null, UserRole.USER, true, 0);
 
     @Test
     void cambio_valido_hashea_y_guarda() {
