@@ -54,7 +54,7 @@ class UserControllerTest {
     private ChangePasswordUseCase changePassword;
 
     private final User user = new User(1L, "Ana", Email.of("ana@x.co"),
-            "$2a$12$hash", "3101234567", UserRole.USER, true);
+            "$2a$12$hash", "3101234567", UserRole.USER, true, 0);
 
     // --- GET /api/users/me ---
 
@@ -69,7 +69,7 @@ class UserControllerTest {
         when(getProfile.getProfile(1L)).thenReturn(user);
 
         mockMvc.perform(get("/api/users/me")
-                        .with(jwt().jwt(j -> j.subject("1"))))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Ana"))
                 .andExpect(jsonPath("$.email").value("ana@x.co"))
@@ -83,11 +83,11 @@ class UserControllerTest {
     @Test
     void update_valido_responde_200() throws Exception {
         User updated = new User(1L, "Ana Maria", Email.of("nueva@x.co"),
-                "$2a$12$hash", "3109876543", UserRole.USER, true);
+                "$2a$12$hash", "3109876543", UserRole.USER, true, 0);
         when(updateProfile.updateProfile(any())).thenReturn(updated);
 
         mockMvc.perform(put("/api/users/me")
-                        .with(jwt().jwt(j -> j.subject("1")))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Ana Maria","email":"nueva@x.co","phone":"3109876543"}"""))
@@ -103,7 +103,7 @@ class UserControllerTest {
                 new InvalidProfileException(List.of(new FieldViolation("name", "El nombre es obligatorio"))));
 
         mockMvc.perform(put("/api/users/me")
-                        .with(jwt().jwt(j -> j.subject("1")))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"","email":"ana@x.co","phone":null}"""))
@@ -116,7 +116,7 @@ class UserControllerTest {
         when(updateProfile.updateProfile(any())).thenThrow(new EmailAlreadyRegisteredException());
 
         mockMvc.perform(put("/api/users/me")
-                        .with(jwt().jwt(j -> j.subject("1")))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"name":"Ana","email":"ocupado@x.co","phone":null}"""))
@@ -130,7 +130,7 @@ class UserControllerTest {
         doNothing().when(changePassword).changePassword(any());
 
         mockMvc.perform(put("/api/users/me/password")
-                        .with(jwt().jwt(j -> j.subject("1")))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"currentPassword":"ViejaPass1","newPassword":"NuevaPass1"}"""))
@@ -142,7 +142,7 @@ class UserControllerTest {
         doThrow(new IncorrectCurrentPasswordException()).when(changePassword).changePassword(any());
 
         mockMvc.perform(put("/api/users/me/password")
-                        .with(jwt().jwt(j -> j.subject("1")))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"currentPassword":"Mala1234","newPassword":"NuevaPass1"}"""))
@@ -157,7 +157,7 @@ class UserControllerTest {
                 .when(changePassword).changePassword(any());
 
         mockMvc.perform(put("/api/users/me/password")
-                        .with(jwt().jwt(j -> j.subject("1")))
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {"currentPassword":"ViejaPass1","newPassword":"abc"}"""))

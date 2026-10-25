@@ -152,6 +152,9 @@ sequenceDiagram
 | `GET` | `/api/users/me` | Sí | 200 / 401 | Perfil del usuario autenticado |
 | `PUT` | `/api/users/me` | Sí | 200 / 400 / 401 / 409 | Actualizar perfil |
 | `PUT` | `/api/users/me/password` | Sí | 204 / 400 / 401 | Cambiar contraseña |
+| `GET` | `/actuator/health` | No | 200 | Estado del servicio y sus dependencias (RNF-01/02) |
+| `GET` | `/actuator/prometheus` | Sí | 200 / 401 | Métricas en formato Prometheus (RNF-01) |
+| `GET` | `/api/_internal/maps-probe` | Sí | 200 / 401 / 503 | Probe de diagnóstico de RNF-01 (solo si está habilitado, ver abajo) |
 
 ### Contrato de error (ProblemDetail, RFC 9457)
 
@@ -287,3 +290,43 @@ ordenadas por nombre. Sin rutas activas devuelve `[]`.
 - **`404`** la ruta no existe **o está suspendida** (`detail` = "Ruta no encontrada"): el
   catálogo público no revela que existe una ruta suspendida.
 - **`400`** el `id` no es numérico (`/api/routes/abc`).
+
+## Métricas y p95 (RNF-01, SCRUM-127)
+
+El RNF-01 exige **p95 < 8 s** extremo a extremo en `/api/routes/search` y un caché de
+**5 min por par origen-destino** sobre las llamadas a Google Maps. El endpoint de búsqueda
+no existe todavía (depende de RF-04); lo que este sprint deja listo es el instrumento y el
+adaptador, para no cablear todo de golpe cuando RF-04 aterrice.
+
+**Acceder a las métricas** (requieren JWT, igual que cualquier endpoint protegido):
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/actuator/prometheus
+curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/actuator/metrics/http.server.requests
+```
+
+- `http.server.requests` trae el histograma y los percentiles (0.5, 0.95, 0.99) de **todos**
+  los endpoints — ahí se leerá el p95 de `/api/routes/search` cuando exista.
+- `fusaroute.maps.travel_time` (tags `status=ok|error`): latencia de la llamada **real** (sin
+  caché) a la Distance Matrix API de Google.
+- `fusaroute.maps.cache` (tags `result=hit|miss`): cuántas consultas de tiempo de viaje se
+  resolvieron con el caché de 5 min vs. con una llamada nueva a Google.
+
+**Caché**: bean `googleMapsTravelTime` (Caffeine, `spring.cache.caffeine.spec` en
+`application.properties`), TTL 5 min, clave = par origen-destino (sin incluir el trazado: la
+Distance Matrix API cotiza por par, no por ruta — seguir un trazado específico exigiría la
+Roads API, fuera de alcance). Un fallo de Google nunca se cachea.
+
+**Probe interno** (`GET /api/_internal/maps-probe?originLat=&originLon=&destLat=&destLon=`):
+valida el cache y las métricas de arriba sin esperar a que `/api/routes/search` exista.
+Apagado por defecto salvo en `dev` (`fusaroute.internal.maps-probe-enabled`). Responde
+`X-Cache: HIT|MISS` cuando la llamada a Google tiene éxito, o `503` con el `status` real de
+Google en `detail` (p. ej. `REQUEST_DENIED` si la API key no tiene Distance Matrix habilitada
+en Google Cloud Console — es la situación actual en DEV y queda pendiente de que alguien con
+acceso al proyecto de Maps lo habilite).
+
+**Pendiente, a reportar ante el comité en vez de darlo por cumplido:**
+- El p95 real sobre `/api/routes/search` no se puede medir hasta que RF-04 cierre.
+- El cold start de Render (tier gratis, hasta 60 s tras 15 min de inactividad) puede empujar
+  el p95 de la primera consulta por encima de 8 s; sigue sin decidirse si se acepta o se paga
+  un tier con instancia siempre activa.
