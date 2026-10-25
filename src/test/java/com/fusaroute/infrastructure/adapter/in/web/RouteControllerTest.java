@@ -1,14 +1,17 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
+import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
 import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase.RouteFare;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
+import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
@@ -20,10 +23,12 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 
 import static org.hamcrest.Matchers.oneOf;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -52,6 +57,9 @@ class RouteControllerTest {
 
     @MockitoBean
     private GetRouteFareUseCase getRouteFareUseCase;
+
+    @MockitoBean
+    private SearchRouteUseCase searchRouteUseCase;
 
     private static Route urbana() {
         return new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
@@ -158,6 +166,46 @@ class RouteControllerTest {
     @Test
     void id_no_numerico_responde_400() throws Exception {
         mockMvc.perform(get("/api/routes/abc"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void busqueda_es_publica_y_devuelve_la_ruta_con_el_tiempo_estimado() throws Exception {
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(new RouteSearchResult(urbana(), Duration.ofMinutes(18)));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.route.id").value(1))
+                .andExpect(jsonPath("$.route.name").value("Camino Real - La Pampa"))
+                .andExpect(jsonPath("$.estimatedMinutes").value(18));
+    }
+
+    @Test
+    void busqueda_sin_rutas_candidatas_responde_404_con_mensaje_explicito() throws Exception {
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "Pasca")
+                        .param("destinationLat", "4.2900")
+                        .param("destinationLng", "-74.3000"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("No hay rutas disponibles que conecten Centro con Pasca"));
+    }
+
+    @Test
+    void busqueda_sin_parametros_obligatorios_responde_400() throws Exception {
+        mockMvc.perform(get("/api/routes/search").param("originNeighborhood", "Centro"))
                 .andExpect(status().isBadRequest());
     }
 

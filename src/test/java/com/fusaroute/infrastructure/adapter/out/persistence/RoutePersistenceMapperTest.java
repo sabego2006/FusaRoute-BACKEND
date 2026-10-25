@@ -1,5 +1,6 @@
 package com.fusaroute.infrastructure.adapter.out.persistence;
 
+import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
@@ -13,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RoutePersistenceMapperTest {
 
@@ -57,5 +59,35 @@ class RoutePersistenceMapperTest {
         assertThat(route.fares().get(0).referencePoint()).isNull();
         assertThat(route.fares().get(0).amount()).isEqualByComparingTo("2600");
         assertThat(route.fares().get(0).validFrom()).isEqualTo(LocalDate.of(2026, 2, 5));
+    }
+
+    @Test
+    void sin_trazado_el_path_es_una_lista_vacia() {
+        Route route = RoutePersistenceMapper.toDomain(entity(Map.of(0, "Centro"), List.of()));
+
+        assertThat(route.path()).isEmpty();
+    }
+
+    @Test
+    void parsea_el_linestring_de_geojson_invirtiendo_lng_lat_a_coordinate() {
+        RouteJpaEntity entity = entity(Map.of(0, "Centro"), List.of());
+        // GeoJSON ordena [longitud, latitud]; Coordinate es (latitud, longitud).
+        ReflectionTestUtils.setField(entity, "pathGeoJson",
+                "{\"type\":\"LineString\",\"coordinates\":[[-74.3661,4.3433],[-74.3600,4.3300]]}");
+
+        Route route = RoutePersistenceMapper.toDomain(entity);
+
+        assertThat(route.path()).containsExactly(
+                new Coordinate(4.3433, -74.3661),
+                new Coordinate(4.3300, -74.3600));
+    }
+
+    @Test
+    void geojson_invalido_lanza_en_vez_de_devolver_un_path_vacio_en_silencio() {
+        RouteJpaEntity entity = entity(Map.of(0, "Centro"), List.of());
+        ReflectionTestUtils.setField(entity, "pathGeoJson", "esto no es json");
+
+        assertThatThrownBy(() -> RoutePersistenceMapper.toDomain(entity))
+                .isInstanceOf(IllegalStateException.class);
     }
 }

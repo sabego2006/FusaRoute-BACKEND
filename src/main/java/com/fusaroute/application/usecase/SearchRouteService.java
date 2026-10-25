@@ -3,11 +3,12 @@ package com.fusaroute.application.usecase;
 import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 
-import java.util.Comparator;
+import java.time.Duration;
 import java.util.List;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
@@ -29,7 +30,7 @@ public class SearchRouteService implements SearchRouteUseCase {
     }
 
     @Override
-    public Route findBestRoute(String originNeighborhood, Coordinate originCoord,
+    public RouteSearchResult findBestRoute(String originNeighborhood, Coordinate originCoord,
                                String destNeighborhood, Coordinate destCoord) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
@@ -47,11 +48,20 @@ public class SearchRouteService implements SearchRouteUseCase {
                 throw new NoRouteAvailableException(originNeighborhood, destNeighborhood);
             }
 
-            // 3. Calcular tiempo para cada candidata y seleccionar la mínima
-            return candidates.stream()
-                    .min(Comparator.comparing(route ->
-                        travelTimePort.getTravelTime(originCoord, destCoord, route.path())))
-                    .orElseThrow(() -> new NoRouteAvailableException(originNeighborhood, destNeighborhood));
+            // 3. Calcular tiempo para cada candidata y quedarse con la de menor tiempo.
+            // Un bucle en vez de Comparator.comparing(keyExtractor): ese extractor se
+            // reevalua en cada comparacion, llamando a travelTimePort mas veces de las
+            // necesarias; ademas, aqui hace falta el Duration ganador, no solo la ruta.
+            Route bestRoute = null;
+            Duration bestTime = null;
+            for (Route candidate : candidates) {
+                Duration time = travelTimePort.getTravelTime(originCoord, destCoord, candidate.path());
+                if (bestTime == null || time.compareTo(bestTime) < 0) {
+                    bestRoute = candidate;
+                    bestTime = time;
+                }
+            }
+            return new RouteSearchResult(bestRoute, bestTime);
         } finally {
             sample.stop(meterRegistry.timer("fusaroute.search.route.latency"));
         }
