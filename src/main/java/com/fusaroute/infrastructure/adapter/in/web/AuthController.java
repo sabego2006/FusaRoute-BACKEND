@@ -17,6 +17,8 @@ import org.springframework.web.bind.annotation.RestController;
 
 /**
  * Endpoints de autenticacion: registro (RF-01, SCRUM-31) y login (RF-02, SCRUM-38).
+ * SCRUM-179 agrega el segundo factor TOTP obligatorio al login; el controller no
+ * cambia su firma externa, solo propaga el {@code totpCode} opcional al caso de uso.
  */
 @RestController
 @RequestMapping("/api/auth")
@@ -45,7 +47,8 @@ public class AuthController {
     @ApiResponse(responseCode = "401", description = "Credenciales inválidas")
     @PostMapping("/login")
     public LoginResponse login(@RequestBody LoginRequest request) {
-        LoginResult result = loginUseCase.login(new LoginCommand(request.email(), request.password()));
+        LoginResult result = loginUseCase.login(
+                new LoginCommand(request.email(), request.password(), request.totpCode()));
         return LoginResponse.from(result);
     }
 }

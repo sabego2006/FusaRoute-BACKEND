@@ -1,6 +1,7 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
+import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -18,11 +19,14 @@ public class RouteController {
 
     private final ListActiveRoutesUseCase listActiveRoutesUseCase;
     private final GetRouteDetailUseCase getRouteDetailUseCase;
+    private final GetRouteFareUseCase getRouteFareUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
-                           GetRouteDetailUseCase getRouteDetailUseCase) {
+                           GetRouteDetailUseCase getRouteDetailUseCase,
+                           GetRouteFareUseCase getRouteFareUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
+        this.getRouteFareUseCase = getRouteFareUseCase;
     }
 
     @Operation(summary = "Listar rutas activas", description = "Retorna la lista de todas las rutas de buseta que se encuentran activas")
@@ -38,5 +42,10 @@ public class RouteController {
     @GetMapping("/{id}")
     public RouteResponse detail(@PathVariable Long id) {
         return RouteResponse.from(getRouteDetailUseCase.getById(id));
+    }
+
+    @GetMapping("/{id}/fare")
+    public RouteFareResponse fare(@PathVariable Long id) {
+        return RouteFareResponse.from(getRouteFareUseCase.getByRouteId(id));
     }
 }

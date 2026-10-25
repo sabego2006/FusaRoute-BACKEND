@@ -30,7 +30,7 @@ class ListActiveRoutesServiceTest {
     private RouteRepositoryPort routeRepository;
 
     private static Route route(long id, String name, RouteStatus status, Fare... fares) {
-        return new Route(id, name, RouteType.URBANA, status, List.of("Centro"), List.of(fares));
+        return new Route(id, name, RouteType.URBANA, status, List.of("Centro"), List.of(fares), List.of());
     }
 
     private static Fare fare(int amount, String validFrom) {

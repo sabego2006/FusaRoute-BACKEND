@@ -43,6 +43,32 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.8.4</version>
 		</dependency>
+		<!-- Cache de 5 min por par origen-destino para las llamadas a Google Maps (RNF-01):
+		     sostiene el p95 < 8 s comprometido y reduce el consumo de cuota. Caffeine en vez
+		     de un cache distribuido porque el backend corre en una sola instancia de Render;
+		     no hay otro nodo con el que sincronizar entradas. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+		<!-- Actuator: expone /actuator/* y trae Micrometer (MeterRegistry), usado por
+		     SearchRouteService para medir la latencia de busqueda (RNF-01). Tambien expone
+		     /actuator/metrics y /actuator/prometheus con el percentil 95 por endpoint, el
+		     instrumento que exige el RNF de rendimiento (SCRUM-127). micrometer-registry-prometheus
+		     es el formato que ese endpoint sirve; sin el no hay /actuator/prometheus, solo
+		     /actuator/metrics. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
+		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-data-jpa</artifactId>
@@ -62,6 +88,15 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+		<!-- TOTP (SCRUM-179): segundo factor obligatorio tipo Microsoft/Google
+		     Authenticator. dev.samstevens.totp cubre secret generation, URI otpauth://
+		     y verificacion con tolerancia de ventana. Confinada al adaptador
+		     out/security por regla hexagonal; el dominio solo conoce TotpPort. -->
+		<dependency>
+			<groupId>dev.samstevens.totp</groupId>
+			<artifactId>totp</artifactId>
+			<version>1.7.1</version>
 		</dependency>
 		<dependency>
 			<groupId>org.flywaydb</groupId>

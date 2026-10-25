@@ -30,6 +30,7 @@ final class RoutePersistenceMapper {
                 entity.getType(),
                 entity.getStatus(),
                 neighborhoods,
-                fares);
+                fares,
+                List.of()); // El path no se mapea desde JPA segun la definicion de RouteJpaEntity
     }
 }

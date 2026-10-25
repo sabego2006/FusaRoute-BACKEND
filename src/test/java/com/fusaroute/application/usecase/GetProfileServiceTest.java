@@ -29,7 +29,7 @@ class GetProfileServiceTest {
     @Test
     void perfil_existente_devuelve_usuario() {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", "3101234567",
-                UserRole.USER, true);
+                UserRole.USER, true, 0);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         User result = service.getProfile(1L);
