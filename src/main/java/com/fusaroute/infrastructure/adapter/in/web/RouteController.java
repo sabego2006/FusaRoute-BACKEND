@@ -5,6 +5,8 @@ import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,6 +35,8 @@ public class RouteController {
         this.searchRouteUseCase = searchRouteUseCase;
     }
 
+    @Operation(summary = "Listar rutas activas", description = "Retorna la lista de todas las rutas de buseta que se encuentran activas")
+    @ApiResponse(responseCode = "200", description = "Lista de rutas recuperada exitosamente")
     @GetMapping
     public List<RouteResponse> list() {
         return listActiveRoutesUseCase.listActive().stream().map(RouteResponse::from).toList();
@@ -55,6 +59,9 @@ public class RouteController {
                 destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
     }
 
+    @Operation(summary = "Detalle de ruta", description = "Retorna la información detallada de una ruta específica mediante su ID")
+    @ApiResponse(responseCode = "200", description = "Detalle de la ruta recuperado exitosamente")
+    @ApiResponse(responseCode = "404", description = "La ruta especificada no existe")
     @GetMapping("/{id}")
     public RouteResponse detail(@PathVariable Long id) {
         return RouteResponse.from(getRouteDetailUseCase.getById(id));

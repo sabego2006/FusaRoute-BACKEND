@@ -74,7 +74,8 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*", "/api/routes/*/fare")
+                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*", "/api/routes/*/fare",
+                                "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
                                 .permitAll()
                         // SCRUM-179: enrolamiento acepta token full (re-enrolar) o enrollment (bootstrap).
                         .requestMatchers(HttpMethod.POST,
