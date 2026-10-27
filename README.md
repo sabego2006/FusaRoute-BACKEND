@@ -1,7 +1,13 @@
 # FusaRoute Backend
 
+[![Quality Gate Status](https://sonar.fusaroute.dev/api/project_badges/measure?project=sabego2006_FusaRoute-BACKEND&metric=alert_status)](https://sonar.fusaroute.dev/dashboard?id=sabego2006_FusaRoute-BACKEND)
+
 API REST para el sistema de información de transporte público de Fusagasugá.
 Arquitectura hexagonal (puertos y adaptadores), Java 25, Spring Boot 3.5, PostgreSQL en Supabase.
+
+> El badge apunta al SonarQube autohospedado (SCRUM-181). Queda **roto hasta que la VM
+> esté arriba y haya corrido el primer análisis**; el host real (`sonar.fusaroute.dev`)
+> se ajusta cuando se registre el subdominio. Ver `docs/calidad/sonarqube.md`.
 
 ## Cómo correr
 
