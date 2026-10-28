@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 /**
  * Ruta de buseta: un recorrido directo de un solo tramo, con sus barrios en orden
@@ -26,6 +27,59 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
 
     public boolean isActive() {
         return status == RouteStatus.ACTIVA;
+    }
+
+    /**
+     * Punto del trazado mas cercano a {@code from} y cuanto hay que caminar hasta el
+     * (RF-04, ultima milla). Sirve igual para el abordaje (desde el origen) y para la
+     * bajada (hacia el destino), y da el mismo resultado online y offline: es
+     * geometria sobre el GeoJSON propio, sin llamar a Google.
+     *
+     * @return vacio si la ruta no tiene trazado cargado todavia. Una ruta asi sigue
+     *     siendo buscable; simplemente no se le puede calcular la ultima milla.
+     */
+    public Optional<BoardingPoint> boardingPointFor(Coordinate from) {
+        return PathProjection.nearestPointOn(path, from);
+    }
+
+    /**
+     * Cuanto hay que viajar en buseta sobre esta ruta entre dos puntos, siguiendo el
+     * trazado y no en linea recta.
+     *
+     * Es el criterio con el que se elige en modo offline: sin red no se puede pedir el
+     * tiempo a Google, asi que gana la ruta de menor recorrido. Se mide entre las
+     * proyecciones del origen y del destino, asi que no cuenta el trazado que la ruta
+     * recorre antes de que el usuario suba ni despues de que se baje.
+     *
+     * @return vacio si la ruta no tiene trazado cargado
+     */
+    public OptionalDouble travelDistanceInMeters(Coordinate origin, Coordinate destination) {
+        Optional<BoardingPoint> boarding = boardingPointFor(origin);
+        Optional<BoardingPoint> dropOff = boardingPointFor(destination);
+        if (boarding.isEmpty() || dropOff.isEmpty()) {
+            return OptionalDouble.empty();
+        }
+        return OptionalDouble.of(Math.abs(
+                dropOff.get().distanceAlongPathInMeters() - boarding.get().distanceAlongPathInMeters()));
+    }
+
+    /**
+     * Regla de descarte de RF-04: la ruta deja de ser candidata si obliga a caminar
+     * mas de {@link BoardingPoint#MAX_WALKING_DISTANCE_METERS} en cualquiera de las
+     * dos puntas.
+     *
+     * Una ruta sin trazado nunca se descarta por esta via: no hay con que medirla, y
+     * sacarla del resultado la haria invisible por un dato que falta, no por una
+     * razon de negocio.
+     */
+    public boolean isWithinWalkingDistance(Coordinate origin, Coordinate destination) {
+        return isWithinWalkingDistance(origin) && isWithinWalkingDistance(destination);
+    }
+
+    private boolean isWithinWalkingDistance(Coordinate from) {
+        return boardingPointFor(from)
+                .map(BoardingPoint::isWithinWalkingDistance)
+                .orElse(true);
     }
 
     /**

@@ -74,7 +74,10 @@ public class SecurityConfig {
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/actuator/health").permitAll()
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
+                        // "/api/routes/*" cubre un solo segmento, asi que /search/offline
+                        // (SCRUM-51) hay que enumerarlo aparte o quedaria exigiendo token.
                         .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*", "/api/routes/*/fare",
+                                "/api/routes/search/offline",
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
                                 .permitAll()
                         // SCRUM-179: enrolamiento acepta token full (re-enrolar) o enrollment (bootstrap).
