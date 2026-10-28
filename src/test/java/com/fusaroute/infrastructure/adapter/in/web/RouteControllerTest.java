@@ -2,6 +2,7 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
+import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
@@ -27,6 +28,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 
+import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.oneOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
@@ -66,6 +68,14 @@ class RouteControllerTest {
                 List.of("Centro", "La Pampa"),
                 List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
                 List.of());
+    }
+
+    /** Misma ruta urbana, pero con su trazado GeoJSON ya cargado. */
+    private static Route urbanaConTrazado() {
+        return new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of("Centro", "La Pampa"),
+                List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
+                List.of(new Coordinate(4.3433, -74.3661), new Coordinate(4.3300, -74.3600)));
     }
 
     private static Route intermunicipal() {
@@ -125,6 +135,46 @@ class RouteControllerTest {
                 .andExpect(jsonPath("$.type").value("INTERMUNICIPAL"))
                 .andExpect(jsonPath("$.neighborhoods[1]").value("Alaska"))
                 .andExpect(jsonPath("$.fares[0].amount").value(3550.0));
+    }
+
+    @Test
+    void el_detalle_trae_el_trazado_como_linestring_de_geojson() throws Exception {
+        when(getRouteDetailUseCase.getById(1L)).thenReturn(urbanaConTrazado());
+
+        mockMvc.perform(get("/api/routes/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.path.type").value("LineString"))
+                // GeoJSON escribe [longitud, latitud], al reves de como se nombran al
+                // hablar. Si esto se invierte, el mapa dibuja la ruta en otro continente.
+                .andExpect(jsonPath("$.path.coordinates[0][0]").value(-74.3661))
+                .andExpect(jsonPath("$.path.coordinates[0][1]").value(4.3433))
+                .andExpect(jsonPath("$.path.coordinates[1][0]").value(-74.3600))
+                .andExpect(jsonPath("$.path.coordinates.length()").value(2));
+    }
+
+    @Test
+    void una_ruta_sin_trazado_responde_path_null_y_no_un_linestring_vacio() throws Exception {
+        // Hoy la mayoria de las rutas sembradas no tiene GeoJSON. El cliente necesita
+        // distinguir "no hay dato" de "hay una linea sin puntos", que ni siquiera seria
+        // GeoJSON valido.
+        when(getRouteDetailUseCase.getById(1L)).thenReturn(urbana());
+
+        mockMvc.perform(get("/api/routes/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.name").value("Camino Real - La Pampa"))
+                .andExpect(jsonPath("$.path").value(nullValue()));
+    }
+
+    @Test
+    void el_listado_no_carga_el_trazado() throws Exception {
+        // El trazado son decenas de vertices por ruta: mandarlo en el listado pesaria
+        // de mas en una pantalla que no dibuja mapas (LCP < 2.5 s en 4G lento).
+        when(listActiveRoutesUseCase.listActive()).thenReturn(List.of(urbanaConTrazado()));
+
+        mockMvc.perform(get("/api/routes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].name").value("Camino Real - La Pampa"))
+                .andExpect(jsonPath("$[0].path").doesNotExist());
     }
 
     @Test

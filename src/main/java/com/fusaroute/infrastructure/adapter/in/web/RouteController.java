@@ -59,12 +59,15 @@ public class RouteController {
                 destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
     }
 
-    @Operation(summary = "Detalle de ruta", description = "Retorna la información detallada de una ruta específica mediante su ID")
+    @Operation(summary = "Detalle de ruta",
+            description = "Retorna la información detallada de una ruta específica mediante su ID, "
+                    + "incluido su trazado como LineString de GeoJSON para pintarlo en el mapa. "
+                    + "El trazado va en null mientras la ruta no lo tenga cargado.")
     @ApiResponse(responseCode = "200", description = "Detalle de la ruta recuperado exitosamente")
     @ApiResponse(responseCode = "404", description = "La ruta especificada no existe")
     @GetMapping("/{id}")
-    public RouteResponse detail(@PathVariable Long id) {
-        return RouteResponse.from(getRouteDetailUseCase.getById(id));
+    public RouteDetailResponse detail(@PathVariable Long id) {
+        return RouteDetailResponse.from(getRouteDetailUseCase.getById(id));
     }
 
     @GetMapping("/{id}/fare")
