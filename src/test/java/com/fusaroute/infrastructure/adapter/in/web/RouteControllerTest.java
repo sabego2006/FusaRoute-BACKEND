@@ -2,12 +2,15 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
+import com.fusaroute.domain.model.CongestionWarning;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
+import com.fusaroute.domain.model.TrafficSector;
+import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase.RouteFare;
@@ -15,6 +18,7 @@ import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
@@ -26,7 +30,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.Set;
 
 import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.oneOf;
@@ -55,6 +61,9 @@ class RouteControllerTest {
     private ListActiveRoutesUseCase listActiveRoutesUseCase;
 
     @MockitoBean
+    private GetCongestionWarningUseCase getCongestionWarningUseCase;
+
+    @MockitoBean
     private GetRouteDetailUseCase getRouteDetailUseCase;
 
     @MockitoBean
@@ -62,6 +71,12 @@ class RouteControllerTest {
 
     @MockitoBean
     private SearchRouteUseCase searchRouteUseCase;
+
+    /** Por defecto no hay trancones: cada test que los necesite los declara. */
+    @BeforeEach
+    void sinCongestionSalvoQueElTestDigaOtraCosa() {
+        when(getCongestionWarningUseCase.forRoute(any())).thenReturn(new CongestionWarning(List.of()));
+    }
 
     private static Route urbana() {
         return new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
@@ -163,6 +178,32 @@ class RouteControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value("Camino Real - La Pampa"))
                 .andExpect(jsonPath("$.path").value(nullValue()));
+    }
+
+    @Test
+    void el_detalle_avisa_de_los_sectores_congestionados_que_la_ruta_atraviesa() throws Exception {
+        when(getRouteDetailUseCase.getById(1L)).thenReturn(urbana());
+        when(getCongestionWarningUseCase.forRoute(List.of("Centro", "La Pampa")))
+                .thenReturn(new CongestionWarning(List.of(
+                        new TrafficSector(1L, "Centro - Carrera 1", Set.of("Centro"),
+                                LocalTime.of(17, 0), LocalTime.of(19, 0)))));
+
+        mockMvc.perform(get("/api/routes/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.congestionSectors.length()").value(1))
+                .andExpect(jsonPath("$.congestionSectors[0].name").value("Centro - Carrera 1"))
+                .andExpect(jsonPath("$.congestionSectors[0].startsAt").value("17:00:00"))
+                .andExpect(jsonPath("$.congestionSectors[0].endsAt").value("19:00:00"));
+    }
+
+    @Test
+    void sin_sectores_activos_el_detalle_responde_una_lista_vacia() throws Exception {
+        // Es el estado de hoy: la tabla de sectores esta vacia, asi que no hay aviso.
+        when(getRouteDetailUseCase.getById(1L)).thenReturn(urbana());
+
+        mockMvc.perform(get("/api/routes/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.congestionSectors.length()").value(0));
     }
 
     @Test
