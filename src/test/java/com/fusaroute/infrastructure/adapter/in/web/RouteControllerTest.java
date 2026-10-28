@@ -175,9 +175,10 @@ class RouteControllerTest {
     @Test
     void busqueda_es_publica_y_devuelve_la_ruta_con_el_tiempo_estimado() throws Exception {
         when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(new RouteSearchResult(urbana(), Duration.ofMinutes(18),
-                        new BoardingPoint(new Coordinate(4.3430, -74.3658), 240),
-                        new BoardingPoint(new Coordinate(4.3305, -74.3602), 90)));
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18),
+                        new BoardingPoint(new Coordinate(4.3430, -74.3658), 240, 0),
+                        new BoardingPoint(new Coordinate(4.3305, -74.3602), 90, 2_400),
+                        2_400d));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -201,7 +202,7 @@ class RouteControllerTest {
         // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON. La sugerencia se devuelve
         // igual; lo que no se puede decir es por donde acercarse a pie.
         when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(new RouteSearchResult(urbana(), Duration.ofMinutes(18), null, null));
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -214,6 +215,44 @@ class RouteControllerTest {
                 .andExpect(jsonPath("$.estimatedMinutes").value(18))
                 .andExpect(jsonPath("$.boarding").value(nullValue()))
                 .andExpect(jsonPath("$.dropOff").value(nullValue()));
+    }
+
+    @Test
+    void la_busqueda_offline_es_publica_y_responde_sin_tiempo_estimado() throws Exception {
+        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.offline(urbana(), 2_400d,
+                        new BoardingPoint(new Coordinate(4.3430, -74.3658), 240, 0),
+                        new BoardingPoint(new Coordinate(4.3305, -74.3602), 90, 2_400)));
+
+        mockMvc.perform(get("/api/routes/search/offline")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.route.name").value("Camino Real - La Pampa"))
+                // Sin red no se consulta a Google, asi que no hay tiempo que dar.
+                .andExpect(jsonPath("$.estimatedMinutes").value(nullValue()))
+                .andExpect(jsonPath("$.travelDistanceInMeters").value(2400))
+                .andExpect(jsonPath("$.boarding.distanceInMeters").value(240));
+    }
+
+    @Test
+    void la_busqueda_offline_sin_candidatas_responde_404() throws Exception {
+        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+                .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
+
+        mockMvc.perform(get("/api/routes/search/offline")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "Pasca")
+                        .param("destinationLat", "4.2900")
+                        .param("destinationLng", "-74.3000"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("No hay rutas disponibles que conecten Centro con Pasca"));
     }
 
     @Test
