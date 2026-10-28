@@ -1,9 +1,25 @@
 package com.fusaroute.domain.model;
 
+import com.fusaroute.domain.exception.InvalidCoordinateException;
+
 /**
  * Objeto de valor que representa una coordenada geográfica.
  */
 public record Coordinate(double latitude, double longitude) {
+
+    /**
+     * Rechaza coordenadas fuera del rango WGS-84, NaN e infinito. Se valida aqui, en el
+     * dominio, para que ningun adaptador (HTTP, GeoJSON de la base) construya un punto
+     * imposible que luego llegue sin error a Google Directions o al calculo de distancia.
+     */
+    public Coordinate {
+        if (!(latitude >= -90 && latitude <= 90)) {
+            throw new InvalidCoordinateException("Latitud fuera de rango [-90, 90]: " + latitude);
+        }
+        if (!(longitude >= -180 && longitude <= 180)) {
+            throw new InvalidCoordinateException("Longitud fuera de rango [-180, 180]: " + longitude);
+        }
+    }
 
     /** Radio medio terrestre (WGS-84), en metros. */
     private static final double EARTH_RADIUS_METERS = 6_371_008.8;

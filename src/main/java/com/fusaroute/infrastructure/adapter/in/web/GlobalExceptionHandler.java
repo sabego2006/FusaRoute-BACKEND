@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.adapter.in.web;
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
+import com.fusaroute.domain.exception.InvalidCoordinateException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
@@ -143,6 +144,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     public ProblemDetail handleTravelTimeUnavailable(TravelTimeUnavailableException e) {
         log.warn("Tiempo de viaje no disponible: {}", e.getMessage());
         return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, e.getMessage());
+    }
+
+    /** Coordenada fuera de rango en la busqueda (RF-04): error del cliente, no un 500. */
+    @ExceptionHandler(InvalidCoordinateException.class)
+    public ProblemDetail handleInvalidCoordinate(InvalidCoordinateException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
     /** Un id que no es numerico (/api/routes/abc) es un error del cliente, no un 500. */

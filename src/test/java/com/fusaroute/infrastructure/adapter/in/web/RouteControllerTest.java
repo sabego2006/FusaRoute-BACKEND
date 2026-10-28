@@ -307,6 +307,18 @@ class RouteControllerTest {
     }
 
     @Test
+    void busqueda_con_coordenadas_fuera_de_rango_responde_400() throws Exception {
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "91")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
     void la_busqueda_offline_es_publica_y_responde_sin_tiempo_estimado() throws Exception {
         when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
                 .thenReturn(RouteSearchResult.offline(urbana(), 2_400d,

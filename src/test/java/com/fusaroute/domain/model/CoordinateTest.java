@@ -1,8 +1,13 @@
 package com.fusaroute.domain.model;
 
+import com.fusaroute.domain.exception.InvalidCoordinateException;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatCode;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class CoordinateTest {
 
@@ -41,5 +46,30 @@ class CoordinateTest {
         double enLatitudAlta = new Coordinate(60.0, -74.0).distanceInMetersTo(new Coordinate(60.0, -74.01));
 
         assertThat(enLatitudAlta).isLessThan(enElTropico);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"-90, -180", "90, 180", "0, 0", "4.34, -74.35"})
+    void acepta_coordenadas_dentro_de_rango(double latitude, double longitude) {
+        assertThatCode(() -> new Coordinate(latitude, longitude)).doesNotThrowAnyException();
+    }
+
+    @ParameterizedTest
+    @CsvSource({"-90.1, 0", "90.1, 0", "NaN, 0", "Infinity, 0"})
+    void rechaza_latitud_fuera_de_rango(double latitude, double longitude) {
+        assertThatThrownBy(() -> new Coordinate(latitude, longitude))
+                .isInstanceOf(InvalidCoordinateException.class);
+    }
+
+    @ParameterizedTest
+    @CsvSource({"0, -180.1", "0, 180.1", "0, NaN", "0, -Infinity"})
+    void rechaza_longitud_fuera_de_rango(double latitude, double longitude) {
+        assertThatThrownBy(() -> new Coordinate(latitude, longitude))
+                .isInstanceOf(InvalidCoordinateException.class);
+    }
+
+    @Test
+    void es_igual_por_valor_como_record() {
+        assertThat(new Coordinate(4.34, -74.35)).isEqualTo(new Coordinate(4.34, -74.35));
     }
 }
