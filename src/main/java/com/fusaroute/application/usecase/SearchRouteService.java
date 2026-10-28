@@ -39,9 +39,14 @@ public class SearchRouteService implements SearchRouteUseCase {
                     .filter(Route::isActive)
                     .toList();
 
-            // 2. Filtrar rutas candidatas (que conecten origen y destino en el orden correcto)
+            // 2. Filtrar rutas candidatas: que conecten origen y destino en el orden
+            // correcto y que no obliguen a caminar mas de 800 m en ninguna de las dos
+            // puntas (RF-04). Las rutas sin trazado pasan este segundo filtro: no hay
+            // con que medirlas, y descartarlas por un dato que falta las haria
+            // invisibles sin una razon de negocio.
             List<Route> candidates = activeRoutes.stream()
                     .filter(route -> connects(route, originNeighborhood, destNeighborhood))
+                    .filter(route -> route.isWithinWalkingDistance(originCoord, destCoord))
                     .toList();
 
             if (candidates.isEmpty()) {
@@ -61,10 +66,22 @@ public class SearchRouteService implements SearchRouteUseCase {
                     bestTime = time;
                 }
             }
-            return new RouteSearchResult(bestRoute, bestTime);
+            return resultFor(bestRoute, bestTime, originCoord, destCoord);
         } finally {
             sample.stop(meterRegistry.timer("fusaroute.search.route.latency"));
         }
+    }
+
+    /**
+     * Arma el resultado agregandole la ultima milla. Los puntos quedan en null cuando
+     * la ruta no tiene trazado cargado: el viaje en buseta se sugiere igual, solo que
+     * sin decir por donde acercarse a pie.
+     */
+    private RouteSearchResult resultFor(Route route, Duration travelTime,
+                                        Coordinate originCoord, Coordinate destCoord) {
+        return new RouteSearchResult(route, travelTime,
+                route.boardingPointFor(originCoord).orElse(null),
+                route.boardingPointFor(destCoord).orElse(null));
     }
 
     private boolean connects(Route route, String origin, String destination) {

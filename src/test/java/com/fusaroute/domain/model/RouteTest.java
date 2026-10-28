@@ -21,6 +21,57 @@ class RouteTest {
         return new Route(1L, "Ruta", type, status, List.of("A", "B"), fares, List.of());
     }
 
+    /** Ruta cuyo trazado es un tramo recto de ~1.1 km sobre el paralelo 4. */
+    private static Route routeConTrazado() {
+        return new Route(1L, "Ruta", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of("A", "B"), List.of(),
+                List.of(new Coordinate(4.000, -74.000), new Coordinate(4.000, -74.010)));
+    }
+
+    @Test
+    void la_ultima_milla_sale_del_trazado_propio() {
+        Coordinate usuario = new Coordinate(4.001, -74.005);
+
+        BoardingPoint abordaje = routeConTrazado().boardingPointFor(usuario).orElseThrow();
+
+        assertThat(abordaje.distanceInMeters()).isLessThan(BoardingPoint.MAX_WALKING_DISTANCE_METERS);
+    }
+
+    @Test
+    void una_ruta_sin_trazado_no_tiene_ultima_milla() {
+        Route sinTrazado = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of());
+
+        assertThat(sinTrazado.boardingPointFor(new Coordinate(4.000, -74.000))).isEmpty();
+    }
+
+    @Test
+    void se_descarta_la_ruta_que_obliga_a_caminar_mas_de_ochocientos_metros() {
+        // ~1.1 km al norte del tramo: la buseta pasa "cerca" en el mapa, pero la
+        // caminata ya no compensa.
+        Coordinate lejos = new Coordinate(4.010, -74.005);
+
+        assertThat(routeConTrazado().isWithinWalkingDistance(lejos, new Coordinate(4.000, -74.005)))
+                .isFalse();
+    }
+
+    @Test
+    void se_acepta_la_ruta_cuando_ambas_puntas_quedan_cerca() {
+        assertThat(routeConTrazado().isWithinWalkingDistance(
+                new Coordinate(4.001, -74.002), new Coordinate(4.001, -74.008)))
+                .isTrue();
+    }
+
+    @Test
+    void una_ruta_sin_trazado_nunca_se_descarta_por_distancia_a_pie() {
+        // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON. Descartarlas las haria
+        // invisibles por un dato que falta, no por una razon de negocio.
+        Route sinTrazado = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of());
+
+        assertThat(sinTrazado.isWithinWalkingDistance(
+                new Coordinate(4.900, -74.900), new Coordinate(5.900, -75.900)))
+                .isTrue();
+    }
+
     @Test
     void tarifa_urbana_unica_con_punto_null_se_conserva() {
         Route route = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of(fare(null, 2600, 0, "2026-02-05")));

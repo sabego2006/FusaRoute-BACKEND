@@ -45,12 +45,19 @@ class SearchRouteServiceTest {
         return new Route(id, name, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
     }
 
+    /** Trazado que pasa por el origen y el destino, asi la ultima milla no lo descarta. */
+    private static List<Coordinate> trazadoQuePasaPorAmbos(double desvio) {
+        return List.of(
+                new Coordinate(ORIGIN.latitude() + desvio, ORIGIN.longitude() + desvio),
+                new Coordinate(DESTINATION.latitude() + desvio, DESTINATION.longitude() + desvio));
+    }
+
     @Test
     void elige_la_candidata_con_menor_tiempo_estimado() {
         // Trazados distintos (no List.of() en ambas) para que el mock de travelTimePort
         // pueda distinguir una llamada de la otra por argumentos.
-        Route lenta = routeWithPath(1L, "Lenta", List.of(new Coordinate(4.34, -74.36)), "Centro", "Terminal");
-        Route rapida = routeWithPath(2L, "Rapida", List.of(new Coordinate(4.35, -74.37)), "Centro", "Terminal");
+        Route lenta = routeWithPath(1L, "Lenta", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        Route rapida = routeWithPath(2L, "Rapida", trazadoQuePasaPorAmbos(0.0001), "Centro", "Terminal");
         when(routeRepository.findAll()).thenReturn(List.of(lenta, rapida));
         when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, lenta.path())).thenReturn(Duration.ofMinutes(25));
         when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, rapida.path())).thenReturn(Duration.ofMinutes(12));
@@ -80,5 +87,49 @@ class SearchRouteServiceTest {
 
         assertThatThrownBy(() -> service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION))
                 .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
+    void el_resultado_trae_el_punto_de_abordaje_y_el_de_bajada() {
+        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, conTrazado.path()))
+                .thenReturn(Duration.ofMinutes(14));
+
+        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.boarding()).isPresent();
+        assertThat(result.dropOff()).isPresent();
+        assertThat(result.boarding().orElseThrow().distanceInMeters()).isLessThan(50);
+    }
+
+    @Test
+    void descarta_la_candidata_que_obliga_a_caminar_mas_de_ochocientos_metros() {
+        // El trazado corre a ~1.1 km al norte: conecta los barrios, pero no se puede
+        // llegar a el a pie desde el origen.
+        Route lejana = routeWithPath(1L, "Lejana", List.of(
+                new Coordinate(ORIGIN.latitude() + 0.01, ORIGIN.longitude()),
+                new Coordinate(DESTINATION.latitude() + 0.01, DESTINATION.longitude())),
+                "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(lejana));
+
+        assertThatThrownBy(() -> service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION))
+                .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
+    void una_ruta_sin_trazado_sigue_siendo_candidata() {
+        // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON todavia. Se sugieren igual,
+        // solo que sin ultima milla.
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of()))
+                .thenReturn(Duration.ofMinutes(20));
+
+        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(sinTrazado);
+        assertThat(result.boarding()).isEmpty();
+        assertThat(result.dropOff()).isEmpty();
     }
 }

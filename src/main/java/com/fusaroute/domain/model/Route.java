@@ -29,6 +29,38 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
     }
 
     /**
+     * Punto del trazado mas cercano a {@code from} y cuanto hay que caminar hasta el
+     * (RF-04, ultima milla). Sirve igual para el abordaje (desde el origen) y para la
+     * bajada (hacia el destino), y da el mismo resultado online y offline: es
+     * geometria sobre el GeoJSON propio, sin llamar a Google.
+     *
+     * @return vacio si la ruta no tiene trazado cargado todavia. Una ruta asi sigue
+     *     siendo buscable; simplemente no se le puede calcular la ultima milla.
+     */
+    public Optional<BoardingPoint> boardingPointFor(Coordinate from) {
+        return PathProjection.nearestPointOn(path, from);
+    }
+
+    /**
+     * Regla de descarte de RF-04: la ruta deja de ser candidata si obliga a caminar
+     * mas de {@link BoardingPoint#MAX_WALKING_DISTANCE_METERS} en cualquiera de las
+     * dos puntas.
+     *
+     * Una ruta sin trazado nunca se descarta por esta via: no hay con que medirla, y
+     * sacarla del resultado la haria invisible por un dato que falta, no por una
+     * razon de negocio.
+     */
+    public boolean isWithinWalkingDistance(Coordinate origin, Coordinate destination) {
+        return isWithinWalkingDistance(origin) && isWithinWalkingDistance(destination);
+    }
+
+    private boolean isWithinWalkingDistance(Coordinate from) {
+        return boardingPointFor(from)
+                .map(BoardingPoint::isWithinWalkingDistance)
+                .orElse(true);
+    }
+
+    /**
      * Devuelve la ruta con solo las tarifas vigentes a {@code today}: por cada punto
      * de referencia, la fila con el {@code validFrom} mas reciente que no sea futuro.
      * Las filas futuras se descartan (una tarifa anunciada no rige todavia).
