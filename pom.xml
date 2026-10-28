@@ -31,13 +31,16 @@
 		     vez de suprimirla: hay fix publicado, y actualizar es mas facil de
 		     defender que argumentar un falso positivo. -->
 		<log4j2.version>2.25.5</log4j2.version>
-		<!-- SonarQube autohospedado (SCRUM-181, RNF-05). sonar.host.url y
-		     sonar.token NO se fijan aqui: viajan por secret del CI, porque la
-		     URL de la VM puede cambiar y el token nunca debe commitearse.
-		     Tampoco va sonar.organization: es exclusivo de SonarCloud; en
-		     autohospedado no aplica. La version del sonar-maven-plugin se
-		     pinea en el goal del workflow (reproducibilidad del CI) a la
-		     ultima estable verificada en Maven Central el 2026-10-27. -->
+		<!-- SonarCloud (SCRUM-181, RNF-05). sonar.host.url va explicito en el
+		     goal del workflow (https://sonarcloud.io) y sonar.token NO se fija
+		     aqui: viaja por secret del CI, porque el token nunca debe
+		     commitearse. sonar.organization es obligatorio en SonarCloud y
+		     debe coincidir con la organization key real; si no coincide el
+		     analisis falla con "project not found". La version del
+		     sonar-maven-plugin se pinea en el goal del workflow
+		     (reproducibilidad del CI) a la ultima estable verificada en Maven
+		     Central el 2026-10-27. -->
+		<sonar.organization>sabego2006</sonar.organization>
 		<sonar.projectKey>sabego2006_FusaRoute-BACKEND</sonar.projectKey>
 		<!-- JaCoCo ya escribe este XML en la fase test (plugin configurado
 		     abajo). Sonar lo ingiere sin duplicar configuracion de cobertura. -->

@@ -10,12 +10,12 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     env:
-      # Secrets de SonarQube (SCRUM-181). Sin ellos el paso de analisis
-      # queda SKIPPED, no FAILED: asi el CI no se enrojece antes de que
-      # el admin monte la VM y guarde los secrets. Con ambos presentes
-      # el paso corre y un fallo del scanner tumba el CI.
+      # Secret de SonarCloud (SCRUM-181). Sin el token el paso de analisis
+      # queda SKIPPED, no FAILED: asi el CI no se enrojece antes de que el
+      # admin importe el repo y guarde el secret. Con el token presente el
+      # paso corre y un fallo del scanner tumba el CI. El host ya no es un
+      # secret: es siempre https://sonarcloud.io (ver el paso de analisis).
       SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-      SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
     steps:
       - name: Checkout
         # Sonar usa el historial para blame y new-code; sin fetch-depth 0
@@ -43,15 +43,17 @@ jobs:
         # de JaCoCo configurado en pom.xml; Sonar lo ingiere mas abajo.
         run: mvn -B verify
 
-      - name: Analisis SonarQube
-        # Guard: sin secrets el paso queda SKIPPED (ver env del job). Con
-        # secrets el paso es bloqueante: un fallo del scanner tumba el CI.
+      - name: Analisis SonarCloud
+        # Guard: sin token el paso queda SKIPPED (ver env del job). Con
+        # token el paso es bloqueante: un fallo del scanner tumba el CI.
+        # El host va explicito: sonar-maven-plugin sin sonar.host.url cae a
+        # http://localhost:9000, no a SonarCloud.
         # qualitygate.wait=false mantiene el gate informativo hasta que
         # domain/ y application/ tengan codigo real; luego se vuelve true.
-        if: env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != ''
+        if: env.SONAR_TOKEN != ''
         run: >
           mvn -B
           org.sonarsource.scanner.maven:sonar-maven-plugin:5.8.0.7211:sonar
-          -Dsonar.host.url=$SONAR_HOST_URL
+          -Dsonar.host.url=https://sonarcloud.io
           -Dsonar.token=$SONAR_TOKEN
           -Dsonar.qualitygate.wait=false 

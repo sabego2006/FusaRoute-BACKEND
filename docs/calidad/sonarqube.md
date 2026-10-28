@@ -1,133 +1,100 @@
-# SonarQube — análisis estático de calidad
+# SonarCloud — análisis estático de calidad
 
 SCRUM-181 · RNF-05 (analizador estático en CI en cada PR).
 
 ## Qué es, y por qué así
 
-**SonarQube Community autohospedado en Docker**, no SonarCloud. El ticket original pedía
-SonarCloud, pero la decisión del 2026-10-27 fue montarlo **únicamente desde Docker**:
-tablero propio, control total, sin dependencia de un SaaS externo.
+**SonarCloud** (SonarQube Cloud), para backend y frontend. El 2026-10-27 se había decidido
+autohospedar SonarQube Community en una VM de Oracle; el 2026-10-28 se revirtió y se
+unificó todo en SonarCloud. Razones:
 
-**Arquitectura elegida** (porque "afecte el CI + tablero persistente + no pesado + gratis"
-no se sostienen los cuatro a la vez con cualquier combinación):
+- **Cero infraestructura que mantener**: sin VM, sin certificado HTTPS, sin parches, sin
+  uptime que vigilar. Para un equipo de dos ante sustentación, la VM era más riesgo que valor.
+- **Decora PRs y analiza por rama.** SonarQube Community autohospedado no hace ninguna de
+  las dos (son features de pago), y encajan con el flujo de `main` protegida con revisión
+  obligatoria.
+- **Un solo tablero** para los dos repos. Ambos `projectKey` ya existen:
+  `sabego2006_FusaRoute-BACKEND` y `sabego2006_FusaRoute-FRONTEND`.
 
-| Pieza | Dónde | Por qué |
-|---|---|---|
-| Servidor SonarQube + Postgres | VM **Always-Free de Oracle Cloud** (ARM Ampere A1, Ubuntu), con `docker compose` | Gratis real 24/7 con IP pública; 4 OCPU / 24 GB ARM alcanzan de sobra para SonarQube Community. Es lo más cercano a "Cloud" sin pagar |
-| Analizador | Runners normales de GitHub Actions (`ubuntu-latest`) | Siempre disponibles; apuntan al servidor por URL pública |
-| Quality Gate | **Informativo** al inicio (`sonar.qualitygate.wait=false`) | `domain/`/`application/` aún tienen poco código; un gate bloqueante hoy pondría todo PR rojo. Se vuelve `wait=true` cuando haya código real |
+**Costo y condición:** el tier gratuito de SonarCloud exige que el repo sea **público**.
 
-**Limitación conocida de Community Edition:** no analiza por rama ni decora PRs (son
-features de pago, Developer Edition en adelante). El tablero refleja el último commit
-analizado, no un diff por PR. Aceptable para la sustentación; no equivale a SonarCloud.
+| Pieza | Dónde |
+|---|---|
+| Servidor y tablero | SonarCloud (organización `sabego2006`) |
+| Analizador | Runners normales de GitHub Actions (`ubuntu-latest`) |
+| Quality Gate | **Informativo** al inicio (`sonar.qualitygate.wait=false`): `domain/` y `application/` aún tienen poco código; un gate bloqueante hoy pondría todo PR rojo |
 
 ## Prerequisitos (una sola vez, los hace Santiago como admin)
 
 El paso de análisis en CI queda **SKIPPED** hasta completar esto. Nada rompe mientras tanto.
 
-### 1. Crear la VM
+### 1. Importar el repo
 
-- Oracle Cloud → Compute → Instances → Create instance.
-- Shape: **VM.Standard.A1.Flex** (ARM Ampere Always-Free). 2 OCPU / 12 GB es suficiente.
-- Imagen: Ubuntu LTS reciente.
-- Guardar la IP pública.
-- **Si falla por "Out of host capacity":** probar otra región Always-Free. Es común.
+- El repo `FusaRoute-BACKEND` debe ser **público**.
+- sonarcloud.io → **+** → *Analyze new project* → organización `sabego2006` → elegir
+  `FusaRoute-BACKEND` → método **With GitHub Actions** (no *Automatic Analysis*).
 
-### 2. Endurecer el host
+### 2. Apagar el análisis automático
 
-```bash
-# vm.max_map_count lo exige Elasticsearch (dentro de SonarQube).
-sudo tee /etc/sysctl.d/99-sonarqube.conf <<'EOF'
-vm.max_map_count=262144
-fs.file-max=131072
-EOF
-sudo sysctl --system
+Proyecto → **Administration → Analysis Method** → desactivar *Automatic Analysis*. Si queda
+activo choca con el análisis del CI y SonarCloud rechaza uno de los dos.
 
-# Docker + compose plugin.
-sudo apt-get update
-sudo apt-get install -y docker.io docker-compose-plugin
-sudo usermod -aG docker $USER
-# Cerrar y reabrir sesión para que el grupo tome efecto.
-```
+### 3. Crear y guardar el token
 
-### 3. Subir el compose y arrancar
+- SonarCloud → *My Account → Security* → generar un token → copiarlo.
+- GitHub → repo BACKEND → Settings → Secrets and variables → Actions → New repository secret:
+  `SONAR_TOKEN` = el token. **No** hay `SONAR_HOST_URL`: el host va fijo en el workflow.
+  Si quedó el secret `SONAR_HOST_URL` de la VM, se puede borrar; el CI ya no lo lee.
 
-```bash
-# Copiar infra/sonarqube/ a la VM (scp o git clone de este repo).
-cd infra/sonarqube
-cp .env.example .env
-# Rellenar SONAR_DB_PASSWORD con una contraseña fuerte:
-#   openssl rand -base64 32
-docker compose up -d
-docker compose logs -f sonarqube   # esperar "SonarQube is operational" (~2 min)
-```
+### 4. Confirmar la organización
 
-### 4. Primer login + endurecimiento obligatorio
+`sonar.organization` está en `pom.xml` como `sabego2006`. Debe ser idéntica a la
+**organization key** real en SonarCloud; si difiere, el análisis falla con *"project not
+found"*. Corregirlo es una línea en el `pom.xml`.
 
-- Entrar a `http://<ip-publica>:9000` solo desde un túnel SSH (`ssh -L 9000:localhost:9000 ubuntu@<ip>`)
-  o desde la red local. **El puerto 9000 no debe quedar expuesto al mundo.**
-- Login: `admin` / `admin`. **Cambiar la contraseña inmediatamente.**
-- Crear el proyecto en SonarQube con **Project Key** = `sabego2006_FusaRoute-BACKEND`.
-- Generar un **token de análisis** (My Account → Security). Guardarlo.
-
-### 5. HTTPS pública (obligatorio antes de abrir al mundo)
-
-Opciones realistas:
-
-- **Caddy** delante del contenedor (lo más corto): un `Caddyfile` con `sonar.<tu-dominio>`
-  y `reverse_proxy localhost:9000`. Caddy saca el certificado de Let's Encrypt solo.
-- **Cloudflare Tunnel**: cero puertos abiertos al mundo, HTTPS automático.
-
-Firewall / Security List de Oracle: abrir **solo 443** (y 80 si usas Let's Encrypt HTTP-01)
-hacia Internet; **9000 nunca**.
-
-### 6. Guardar los secrets del CI
-
-GitHub → repo → Settings → Secrets and variables → Actions → New repository secret:
-
-- `SONAR_TOKEN` = el token del paso 4.
-- `SONAR_HOST_URL` = la URL HTTPS pública (por ejemplo `https://sonar.fusaroute.dev`).
-
-El primer push a cualquier rama hará que el paso **Análisis SonarQube** del CI corra
-contra la VM. El badge del README resolverá tras ese primer análisis.
+El primer push o PR a `main` hace que el paso **Análisis SonarCloud** corra. El badge del
+README resuelve tras ese primer análisis.
 
 ## Cómo encaja con el CI actual
 
-El job `build-and-test` de `.github/workflows/ci.yml` sigue haciendo `mvn -B verify`
-(que ya genera `target/site/jacoco/jacoco.xml` vía el plugin de JaCoCo). Tras eso corre
-`sonar-maven-plugin:5.8.0.7211:sonar` con `-Dsonar.host.url=$SONAR_HOST_URL` y
-`-Dsonar.token=$SONAR_TOKEN`. La propiedad `sonar.coverage.jacoco.xmlReportPaths` está en
-el `pom.xml` apuntando al XML que ya existe; Sonar lo ingiere sin duplicar configuración.
+El job `build-and-test` de `.github/workflows/ci.yml` sigue haciendo `mvn -B verify` (que ya
+genera `target/site/jacoco/jacoco.xml` vía el plugin de JaCoCo). Tras eso corre
+`sonar-maven-plugin:5.8.0.7211:sonar` con `-Dsonar.host.url=https://sonarcloud.io` y
+`-Dsonar.token=$SONAR_TOKEN`. La propiedad `sonar.coverage.jacoco.xmlReportPaths` está en el
+`pom.xml` apuntando al XML que ya existe.
 
-El paso del scanner es **bloqueante** (no `continue-on-error`) **con guard** `if: env.SONAR_TOKEN != '' && env.SONAR_HOST_URL != ''`:
+El host va **explícito** a propósito: `sonar-maven-plugin` sin `sonar.host.url` cae a
+`http://localhost:9000`, no a SonarCloud, y fallaría sin avisar por qué.
 
-- Sin secrets → paso **SKIPPED**, CI verde.
-- Con secrets → paso **corre**; cualquier fallo (red, Java 25 no soportado, token
-  inválido, VM caída) deja el PR en rojo. Es a propósito: el CI tiene que avisar.
+El paso del scanner es **bloqueante** (no `continue-on-error`) **con guard**
+`if: env.SONAR_TOKEN != ''`:
+
+- Sin token → paso **SKIPPED**, CI verde.
+- Con token → paso **corre**; cualquier fallo (red, Java 25 no soportado, token inválido)
+  deja el PR en rojo. Es a propósito: el CI tiene que avisar.
 
 ## Plan B: Java 25 en el analyzer
 
 SonarQube 2026.1 LTA (y las Community Build posteriores) soportan Java 25 oficialmente.
-Verificado en los docs oficiales el 2026-10-27. Si el primer run falla por versión de Java:
+Verificado en los docs oficiales el 2026-10-27; **no verificado contra SonarCloud**. Si el
+primer run falla por versión de Java:
 
 - Añadir al pom o al goal: `-Dsonar.java.source=25 -Dsonar.java.binaries=target/classes`.
-- Como último recurso, subir la imagen a la **última** Community Build en Docker Hub (ya
-  hay una del 2026-10 pineada en `compose.yaml`; actualizarla sabiendo que exige
-  migración de BD).
 
 ## Volver el gate bloqueante (cuando corresponda)
 
 Cuando `domain/` y `application/` tengan código real y el gate verde sea alcanzable:
 
-1. En SonarQube, Quality Gates → ajustar umbrales si hace falta.
+1. En SonarCloud, Quality Gates → ajustar umbrales si hace falta.
 2. En `ci.yml`, cambiar `qualitygate.wait=false` a `qualitygate.wait=true`.
 3. Ahora un gate rojo tumba el PR.
 
-## Reset / mantenimiento
+## VM de Oracle y `infra/sonarqube/`
 
-- **Backup del Postgres de SonarQube:** `docker compose exec db pg_dump -U sonar sonar > backup.sql`.
-  Nada crítico (el análisis se reconstruye desde el repo), pero el histórico y las
-  revisiones de hotspots se pierden si se tira el volumen sin backup.
-- **Actualización mayor:** NO hacerla sin leer la guía de upgrade de SonarQube para la
-  versión destino. Las versiones mayores exigen pasos de migración; por eso el tag está
-  pineado en `compose.yaml`.
+El montaje autohospedado (`infra/sonarqube/compose.yaml` y `.env.example`) queda **obsoleto**.
+Se conserva en este PR para no mezclar la migración con un borrado. Pasos pendientes, tras
+confirmar que el análisis en SonarCloud queda verde:
+
+1. Dar de baja la VM de Oracle (si llegó a crearse) y su IP pública.
+2. Borrar `infra/sonarqube/` en un commit aparte.
+3. Borrar el secret `SONAR_HOST_URL` del repo si sigue ahí.
