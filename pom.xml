@@ -225,6 +225,23 @@
 					</execution>
 				</executions>
 			</plugin>
+			<plugin>
+				<!-- Los tests de integracion (*IT.java) existian desde SCRUM-29 pero no
+				     corrian nunca: surefire solo recoge *Test.java, y sin failsafe nadie
+				     ejecutaba los *IT. Resultado: ningun test del build levantaba el
+				     contexto de Spring, asi que el CI quedo verde con una colision de
+				     migraciones de Flyway y un CacheManager duplicado que rompian el
+				     arranque. Failsafe los corre en la fase integration-test y falla el
+				     build en verify. Los IT que necesitan Docker (Testcontainers) ya se
+				     saltan solos con disabledWithoutDocker, asi que una maquina sin el
+				     daemon sigue pudiendo construir.
+
+				     Sin <executions> a proposito: el parent de Spring Boot ya declara la
+				     ejecucion en su pluginManagement, y basta con nombrar el plugin aqui
+				     para activarla. Agregar una propia la correria dos veces. -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
+			</plugin>
 		</plugins>
 	</build>
 	<profiles>
