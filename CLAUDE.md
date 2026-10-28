@@ -4,7 +4,7 @@ API REST del sistema de información de transporte público de Fusagasugá. Proy
 
 **Recursos externos:** la carpeta del curso en OneDrive (`C:/Users/Santiago/OneDrive - UNIVERSIDAD DE CUNDINAMARCA/Universidad/5 SEMESTRE/INGENIERIA SOFTWARE I`) contiene la Actividad 3 v3 y el material de clase. Las 15 historias de usuario aprobadas (RF-01 a RF-15, con criterios de aceptación) están en `docs/backlog/historias-rf01-rf15.md` de esa misma carpeta, y los RNF en `docs/backlog/requisitos-no-funcionales.md` — es la fuente de las reglas de negocio de este archivo.
 
-**Jira:** proyecto `SCRUM` en `fusaroute.atlassian.net`. 5 épicas (`SCRUM-7`..`SCRUM-11`), 15 historias (`SCRUM-12`..`SCRUM-26` + `SCRUM-153`, la parte de última milla/offline separada de HU_MF02_001), 7 RNF como Task (`SCRUM-127`..`SCRUM-133`). **Sprint Planning cerrado el 2026-09-17**: 9 sprints semanales, cada issue con Sprint + Story Points + responsable asignado, cada Subtask con descripción y responsable. Sprint 1 activo (15→21 sep, arranque técnico — RNF-03 mantenibilidad + RNF-05 seguridad). Ver `docs/guia-jira-fusaroute.md` en la carpeta del curso para las convenciones completas del tablero.
+**Jira:** proyecto `SCRUM` en `fusaroute.atlassian.net`. 5 épicas (`SCRUM-7`..`SCRUM-11`), 15 historias (`SCRUM-12`..`SCRUM-26` + `SCRUM-153`, la parte de última milla/offline separada de HU_MF02_001), 7 RNF como Task (`SCRUM-127`..`SCRUM-133`). **Sprint Planning cerrado el 2026-09-17**: 9 sprints semanales, cada issue con Sprint + Story Points + responsable asignado, cada Subtask con descripción y responsable. El Sprint 1 (15→21 sep) cerró con velocidad 0; el Sprint 2 (22→28 sep) es el del comité del 28-sep y cierra con las 3 funcionalidades (registro, login, catálogo público) más RNF-03/05/06; `SCRUM-14` (perfil, RF-03) se adelantó al Sprint 2 y está implementado en rama, sin mergear. Sprint 3 (29-sep→5-oct): despliegue real y `SCRUM-155` (bloqueo por intentos fallidos). Ver `docs/guia-jira-fusaroute.md` en la carpeta del curso para las convenciones completas del tablero.
 
 **Planes vigentes** (leer al abrir sesión nueva): el plan maestro de arranque en `C:/Users/Santiago/.claude/plans/eager-coalescing-creek.md`, el **Plan de Metodología y Preparación** en `C:/Users/Santiago/.claude/plans/lee-el-estado-del-wondrous-hoare.md`, y el plan de carga a Jira (ya ejecutado, referencia de las decisiones tomadas) en `C:/Users/Santiago/.claude/plans/dreamy-exploring-unicorn.md`.
 
@@ -17,6 +17,7 @@ El contexto completo del curso, el alcance del proyecto y las métricas de calid
 - **Java 25** (LTS vigente) + **Spring Boot 3.5.16**, Maven 3.9+
 - **Arquitectura hexagonal** (puertos y adaptadores) — exigida por el docente
 - PostgreSQL alojado en Supabase, vía Spring Data JPA
+- **Flyway** para versionar el esquema — Hibernate solo valida, nunca genera DDL
 - Spring Security + JWT
 - JUnit 5 + Mockito
 
@@ -34,17 +35,20 @@ Concretamente: una clase en `domain/` **nunca** importa Spring, JPA, Jackson, HT
 com.fusaroute
 ├── domain
 │   ├── model/            Route, Stop, Neighborhood, Fare, TrafficSector, User, SearchRecord, Feedback
+│   ├── exception/        excepciones de negocio (FieldViolation, InvalidRegistrationException...)
 │   └── port
 │       ├── in/           interfaces de casos de uso (lo que el mundo puede pedirle al dominio)
 │       └── out/          interfaces que el dominio necesita (RouteRepositoryPort, TravelTimePort...)
 ├── application
 │   └── usecase/          implementación de los casos de uso; orquesta dominio + puertos out
 └── infrastructure
+    ├── config/           SecurityConfig, UseCaseConfig (cablea casos de uso con adaptadores)
     └── adapter
         ├── in
         │   └── web/      @RestController, DTOs de request/response, mappers
         └── out
             ├── persistence/  @Entity JPA, repositorios Spring Data, mappers a/desde dominio
+            ├── security/     hasheo de contraseñas (BCrypt), implementa PasswordHasherPort
             └── maps/         cliente HTTP de Google Maps
 ```
 
@@ -95,12 +99,12 @@ Dos reglas sobre eso: **los orígenes se enumeran, nunca `*`** —con credencial
 | Ambiente | Usuario | Esquema/base |
 |---|---|---|
 | DEV | `fusaroute_dev` (sin `rolsuper`/`rolcreaterole`/`rolbypassrls`) | esquema `fusaroute` en la base `postgres` del proyecto Supabase `fusaroute-dev`, compartido por el equipo |
-| PRE | usuario propio del proyecto Supabase de PRE | la de ese proyecto |
-| PROD | usuario propio del proyecto Supabase de PROD | la de ese proyecto |
+| PRE | — (diferido, ver tabla de ambientes) | — |
+| PROD | `fusaroute_prod` (mismas restricciones que `fusaroute_dev`) | esquema `fusaroute` en la base `postgres` del proyecto Supabase `fusaroute-prod` |
 
 La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limita a ese esquema; si se filtra el superusuario, se pierde el servidor entero. Si algún `.env` real llega a tener `DB_USERNAME=postgres` o el admin de Supabase, es una desviación de esta regla y se corrige, no se deja pasar "porque es solo DEV".
 
-**API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota.
+**API key de Maps.** La del backend es distinta de la del frontend y no se expone al cliente jamás. **Las llamadas a Google Maps se cachean 5 minutos por par origen-destino** — es parte del diseño de RNF-01, no una optimización opcional. La razón: el cálculo de la ruta depende de Maps, así que el caché sostiene el p95 < 8 s comprometido y reduce el consumo de cuota. Implementado en `GoogleMapsClient` (SCRUM-127): el bean del caché se llama `googleMapsTravelTime` (Caffeine, TTL fijado en `spring.cache.caffeine.spec`), y un fallo de Google nunca se cachea. Ver "Métricas y p95" en el README.
 
 **Errores explícitos.** Nada de `catch` vacíos ni de devolver `null` para disimular un fallo. Códigos HTTP correctos (`400` validación, `401` sin autenticar, `403` sin permiso, `404` no existe) y un cuerpo de error consistente. El docente evalúa fiabilidad con métrica.
 
@@ -111,16 +115,33 @@ La razón no es solo higiene: si el usuario dedicado se filtra, el daño se limi
 | Ambiente | Qué es | Estado hoy |
 |---|---|---|
 | **DEV** | proyecto Supabase compartido `fusaroute-dev` (rol `fusaroute_dev`, esquema `fusaroute`). Ya no es PostgreSQL local por integrante. | **activo** |
-| **PRE** | proyecto Supabase con datos de prueba. El ensayo general. | se monta en el Sprint 2 |
-| **PROD** | proyecto Supabase con las rutas reales; frontend en **Vercel**, backend en **Render** (tier gratis). Lo que ve el comité. | decidido el 2026-09-14, **por desplegar en el Sprint 2** · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
+| **PRE** | el ensayo general, con datos de prueba. | **diferido** (decisión del 2026-10-01): el plan gratis de Supabase permite 2 proyectos activos por organización —ya los ocupan DEV y PROD— y las 750 h/mes gratis de Render alcanzan para un solo servicio 24/7. El perfil existe en estructura, sin dónde montarlo |
+| **PROD** | proyecto Supabase `fusaroute-prod` (rol `fusaroute_prod`, esquema `fusaroute`) con las rutas reales; backend en **Render** (tier gratis, Docker, ver `render.yaml`), frontend en **Vercel**. Lo que ve el comité. | **desplegándose en el Sprint 3** (SCRUM-128): proyecto Supabase creado el 2026-10-01 · el tier gratis de Render se duerme tras 15 min sin tráfico y tarda 30-60 s en reactivarse (cold start) — ver RNF-02 |
 
 ```
 src/main/resources/
 ├── application.properties        # común · spring.profiles.active=${SPRING_PROFILE:dev}
 ├── application-dev.properties    # Supabase fusaroute-dev, rol fusaroute_dev
-├── application-pre.properties    # claves declaradas y vacías hasta el Sprint 2
-└── application-prod.properties   # claves declaradas y vacías hasta el Sprint 2
+├── application-pre.properties    # PRE diferido: claves declaradas, sin ambiente
+├── application-prod.properties   # Supabase fusaroute-prod, rol fusaroute_prod (valores en Render)
+└── db/migration/                 # migraciones de Flyway, en orden V1, V2, ...
 ```
+
+**El dueño del esquema es Flyway, no Hibernate.** Los tres perfiles van con
+`spring.jpa.hibernate.ddl-auto=validate`: Hibernate comprueba que las entidades calcen
+con las tablas, y nunca las crea ni las altera. Cada cambio de esquema es un archivo
+nuevo en `db/migration/`, revisable en el PR y aplicado igual en DEV, PRE y PROD.
+
+Dos reglas que no se rompen:
+
+- **Una migración ya aplicada no se edita jamás.** Flyway guarda un checksum de cada
+  archivo en `fusaroute.flyway_schema_history`; si el archivo cambia después de haberse
+  aplicado, el arranque falla con un error de validación. Un cambio se corrige con una
+  migración **nueva**, no editando la anterior.
+- **El esquema se declara, no se hereda del rol.** `spring.flyway.schemas` e
+  `hibernate.default_schema` apuntan a `${DB_SCHEMA:fusaroute}` en
+  `application.properties`. El rol `fusaroute_dev` ya trae `search_path=fusaroute`, pero
+  el arranque no depende de esa propiedad del servidor, que no está en el repositorio.
 
 Los cuatro archivos existen desde ya, para cumplir en estructura con la §22 de la guía de buenas prácticas aunque PRE y PROD todavía no tengan valores.
 
@@ -157,12 +178,12 @@ Requiere **JDK 25** y **Maven 3.9+** instalados. No requiere PostgreSQL local �
 | Rendimiento | p95 < 8 s end-to-end (cliente → backend → Google Maps → render) en `/api/routes/search` sobre 4G. Caché de 5 min por par origen-destino. | Spring Boot Actuator + Micrometer (percentil 95) sobre el endpoint, midiendo latencia total desde que entra al controller hasta que sale la respuesta |
 | Fiabilidad | ≥ 95 % de los latidos de monitoreo responden en horario hábil (lun–vie 7:00–21:00), incluyendo el cold start del tier gratis de Render (hasta 60 s tras 15 min de inactividad); RPO < 24 h | UptimeRobot (backend en Render) + backup diario automatizado de PostgreSQL (Supabase), con restore probado al cierre de sprint |
 | Mantenibilidad | 0 violaciones de la regla de dependencia hexagonal · cobertura de `domain/` y `application/` ≥ 70 % | **ArchUnit** en el build (falla el build, no el revisor) + **JaCoCo** con umbral bloqueante; además revisión en PR |
-| Seguridad | 0 vulnerabilidades críticas conocidas | auditoría de dependencias |
+| Seguridad | 0 vulnerabilidades altas o críticas (CVSS ≥ 7) **sin suprimir**, con el conteo de supresiones vigentes declarado; toda supresión (`config/owasp/suppression.xml`) lleva justificación de inalcanzabilidad, razón de no actualizar y fecha `until`. Si hay fix publicado se sube la versión en vez de suprimir. Ajustada el 2026-09-27 (RNF-05). | OWASP Dependency-Check (`failBuildOnCVSS=7`, bloqueante) en CI; el XML de supresiones se valida en su propio paso |
 | Usabilidad de la API | códigos HTTP correctos y errores descriptivos | revisión en PR |
 
 ## Instrumentos de la métrica de mantenibilidad
 
-La regla hexagonal no se sostiene con buena voluntad: se sostiene con dos herramientas en el build. **Ninguna de las dos existe todavía — se instalan en el Sprint 1.**
+La regla hexagonal no se sostiene con buena voluntad: se sostiene con dos herramientas en el build. **Ambas ya existen y corren en `mvn -B verify` (CI):** las reglas de ArchUnit están en `src/test/java/com/fusaroute/architecture/HexagonalArchitectureTest.java` y el umbral de JaCoCo (0,70) en `pom.xml`.
 
 - **ArchUnit** (test de arquitectura en `src/test/java`): comprueba que ninguna clase de `com.fusaroute.domain..` importe `org.springframework..`, `jakarta.persistence..` ni `com.fasterxml.jackson..`, y que la dependencia entre capas apunte siempre hacia adentro. Si alguien contamina el dominio, **falla el build**, no lo tiene que ver un humano en el PR.
 - **JaCoCo**: umbral de cobertura **bloqueante** sobre `domain/` y `application/`. Se limita a esos dos paquetes a propósito: son los que contienen lógica de negocio propia y los únicos donde la cobertura significa algo. Cubrir controllers para subir un porcentaje es maquillaje.
@@ -179,8 +200,7 @@ Las reglas de ArchUnit se escriben **contra nombres de paquete**. Por eso los no
 
 - `main` protegida. Ramas `feature/SCRUM-N-nombre` o `fix/SCRUM-N-nombre`.
 - **Pull Request obligatorio**, revisado por el otro integrante; nadie mergea su propio PR sin revisión. Es donde ambos aprenden el código del otro, que es justo lo que el docente busca.
-- **Bloque de ejecución manual por sprint:** cada integrante resuelve al menos una Subtask propia sin que un agente escriba el código ni corra el comando — Claude puede guiar, no ejecutar.
-- **Ningún commit ni PR lleva atribución a Claude** (`Co-Authored-By: Claude...`, `Claude-Session: ...`), en ningún caso — no solo en el bloque de ejecución manual. Regla general de los 3 repos, en el `CLAUDE.md` de la carpeta del curso, sección Git.
+- **Ningún commit ni PR lleva atribución a Claude** (`Co-Authored-By: Claude...`, `Claude-Session: ...`, "Hecho por Claude" ni ninguna frase o alegoría equivalente). Regla general de los 3 repos, en el `CLAUDE.md` de la carpeta del curso, sección Git.
 - Conventional Commits en español con key de Jira: `feat(SCRUM-N): descripción`, `fix(SCRUM-N): descripción`, etc.
 - CI en GitHub Actions: build + tests en cada PR. Si el CI falla, no se mergea.
 - Backlog en Jira; cada sustentación quincenal ante el comité cierra un hito.

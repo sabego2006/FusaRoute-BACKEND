@@ -1,0 +1,13 @@
+-- V4 — Columna de activacion de la cuenta (SCRUM-30, RF-01).
+--
+-- La activacion es inmediata y sin verificacion por correo este semestre, pero
+-- quien la decide es el dominio (User.register nace active=true), NO un default
+-- de la base. Por eso la columna nace DEFAULT FALSE: el default solo cubre filas
+-- preexistentes y cualquier INSERT que no fije el valor; el alta real lo pone en
+-- true de forma explicita. Asi la regla de negocio vive en un solo sitio y es
+-- testeable sin Postgres.
+--
+-- DEFAULT FALSE ademas es seguro sobre una tabla con datos: si hubiera usuarios
+-- de prueba insertados a mano quedarian inactivos, lo que se verifica en Supabase
+-- antes del primer arranque. V1..V3 no se editan (Flyway valida su checksum).
+ALTER TABLE users ADD COLUMN active BOOLEAN NOT NULL DEFAULT FALSE;

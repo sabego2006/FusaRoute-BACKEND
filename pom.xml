@@ -31,11 +31,54 @@
 		     vez de suprimirla: hay fix publicado, y actualizar es mas facil de
 		     defender que argumentar un falso positivo. -->
 		<log4j2.version>2.25.5</log4j2.version>
+		<!-- SonarQube autohospedado (SCRUM-181, RNF-05). sonar.host.url y
+		     sonar.token NO se fijan aqui: viajan por secret del CI, porque la
+		     URL de la VM puede cambiar y el token nunca debe commitearse.
+		     Tampoco va sonar.organization: es exclusivo de SonarCloud; en
+		     autohospedado no aplica. La version del sonar-maven-plugin se
+		     pinea en el goal del workflow (reproducibilidad del CI) a la
+		     ultima estable verificada en Maven Central el 2026-10-27. -->
+		<sonar.projectKey>sabego2006_FusaRoute-BACKEND</sonar.projectKey>
+		<!-- JaCoCo ya escribe este XML en la fase test (plugin configurado
+		     abajo). Sonar lo ingiere sin duplicar configuracion de cobertura. -->
+		<sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
 	</properties>
 	<dependencies>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-web</artifactId>
+		</dependency>
+		<!-- SCRUM-167: documentacion de la API pedida por el comite del 28-sep. -->
+		<dependency>
+			<groupId>org.springdoc</groupId>
+			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
+			<version>2.8.6</version>
+		</dependency>
+		<!-- Cache de 5 min por par origen-destino para las llamadas a Google Maps (RNF-01):
+		     sostiene el p95 < 8 s comprometido y reduce el consumo de cuota. Caffeine en vez
+		     de un cache distribuido porque el backend corre en una sola instancia de Render;
+		     no hay otro nodo con el que sincronizar entradas. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-cache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.github.ben-manes.caffeine</groupId>
+			<artifactId>caffeine</artifactId>
+		</dependency>
+		<!-- Actuator: expone /actuator/* y trae Micrometer (MeterRegistry), usado por
+		     SearchRouteService para medir la latencia de busqueda (RNF-01). Tambien expone
+		     /actuator/metrics y /actuator/prometheus con el percentil 95 por endpoint, el
+		     instrumento que exige el RNF de rendimiento (SCRUM-127). micrometer-registry-prometheus
+		     es el formato que ese endpoint sirve; sin el no hay /actuator/prometheus, solo
+		     /actuator/metrics. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-actuator</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.micrometer</groupId>
+			<artifactId>micrometer-registry-prometheus</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
@@ -44,6 +87,35 @@
 		<dependency>
 			<groupId>org.springframework.boot</groupId>
 			<artifactId>spring-boot-starter-security</artifactId>
+		</dependency>
+		<!-- Flyway es el dueno del esquema: cada cambio viaja en un .sql revisable en el
+		     PR y se aplica igual en DEV, PRE y PROD. Hibernate solo valida (ddl-auto=validate).
+		     flyway-database-postgresql es obligatorio desde Flyway 10: el soporte de cada
+		     motor salio del core a su propio artefacto. Las versiones las fija el BOM de
+		     spring-boot-starter-parent. -->
+		<!-- JWT (SCRUM-13): Nimbus JOSE para firmar (JwtEncoder) y validar (resource
+		     server) tokens HS256. La version la fija el BOM de spring-boot-starter-parent,
+		     asi no hay una libreria JWT extra cuya version seguir a mano. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-starter-oauth2-resource-server</artifactId>
+		</dependency>
+		<!-- TOTP (SCRUM-179): segundo factor obligatorio tipo Microsoft/Google
+		     Authenticator. dev.samstevens.totp cubre secret generation, URI otpauth://
+		     y verificacion con tolerancia de ventana. Confinada al adaptador
+		     out/security por regla hexagonal; el dominio solo conoce TotpPort. -->
+		<dependency>
+			<groupId>dev.samstevens.totp</groupId>
+			<artifactId>totp</artifactId>
+			<version>1.7.1</version>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.flywaydb</groupId>
+			<artifactId>flyway-database-postgresql</artifactId>
 		</dependency>
 		<dependency>
 			<groupId>org.postgresql</groupId>
@@ -64,6 +136,24 @@
 			<groupId>com.tngtech.archunit</groupId>
 			<artifactId>archunit-junit5</artifactId>
 			<version>1.5.0</version>
+			<scope>test</scope>
+		</dependency>
+		<!-- Testcontainers: solo para el IT del adaptador de persistencia, que
+		     levanta un Postgres real y deja a Flyway aplicar V1..V4. Las versiones
+		     las fija el BOM de spring-boot-starter-parent. -->
+		<dependency>
+			<groupId>org.springframework.boot</groupId>
+			<artifactId>spring-boot-testcontainers</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>postgresql</artifactId>
+			<scope>test</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.testcontainers</groupId>
+			<artifactId>junit-jupiter</artifactId>
 			<scope>test</scope>
 		</dependency>
 	</dependencies>
@@ -145,6 +235,23 @@
 						</goals>
 					</execution>
 				</executions>
+			</plugin>
+			<plugin>
+				<!-- Los tests de integracion (*IT.java) existian desde SCRUM-29 pero no
+				     corrian nunca: surefire solo recoge *Test.java, y sin failsafe nadie
+				     ejecutaba los *IT. Resultado: ningun test del build levantaba el
+				     contexto de Spring, asi que el CI quedo verde con una colision de
+				     migraciones de Flyway y un CacheManager duplicado que rompian el
+				     arranque. Failsafe los corre en la fase integration-test y falla el
+				     build en verify. Los IT que necesitan Docker (Testcontainers) ya se
+				     saltan solos con disabledWithoutDocker, asi que una maquina sin el
+				     daemon sigue pudiendo construir.
+
+				     Sin <executions> a proposito: el parent de Spring Boot ya declara la
+				     ejecucion en su pluginManagement, y basta con nombrar el plugin aqui
+				     para activarla. Agregar una propia la correria dos veces. -->
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-failsafe-plugin</artifactId>
 			</plugin>
 		</plugins>
 	</build>

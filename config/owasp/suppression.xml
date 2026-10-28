@@ -53,7 +53,7 @@
             - CVE-2026-47889, CVE-2026-47891: mismo lote MVC/WebFlux/RSocket,
               caracteristicas ausentes.
             - CVE-2026-47890, CVE-2026-59313 (SSE, corrupcion de stream/CRLF):
-              sin endpoints SSE (HealthController es el unico controller hoy).
+              sin endpoints SSE en ningun controller (Health, Auth, Route, User).
             - CVE-2026-47892, CVE-2026-59283 (SpEL safety guard bypass): sin
               evaluacion de SpEL sobre entrada no confiable; Spring/HeroDevs
               documentan ademas que CISA la califico sin considerar que solo es
@@ -106,8 +106,9 @@
             legitimas y reenviar una prueba DPoP interceptada. Solo es alcanzable
             con un resource server OAuth2 con DPoP configurado: el arbol de
             dependencias del escaneo no tiene ningun spring-security-oauth2-*, y
-            SecurityConfig.java es CORS + permitAll en /health + authenticated()
-            en el resto, con CSRF, httpBasic y formLogin desactivados.
+            SecurityConfig.java es CORS + permitAll en /health, /api/auth/**
+            y GET /api/routes/** + authenticated() en el resto, con CSRF,
+            httpBasic y formLogin desactivados.
             Caso aparte en cuanto al fix: aqui SI existe una version corregida de
             la linea 6.5 (la 6.5.12), pero el aviso oficial
             https://spring.io/security/cve-2026-41707 la marca "Enterprise Support
@@ -129,6 +130,33 @@
         <cve>CVE-2026-59270</cve>
         <cve>CVE-2026-47841</cve>
         <cve>CVE-2026-41707</cve>
+    </suppress>
+
+    <!-- DOMPurify, empaquetado dentro del webjar swagger-ui que trae springdoc-openapi-starter-webmvc-ui (SCRUM-167) -->
+    <suppress until="2027-01-15Z">
+        <notes><![CDATA[
+            CVE-2026-65898: mutation XSS (mXSS) en DOMPurify al sanitizar HTML/SVG
+            con ciertas secuencias de tags anidados. La version viene fija dentro
+            del webjar org.webjars:swagger-ui que empaqueta springdoc-openapi-starter-webmvc-ui;
+            no es una dependencia directa de este proyecto ni algo que se pueda
+            fijar aparte. Probado contra 2.8.4 (DOMPurify 3.1.6) y 2.8.6 (DOMPurify
+            3.2.4, la mas reciente publicada en Maven Central a la fecha): el CVE
+            persiste en ambas, asi que no hay a que version subir todavia.
+
+            Alcanzabilidad: DOMPurify corre client-side, dentro de swagger-ui-bundle.js,
+            y en esta app solo sanitiza el Markdown de las anotaciones @Operation/
+            @Schema que YA estan en el codigo fuente propio (generan el JSON que
+            sirve /v3/api-docs). No hay ningun endpoint que inyecte contenido de
+            usuario en ese documento OpenAPI -- lo arma springdoc a partir de las
+            anotaciones de los controllers, no de un request. Un atacante externo
+            no tiene forma de controlar el HTML que DOMPurify termina sanitizando
+            en este proyecto.
+
+            Revisar antes de esta fecha o al primer springdoc-openapi que empaquete
+            una version de swagger-ui/DOMPurify sin este CVE, lo que ocurra primero.
+        ]]></notes>
+        <packageUrl regex="true">(?i)^pkg:javascript/dompurify@.*$</packageUrl>
+        <cve>CVE-2026-65898</cve>
     </suppress>
 
 </suppressions>
