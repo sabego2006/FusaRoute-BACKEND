@@ -45,6 +45,24 @@ class RouteTest {
     }
 
     @Test
+    void el_recorrido_en_buseta_se_mide_sobre_el_trazado_entre_las_dos_proyecciones() {
+        // Sube en el 20% del tramo y se baja en el 80%: viaja el 60% de sus ~1109 m.
+        // No cuenta el trazado que la ruta recorre antes de que suba ni despues.
+        double recorrido = routeConTrazado().travelDistanceInMeters(
+                new Coordinate(4.001, -74.002), new Coordinate(4.001, -74.008)).orElseThrow();
+
+        assertThat(recorrido).isCloseTo(665.6, org.assertj.core.data.Offset.offset(2d));
+    }
+
+    @Test
+    void una_ruta_sin_trazado_no_tiene_recorrido_medible() {
+        Route sinTrazado = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of());
+
+        assertThat(sinTrazado.travelDistanceInMeters(
+                new Coordinate(4.000, -74.000), new Coordinate(4.000, -74.010))).isEmpty();
+    }
+
+    @Test
     void se_descarta_la_ruta_que_obliga_a_caminar_mas_de_ochocientos_metros() {
         // ~1.1 km al norte del tramo: la buseta pasa "cerca" en el mapa, pero la
         // caminata ya no compensa.

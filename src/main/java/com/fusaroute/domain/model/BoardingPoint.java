@@ -13,8 +13,11 @@ import java.time.Duration;
  *
  * @param point coordenada sobre el trazado, no necesariamente un vertice del GeoJSON
  * @param distanceInMeters distancia geometrica desde el punto del usuario, en metros
+ * @param distanceAlongPathInMeters cuanto trazado queda detras de este punto, medido
+ *     desde el inicio del recorrido. Es lo que permite saber cuanto hay que viajar en
+ *     buseta entre dos puntos de la misma ruta (modo offline, RF-04)
  */
-public record BoardingPoint(Coordinate point, double distanceInMeters) {
+public record BoardingPoint(Coordinate point, double distanceInMeters, double distanceAlongPathInMeters) {
 
     /**
      * Mas alla de esta distancia la ruta deja de ser candidata (RF-04): obliga a una

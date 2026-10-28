@@ -59,6 +59,28 @@ public class RouteController {
                 destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
     }
 
+    /**
+     * Busqueda sin conexion (RF-04): la app llama aqui cuando no tiene red. No consulta
+     * a Google, asi que no devuelve tiempo estimado; elige por el recorrido mas corto
+     * sobre el trazado propio del catalogo.
+     */
+    @Operation(summary = "Buscar ruta sin conexión",
+            description = "Sugiere la ruta de menor recorrido usando solo el trazado del catálogo, sin consultar Google. "
+                    + "No devuelve tiempo estimado.")
+    @ApiResponse(responseCode = "200", description = "Ruta sugerida por distancia")
+    @ApiResponse(responseCode = "404", description = "Ninguna ruta conecta el origen con el destino")
+    @GetMapping("/search/offline")
+    public RouteSearchResponse searchOffline(@RequestParam String originNeighborhood,
+                                      @RequestParam double originLat,
+                                      @RequestParam double originLng,
+                                      @RequestParam String destinationNeighborhood,
+                                      @RequestParam double destinationLat,
+                                      @RequestParam double destinationLng) {
+        return RouteSearchResponse.from(searchRouteUseCase.findBestRouteOffline(
+                originNeighborhood, new Coordinate(originLat, originLng),
+                destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
+    }
+
     @Operation(summary = "Detalle de ruta", description = "Retorna la información detallada de una ruta específica mediante su ID")
     @ApiResponse(responseCode = "200", description = "Detalle de la ruta recuperado exitosamente")
     @ApiResponse(responseCode = "404", description = "La ruta especificada no existe")

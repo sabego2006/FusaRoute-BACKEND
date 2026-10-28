@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.OptionalDouble;
 
 /**
  * Ruta de buseta: un recorrido directo de un solo tramo, con sus barrios en orden
@@ -39,6 +40,27 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
      */
     public Optional<BoardingPoint> boardingPointFor(Coordinate from) {
         return PathProjection.nearestPointOn(path, from);
+    }
+
+    /**
+     * Cuanto hay que viajar en buseta sobre esta ruta entre dos puntos, siguiendo el
+     * trazado y no en linea recta.
+     *
+     * Es el criterio con el que se elige en modo offline: sin red no se puede pedir el
+     * tiempo a Google, asi que gana la ruta de menor recorrido. Se mide entre las
+     * proyecciones del origen y del destino, asi que no cuenta el trazado que la ruta
+     * recorre antes de que el usuario suba ni despues de que se baje.
+     *
+     * @return vacio si la ruta no tiene trazado cargado
+     */
+    public OptionalDouble travelDistanceInMeters(Coordinate origin, Coordinate destination) {
+        Optional<BoardingPoint> boarding = boardingPointFor(origin);
+        Optional<BoardingPoint> dropOff = boardingPointFor(destination);
+        if (boarding.isEmpty() || dropOff.isEmpty()) {
+            return OptionalDouble.empty();
+        }
+        return OptionalDouble.of(Math.abs(
+                dropOff.get().distanceAlongPathInMeters() - boarding.get().distanceAlongPathInMeters()));
     }
 
     /**

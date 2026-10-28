@@ -10,6 +10,7 @@ import com.fusaroute.domain.port.out.TravelTimePort;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.OptionalDouble;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
@@ -18,6 +19,8 @@ import io.micrometer.core.instrument.Timer;
  * Orquesta el filtrado de rutas candidatas y la selección de la mejor basada en tiempo.
  */
 public class SearchRouteService implements SearchRouteUseCase {
+
+    private static final String LATENCY_METRIC = "fusaroute.search.route.latency";
 
     private final RouteRepositoryPort routeRepository;
     private final TravelTimePort travelTimePort;
@@ -34,26 +37,8 @@ public class SearchRouteService implements SearchRouteUseCase {
                                String destNeighborhood, Coordinate destCoord) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            // 1. Obtener todas las rutas activas
-            List<Route> activeRoutes = routeRepository.findAll().stream()
-                    .filter(Route::isActive)
-                    .toList();
+            List<Route> candidates = candidatesFor(originNeighborhood, originCoord, destNeighborhood, destCoord);
 
-            // 2. Filtrar rutas candidatas: que conecten origen y destino en el orden
-            // correcto y que no obliguen a caminar mas de 800 m en ninguna de las dos
-            // puntas (RF-04). Las rutas sin trazado pasan este segundo filtro: no hay
-            // con que medirlas, y descartarlas por un dato que falta las haria
-            // invisibles sin una razon de negocio.
-            List<Route> candidates = activeRoutes.stream()
-                    .filter(route -> connects(route, originNeighborhood, destNeighborhood))
-                    .filter(route -> route.isWithinWalkingDistance(originCoord, destCoord))
-                    .toList();
-
-            if (candidates.isEmpty()) {
-                throw new NoRouteAvailableException(originNeighborhood, destNeighborhood);
-            }
-
-            // 3. Calcular tiempo para cada candidata y quedarse con la de menor tiempo.
             // Un bucle en vez de Comparator.comparing(keyExtractor): ese extractor se
             // reevalua en cada comparacion, llamando a travelTimePort mas veces de las
             // necesarias; ademas, aqui hace falta el Duration ganador, no solo la ruta.
@@ -66,22 +51,72 @@ public class SearchRouteService implements SearchRouteUseCase {
                     bestTime = time;
                 }
             }
-            return resultFor(bestRoute, bestTime, originCoord, destCoord);
+            return RouteSearchResult.online(bestRoute, bestTime,
+                    bestRoute.boardingPointFor(originCoord).orElse(null),
+                    bestRoute.boardingPointFor(destCoord).orElse(null),
+                    travelDistanceOrNull(bestRoute, originCoord, destCoord));
         } finally {
-            sample.stop(meterRegistry.timer("fusaroute.search.route.latency"));
+            // Etiquetado por modo a proposito: el p95 < 8 s de RNF-01 es sobre la
+            // busqueda que consulta a Google. La offline no sale a la red y es ordenes
+            // de magnitud mas rapida, asi que mezclarlas en la misma serie haria ver un
+            // p95 mejor del real.
+            sample.stop(meterRegistry.timer(LATENCY_METRIC, "mode", "online"));
+        }
+    }
+
+    @Override
+    public RouteSearchResult findBestRouteOffline(String originNeighborhood, Coordinate originCoord,
+                               String destNeighborhood, Coordinate destCoord) {
+        Timer.Sample sample = Timer.start(meterRegistry);
+        try {
+            List<Route> candidates = candidatesFor(originNeighborhood, originCoord, destNeighborhood, destCoord);
+
+            Route bestRoute = null;
+            double bestDistance = Double.MAX_VALUE;
+            for (Route candidate : candidates) {
+                // Sin trazado no hay con que medir, asi que queda de ultima: entra solo
+                // si ninguna otra candidata pudo compararse.
+                double distance = candidate.travelDistanceInMeters(originCoord, destCoord)
+                        .orElse(Double.MAX_VALUE);
+                if (bestRoute == null || distance < bestDistance) {
+                    bestRoute = candidate;
+                    bestDistance = distance;
+                }
+            }
+            // Si gano una ruta sin trazado, la distancia queda vacia en vez de 0: no se
+            // midio nada, y un 0 se leeria como "ya estas encima de la ruta".
+            return RouteSearchResult.offline(bestRoute,
+                    bestDistance == Double.MAX_VALUE ? null : bestDistance,
+                    bestRoute.boardingPointFor(originCoord).orElse(null),
+                    bestRoute.boardingPointFor(destCoord).orElse(null));
+        } finally {
+            sample.stop(meterRegistry.timer(LATENCY_METRIC, "mode", "offline"));
         }
     }
 
     /**
-     * Arma el resultado agregandole la ultima milla. Los puntos quedan en null cuando
-     * la ruta no tiene trazado cargado: el viaje en buseta se sugiere igual, solo que
-     * sin decir por donde acercarse a pie.
+     * Rutas que conectan origen y destino en el orden correcto y a las que se puede
+     * llegar a pie (RF-04). Las rutas sin trazado pasan el filtro de distancia: no hay
+     * con que medirlas, y descartarlas por un dato que falta las haria invisibles sin
+     * una razon de negocio.
      */
-    private RouteSearchResult resultFor(Route route, Duration travelTime,
-                                        Coordinate originCoord, Coordinate destCoord) {
-        return new RouteSearchResult(route, travelTime,
-                route.boardingPointFor(originCoord).orElse(null),
-                route.boardingPointFor(destCoord).orElse(null));
+    private List<Route> candidatesFor(String originNeighborhood, Coordinate originCoord,
+                                      String destNeighborhood, Coordinate destCoord) {
+        List<Route> candidates = routeRepository.findAll().stream()
+                .filter(Route::isActive)
+                .filter(route -> connects(route, originNeighborhood, destNeighborhood))
+                .filter(route -> route.isWithinWalkingDistance(originCoord, destCoord))
+                .toList();
+
+        if (candidates.isEmpty()) {
+            throw new NoRouteAvailableException(originNeighborhood, destNeighborhood);
+        }
+        return candidates;
+    }
+
+    private static Double travelDistanceOrNull(Route route, Coordinate originCoord, Coordinate destCoord) {
+        OptionalDouble distance = route.travelDistanceInMeters(originCoord, destCoord);
+        return distance.isPresent() ? distance.getAsDouble() : null;
     }
 
     private boolean connects(Route route, String origin, String destination) {

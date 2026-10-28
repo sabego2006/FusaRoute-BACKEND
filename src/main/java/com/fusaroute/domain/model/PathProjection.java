@@ -35,23 +35,26 @@ final class PathProjection {
         }
         if (path.size() == 1) {
             Coordinate only = path.get(0);
-            return Optional.of(new BoardingPoint(only, from.distanceInMetersTo(only)));
+            return Optional.of(new BoardingPoint(only, from.distanceInMetersTo(only), 0));
         }
 
         BoardingPoint nearest = null;
+        double traversed = 0;
         for (int i = 0; i < path.size() - 1; i++) {
-            BoardingPoint candidate = nearestPointOnSegment(path.get(i), path.get(i + 1), from);
-            if (nearest == null || candidate.distanceInMeters() < nearest.distanceInMeters()) {
-                nearest = candidate;
+            Coordinate start = path.get(i);
+            Coordinate end = path.get(i + 1);
+            double segmentLength = start.distanceInMetersTo(end);
+
+            double ratio = projectionRatio(start, end, from);
+            Coordinate projected = interpolate(start, end, ratio);
+            double distance = from.distanceInMetersTo(projected);
+
+            if (nearest == null || distance < nearest.distanceInMeters()) {
+                nearest = new BoardingPoint(projected, distance, traversed + ratio * segmentLength);
             }
+            traversed += segmentLength;
         }
         return Optional.of(nearest);
-    }
-
-    private static BoardingPoint nearestPointOnSegment(Coordinate start, Coordinate end, Coordinate from) {
-        double ratio = projectionRatio(start, end, from);
-        Coordinate projected = interpolate(start, end, ratio);
-        return new BoardingPoint(projected, from.distanceInMetersTo(projected));
     }
 
     /**

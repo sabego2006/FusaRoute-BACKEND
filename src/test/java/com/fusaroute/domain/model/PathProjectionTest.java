@@ -57,6 +57,25 @@ class PathProjectionTest {
     }
 
     @Test
+    void registra_cuanto_trazado_queda_detras_del_punto() {
+        // El tramo mide ~1109 m; proyectando sobre su mitad, quedan ~555 m detras. Es
+        // lo que permite medir el recorrido en buseta entre dos puntos de la ruta.
+        Coordinate usuario = new Coordinate(4.001, -74.005);
+
+        BoardingPoint abordaje = PathProjection.nearestPointOn(TRAMO_RECTO, usuario).orElseThrow();
+
+        assertThat(abordaje.distanceAlongPathInMeters()).isCloseTo(554.7, Offset.offset(2d));
+    }
+
+    @Test
+    void el_primer_vertice_no_tiene_trazado_detras() {
+        BoardingPoint abordaje =
+                PathProjection.nearestPointOn(TRAMO_RECTO, new Coordinate(4.000, -74.000)).orElseThrow();
+
+        assertThat(abordaje.distanceAlongPathInMeters()).isZero();
+    }
+
+    @Test
     void una_ruta_sin_trazado_no_tiene_punto_de_abordaje() {
         // Vacio significa "no hay GeoJSON cargado", no "queda lejos". La ruta sigue
         // siendo buscable; es la distincion que sostiene la regla de descarte.

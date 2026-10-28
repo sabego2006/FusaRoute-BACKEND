@@ -19,6 +19,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -114,6 +115,56 @@ class SearchRouteServiceTest {
         when(routeRepository.findAll()).thenReturn(List.of(lejana));
 
         assertThatThrownBy(() -> service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION))
+                .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
+    void offline_elige_la_de_menor_recorrido_y_no_consulta_a_google() {
+        // Las dos conectan los mismos barrios y arrancan y terminan en el mismo punto;
+        // la "larga" se desvia por el noroeste antes de llegar.
+        Route corta = routeWithPath(1L, "Corta", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
+        Route larga = routeWithPath(2L, "Larga",
+                List.of(ORIGIN, new Coordinate(4.3500, -74.3800), DESTINATION), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(larga, corta));
+
+        RouteSearchResult result = service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(corta);
+        assertThat(result.travelTime()).isEmpty();
+        assertThat(result.travelDistance()).isPresent();
+        // Sin red no se pregunta el tiempo: ese es el punto del modo offline.
+        verifyNoInteractions(travelTimePort);
+    }
+
+    @Test
+    void offline_deja_de_ultimas_las_rutas_sin_trazado() {
+        // No hay con que medirlas, asi que solo ganan si ninguna otra pudo compararse.
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        Route conTrazado = routeWithPath(2L, "Con trazado", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado, conTrazado));
+
+        RouteSearchResult result = service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(conTrazado);
+    }
+
+    @Test
+    void offline_con_solo_rutas_sin_trazado_la_sugiere_igual_pero_sin_distancia() {
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
+
+        RouteSearchResult result = service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(sinTrazado);
+        // Vacio y no cero: no se midio nada, y un 0 se leeria como "ya estas encima".
+        assertThat(result.travelDistance()).isEmpty();
+    }
+
+    @Test
+    void offline_sin_candidatas_lanza_no_route_available() {
+        when(routeRepository.findAll()).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION))
                 .isInstanceOf(NoRouteAvailableException.class);
     }
 
