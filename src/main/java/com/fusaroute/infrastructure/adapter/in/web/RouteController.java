@@ -1,6 +1,8 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.model.Coordinate;
+import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
@@ -22,15 +24,18 @@ public class RouteController {
 
     private final ListActiveRoutesUseCase listActiveRoutesUseCase;
     private final GetRouteDetailUseCase getRouteDetailUseCase;
+    private final GetCongestionWarningUseCase getCongestionWarningUseCase;
     private final GetRouteFareUseCase getRouteFareUseCase;
     private final SearchRouteUseCase searchRouteUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
                            GetRouteDetailUseCase getRouteDetailUseCase,
+                           GetCongestionWarningUseCase getCongestionWarningUseCase,
                            GetRouteFareUseCase getRouteFareUseCase,
                            SearchRouteUseCase searchRouteUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
+        this.getCongestionWarningUseCase = getCongestionWarningUseCase;
         this.getRouteFareUseCase = getRouteFareUseCase;
         this.searchRouteUseCase = searchRouteUseCase;
     }
@@ -67,7 +72,11 @@ public class RouteController {
     @ApiResponse(responseCode = "404", description = "La ruta especificada no existe")
     @GetMapping("/{id}")
     public RouteDetailResponse detail(@PathVariable Long id) {
-        return RouteDetailResponse.from(getRouteDetailUseCase.getById(id));
+        Route route = getRouteDetailUseCase.getById(id);
+        // El aviso se evalua sobre TODOS los barrios de la ruta: en el detalle se ve el
+        // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
+        // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
+        return RouteDetailResponse.from(route, getCongestionWarningUseCase.forRoute(route.neighborhoods()));
     }
 
     @GetMapping("/{id}/fare")
