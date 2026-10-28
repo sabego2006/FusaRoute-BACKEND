@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.config;
 import com.fusaroute.application.usecase.ChangePasswordService;
 import com.fusaroute.application.usecase.ConfirmTotpService;
 import com.fusaroute.application.usecase.EnrollTotpService;
+import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
@@ -15,6 +16,7 @@ import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.ConfirmTotpUseCase;
 import com.fusaroute.domain.port.in.EnrollTotpUseCase;
+import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
@@ -30,6 +32,7 @@ import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
+import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -72,6 +75,12 @@ public class UseCaseConfig {
     @Bean
     public GetRouteFareUseCase getRouteFareUseCase(RouteRepositoryPort routeRepository, Clock clock) {
         return new GetRouteFareService(routeRepository, clock);
+    }
+
+    @Bean
+    public GetCongestionWarningUseCase getCongestionWarningUseCase(
+            TrafficSectorRepositoryPort trafficSectorRepository, Clock clock) {
+        return new GetCongestionWarningService(trafficSectorRepository, clock);
     }
 
     @Bean
