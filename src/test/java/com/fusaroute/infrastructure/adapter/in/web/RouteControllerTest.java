@@ -382,7 +382,8 @@ class RouteControllerTest {
                 .andExpect(jsonPath("$.boarding.latitude").value(4.3430))
                 .andExpect(jsonPath("$.boarding.distanceInMeters").value(240))
                 .andExpect(jsonPath("$.boarding.walkingMinutes").value(2))
-                .andExpect(jsonPath("$.dropOff.distanceInMeters").value(90));
+                .andExpect(jsonPath("$.dropOff.distanceInMeters").value(90))
+                .andExpect(jsonPath("$.lastUpdatedAt").value("2026-02-05"));
     }
 
     @Test

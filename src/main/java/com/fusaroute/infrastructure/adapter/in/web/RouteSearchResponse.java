@@ -4,6 +4,7 @@ import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteSign;
 
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -20,10 +21,13 @@ import java.util.List;
  * @param signs letreros fisicos de la ruta sugerida (SCRUM-176); lista vacia si
  *     todavia no hay evidencia de campo. Va aqui y no dentro de {@code route} porque
  *     {@link RouteResponse} se queda liviano a proposito para el listado publico.
+ * @param lastUpdatedAt el {@code validFrom} mas reciente entre las tarifas vigentes de
+ *     la ruta sugerida (RF-06); {@code null} si no tiene ninguna. Por la misma razon
+ *     que {@code signs}, va aqui y no en {@code route}: el listado publico no lo lleva.
  */
 public record RouteSearchResponse(RouteResponse route, Long estimatedMinutes, Long travelDistanceInMeters,
                                   BoardingPointResponse boarding, BoardingPointResponse dropOff,
-                                  List<RouteSignResponse> signs) {
+                                  List<RouteSignResponse> signs, LocalDate lastUpdatedAt) {
 
     static RouteSearchResponse from(RouteSearchResult result, List<RouteSign> signs) {
         return new RouteSearchResponse(
@@ -32,6 +36,7 @@ public record RouteSearchResponse(RouteResponse route, Long estimatedMinutes, Lo
                 result.travelDistance().isPresent() ? Math.round(result.travelDistance().getAsDouble()) : null,
                 result.boarding().map(BoardingPointResponse::from).orElse(null),
                 result.dropOff().map(BoardingPointResponse::from).orElse(null),
-                RouteSignResponse.from(signs));
+                RouteSignResponse.from(signs),
+                result.route().lastFareUpdate().orElse(null));
     }
 }
