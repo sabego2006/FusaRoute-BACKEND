@@ -2,9 +2,11 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
+import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import io.swagger.v3.oas.annotations.Operation;
@@ -27,17 +29,20 @@ public class RouteController {
     private final GetCongestionWarningUseCase getCongestionWarningUseCase;
     private final GetRouteFareUseCase getRouteFareUseCase;
     private final SearchRouteUseCase searchRouteUseCase;
+    private final GetRouteSignsUseCase getRouteSignsUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
                            GetRouteDetailUseCase getRouteDetailUseCase,
                            GetCongestionWarningUseCase getCongestionWarningUseCase,
                            GetRouteFareUseCase getRouteFareUseCase,
-                           SearchRouteUseCase searchRouteUseCase) {
+                           SearchRouteUseCase searchRouteUseCase,
+                           GetRouteSignsUseCase getRouteSignsUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
         this.getCongestionWarningUseCase = getCongestionWarningUseCase;
         this.getRouteFareUseCase = getRouteFareUseCase;
         this.searchRouteUseCase = searchRouteUseCase;
+        this.getRouteSignsUseCase = getRouteSignsUseCase;
     }
 
     @Operation(summary = "Listar rutas activas", description = "Retorna la lista de todas las rutas de buseta que se encuentran activas")
@@ -59,9 +64,10 @@ public class RouteController {
                                       @RequestParam String destinationNeighborhood,
                                       @RequestParam double destinationLat,
                                       @RequestParam double destinationLng) {
-        return RouteSearchResponse.from(searchRouteUseCase.findBestRoute(
+        RouteSearchResult result = searchRouteUseCase.findBestRoute(
                 originNeighborhood, new Coordinate(originLat, originLng),
-                destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
+                destinationNeighborhood, new Coordinate(destinationLat, destinationLng));
+        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
     }
 
     /**
@@ -81,9 +87,10 @@ public class RouteController {
                                       @RequestParam String destinationNeighborhood,
                                       @RequestParam double destinationLat,
                                       @RequestParam double destinationLng) {
-        return RouteSearchResponse.from(searchRouteUseCase.findBestRouteOffline(
+        RouteSearchResult result = searchRouteUseCase.findBestRouteOffline(
                 originNeighborhood, new Coordinate(originLat, originLng),
-                destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
+                destinationNeighborhood, new Coordinate(destinationLat, destinationLng));
+        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
     }
 
     @Operation(summary = "Detalle de ruta",
@@ -98,7 +105,9 @@ public class RouteController {
         // El aviso se evalua sobre TODOS los barrios de la ruta: en el detalle se ve el
         // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
         // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
-        return RouteDetailResponse.from(route, getCongestionWarningUseCase.forRoute(route.neighborhoods()));
+        return RouteDetailResponse.from(route,
+                getCongestionWarningUseCase.forRoute(route.neighborhoods()),
+                getRouteSignsUseCase.forRoute(route.id()));
     }
 
     @Operation(summary = "Costo del pasaje de una ruta",
