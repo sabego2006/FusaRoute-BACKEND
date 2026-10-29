@@ -154,6 +154,7 @@ sequenceDiagram
 | `POST` | `/api/auth/login` | No | 200 / 401 | Inicio de sesión (JWT) |
 | `GET` | `/api/routes` | No | 200 | Catálogo de rutas activas |
 | `GET` | `/api/routes/{id}` | No | 200 / 404 | Detalle de una ruta |
+| `GET` | `/api/routes/{id}/fare` | No | 200 / 404 | Costo del pasaje de una ruta (RF-06) |
 | `GET` | `/api/users/me` | Sí | 200 / 401 | Perfil del usuario autenticado |
 | `PUT` | `/api/users/me` | Sí | 200 / 400 / 401 / 409 | Actualizar perfil |
 | `PUT` | `/api/users/me/password` | Sí | 204 / 400 / 401 | Cambiar contraseña |
@@ -263,7 +264,9 @@ Endpoints públicos (sin token ni sesión), de solo lectura. Cualquier otro mét
 **`GET /api/routes`** — `200 OK`. Solo rutas **activas** (las suspendidas no aparecen),
 ordenadas por nombre. Sin rutas activas devuelve `[]`.
 
-**`GET /api/routes/{id}`** — `200 OK` con una sola ruta, del mismo formato.
+**`GET /api/routes/{id}`** — `200 OK` con una sola ruta. Lleva lo mismo que una fila del
+listado más tres campos que solo necesita la pantalla que abre la ruta: `lastUpdatedAt`,
+`path` y `congestionSectors`.
 
 ```json
 {
@@ -274,9 +277,21 @@ ordenadas por nombre. Sin rutas activas devuelve `[]`.
   "fares": [
     { "referencePoint": "Alaska", "amount": 3550.00, "validFrom": "2026-02-05" },
     { "referencePoint": "Pasca", "amount": 4300.00, "validFrom": "2025-01-16" }
-  ]
+  ],
+  "lastUpdatedAt": "2026-02-05"
 }
 ```
+
+El ejemplo omite `path` y `congestionSectors` para abreviar.
+
+- `lastUpdatedAt`: el `validFrom` más reciente entre las `fares` vigentes (RF-06); `null`
+  si la ruta no tiene ninguna. En una intermunicipal es la fecha del precio que cambió más
+  recientemente, no la de todos: cada fila trae la suya.
+- `path`: trazado como `LineString` de GeoJSON; `null` si la ruta aún no lo tiene cargado.
+- `congestionSectors`: sectores que la ruta atraviesa y están en su franja de trancón en
+  este momento (RF-09); lista vacía si ninguno.
+- El listado **no** trae ninguno de los tres: la tarjeta muestra un solo precio y no dibuja
+  mapas.
 
 - `type`: `URBANA` o `INTERMUNICIPAL`.
 - `neighborhoods`: barrios en orden de recorrido. Son nombres, no paradas: en Fusagasugá se
@@ -295,6 +310,45 @@ ordenadas por nombre. Sin rutas activas devuelve `[]`.
 - **`404`** la ruta no existe **o está suspendida** (`detail` = "Ruta no encontrada"): el
   catálogo público no revela que existe una ruta suspendida.
 - **`400`** el `id` no es numérico (`/api/routes/abc`).
+
+### `GET /api/routes/{id}/fare` — Costo del pasaje (RF-06, SCRUM-17)
+
+Endpoint público, de solo lectura. Devuelve únicamente el pasaje de la ruta: sus tarifas
+vigentes y la fecha de la última actualización. Las reglas de vigencia y de orden de
+`fares` son las del detalle, arriba.
+
+**`200 OK`** — ruta intermunicipal Fusagasugá - Pasca (`id` 8):
+
+```json
+{
+  "id": 8,
+  "name": "Fusagasugá - Pasca",
+  "type": "INTERMUNICIPAL",
+  "fares": [
+    { "referencePoint": "Corregimiento", "amount": 3000.00, "validFrom": "2025-01-16" },
+    { "referencePoint": "Hogar Francisco y Clara", "amount": 3000.00, "validFrom": "2025-01-16" },
+    { "referencePoint": "Escuela de los Sauces", "amount": 3000.00, "validFrom": "2025-01-16" },
+    { "referencePoint": "Buenas Tardes", "amount": 3300.00, "validFrom": "2025-01-16" },
+    { "referencePoint": "Crucero La Angostura", "amount": 3300.00, "validFrom": "2025-01-16" },
+    { "referencePoint": "Alaska", "amount": 3550.00, "validFrom": "2026-02-05" },
+    { "referencePoint": "La Capilla", "amount": 3600.00, "validFrom": "2025-01-16" },
+    { "referencePoint": "Pasca", "amount": 4300.00, "validFrom": "2025-01-16" }
+  ],
+  "lastUpdatedAt": "2026-02-05"
+}
+```
+
+- Ruta urbana: una sola tarifa con `referencePoint: null`.
+- `lastUpdatedAt` es `null` si la ruta no tiene ninguna tarifa vigente.
+
+**Errores** (cuerpo `ProblemDetail`, RFC 9457):
+
+- **`404`** la ruta no existe o está suspendida (`detail` = "Ruta no encontrada").
+- **`400`** el `id` no es numérico.
+
+**La pantalla de detalle no llama a este endpoint**: consume `GET /api/routes/{id}`, que ya
+trae `fares` y `lastUpdatedAt`, para quedarse en una sola petición (LCP < 2.5 s). Este existe
+como superficie de API de RF-06 y para clientes que solo quieran la tarifa.
 
 ## Métricas y p95 (RNF-01, SCRUM-127)
 
