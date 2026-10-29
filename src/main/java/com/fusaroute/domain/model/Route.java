@@ -43,6 +43,30 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
     }
 
     /**
+     * Punto del trazado a la altura del barrio {@code name} (SCRUM-130): sirve cuando
+     * no hay una coordenada real del cliente para esa punta — el selector de barrio
+     * del frontend solo entrega un nombre, nunca una posicion, y la geolocalizacion
+     * del navegador solo cubre el origen, nunca el destino.
+     *
+     * Es una aproximacion deliberada: supone que los barrios se reparten de forma
+     * uniforme a lo largo del trazado (el barrio en el indice {@code i} de
+     * {@code neighborhoods} cae a la fraccion {@code i / (size - 1)} del recorrido),
+     * que es lo unico que se puede asumir sin pedirle a alguien que camine la ruta con
+     * un GPS. No es un centroide real del barrio.
+     *
+     * @return vacio si la ruta no tiene trazado cargado todavia o si {@code name} no
+     *     esta en {@link #neighborhoods()} de esta ruta
+     */
+    public Optional<Coordinate> pointAtNeighborhood(String name) {
+        int index = neighborhoods.indexOf(name);
+        if (index == -1 || path.size() < 2) {
+            return Optional.empty();
+        }
+        double fraction = neighborhoods.size() == 1 ? 0d : (double) index / (neighborhoods.size() - 1);
+        return Optional.of(PathProjection.pointAtFraction(path, fraction));
+    }
+
+    /**
      * Cuanto hay que viajar en buseta sobre esta ruta entre dos puntos, siguiendo el
      * trazado y no en linea recta.
      *
@@ -74,6 +98,18 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
      */
     public boolean isWithinWalkingDistance(Coordinate origin, Coordinate destination) {
         return isWithinWalkingDistance(origin) && isWithinWalkingDistance(destination);
+    }
+
+    /**
+     * Como {@link #isWithinWalkingDistance(Coordinate, Coordinate)}, pero solo evalua
+     * las puntas que el propio cliente mando (SCRUM-130). Sin coordenada del cliente
+     * no hay nada que medir en esa punta: el punto que {@link #pointAtNeighborhood}
+     * deriva del nombre del barrio esta siempre sobre el trazado (distancia ~0), asi
+     * que evaluarlo contra este filtro seria dejar de filtrar sin decirlo.
+     */
+    public boolean isWithinWalkingDistance(Optional<Coordinate> origin, Optional<Coordinate> destination) {
+        return origin.map(this::isWithinWalkingDistance).orElse(true)
+                && destination.map(this::isWithinWalkingDistance).orElse(true);
     }
 
     private boolean isWithinWalkingDistance(Coordinate from) {

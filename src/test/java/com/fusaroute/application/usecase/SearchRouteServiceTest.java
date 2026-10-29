@@ -2,6 +2,7 @@ package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.model.Coordinate;
+import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
@@ -15,9 +16,15 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.math.BigDecimal;
+import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -32,6 +39,7 @@ class SearchRouteServiceTest {
 
     private static final Coordinate ORIGIN = new Coordinate(4.3433, -74.3661);
     private static final Coordinate DESTINATION = new Coordinate(4.3300, -74.3600);
+    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-27T15:00:00Z"), ZoneId.of("America/Bogota"));
 
     @Mock
     private RouteRepositoryPort routeRepository;
@@ -40,7 +48,7 @@ class SearchRouteServiceTest {
     private TravelTimePort travelTimePort;
 
     private SearchRouteService service() {
-        return new SearchRouteService(routeRepository, travelTimePort, new SimpleMeterRegistry());
+        return new SearchRouteService(routeRepository, travelTimePort, new SimpleMeterRegistry(), CLOCK);
     }
 
     private static Route route(long id, String name, RouteStatus status, String... neighborhoods) {
@@ -49,6 +57,12 @@ class SearchRouteServiceTest {
 
     private static Route routeWithPath(long id, String name, List<Coordinate> path, String... neighborhoods) {
         return new Route(id, name, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
+    }
+
+    /** Misma forma que {@link #route}, pero con tarifas: para el caso de RF-06 en la busqueda. */
+    private static Route routeWithFares(long id, String name, RouteType type, List<Fare> fares,
+                                        String... neighborhoods) {
+        return new Route(id, name, type, RouteStatus.ACTIVA, List.of(neighborhoods), fares, List.of());
     }
 
     /** Trazado que pasa por el origen y el destino, asi la ultima milla no lo descarta. */
@@ -92,7 +106,7 @@ class SearchRouteServiceTest {
                 lenta.path(), Duration.ofMinutes(25),
                 rapida.path(), Duration.ofMinutes(12)));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(rapida);
         assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(12));
@@ -107,7 +121,7 @@ class SearchRouteServiceTest {
         when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
         when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(14));
 
-        service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         ArgumentCaptor<Coordinate> from = ArgumentCaptor.forClass(Coordinate.class);
         ArgumentCaptor<Coordinate> to = ArgumentCaptor.forClass(Coordinate.class);
@@ -130,7 +144,7 @@ class SearchRouteServiceTest {
                 cercana.path(), Duration.ofMinutes(20),
                 lejana.path(), Duration.ofMinutes(19)));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(cercana);
         assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(20));
@@ -144,7 +158,7 @@ class SearchRouteServiceTest {
         when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
         when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(14));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(14));
     }
@@ -164,7 +178,7 @@ class SearchRouteServiceTest {
                 primera.path(), Duration.ofMinutes(15),
                 segunda.path(), Duration.ofMinutes(15)));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(primera);
     }
@@ -177,7 +191,7 @@ class SearchRouteServiceTest {
         when(routeRepository.findAll()).thenReturn(List.of(suspendida, sentidoContrario, valida));
         when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, valida.path())).thenReturn(Duration.ofMinutes(10));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(valida);
     }
@@ -186,7 +200,7 @@ class SearchRouteServiceTest {
     void sin_candidatas_lanza_no_route_available() {
         when(routeRepository.findAll()).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION))
+        assertThatThrownBy(() -> service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
                 .isInstanceOf(NoRouteAvailableException.class);
     }
 
@@ -197,7 +211,7 @@ class SearchRouteServiceTest {
         when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, conTrazado.path()))
                 .thenReturn(Duration.ofMinutes(14));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.boarding()).isPresent();
         assertThat(result.dropOff()).isPresent();
@@ -214,7 +228,7 @@ class SearchRouteServiceTest {
                 "Centro", "Terminal");
         when(routeRepository.findAll()).thenReturn(List.of(lejana));
 
-        assertThatThrownBy(() -> service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION))
+        assertThatThrownBy(() -> service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
                 .isInstanceOf(NoRouteAvailableException.class);
     }
 
@@ -228,7 +242,7 @@ class SearchRouteServiceTest {
         when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of()))
                 .thenReturn(Duration.ofMinutes(20));
 
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(sinTrazado);
         assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(20));
@@ -245,7 +259,7 @@ class SearchRouteServiceTest {
                 List.of(ORIGIN, new Coordinate(4.3500, -74.3800), DESTINATION), "Centro", "Terminal");
         when(routeRepository.findAll()).thenReturn(List.of(larga, corta));
 
-        RouteSearchResult result = service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(corta);
         assertThat(result.travelTime()).isEmpty();
@@ -261,7 +275,7 @@ class SearchRouteServiceTest {
         Route conTrazado = routeWithPath(2L, "Con trazado", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
         when(routeRepository.findAll()).thenReturn(List.of(sinTrazado, conTrazado));
 
-        RouteSearchResult result = service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(conTrazado);
     }
@@ -271,7 +285,7 @@ class SearchRouteServiceTest {
         Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
         when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
 
-        RouteSearchResult result = service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION);
+        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
 
         assertThat(result.route()).isEqualTo(sinTrazado);
         // Vacio y no cero: no se midio nada, y un 0 se leeria como "ya estas encima".
@@ -282,7 +296,159 @@ class SearchRouteServiceTest {
     void offline_sin_candidatas_lanza_no_route_available() {
         when(routeRepository.findAll()).thenReturn(List.of());
 
-        assertThatThrownBy(() -> service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION))
+        assertThatThrownBy(() -> service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
                 .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    // --- SCRUM-130: coordenadas opcionales, derivadas del nombre del barrio ---
+
+    @Test
+    void sin_coordenadas_del_cliente_deriva_el_punto_del_barrio_sobre_el_trazado() {
+        // Trazado real entre dos barrios, sin coordenadas del cliente en ninguna
+        // punta: el unico origen de un punto es "Centro" -> indice 0 -> fraccion 0 del
+        // trazado, y "Terminal" -> indice 1 (ultimo) -> fraccion 1.
+        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(16));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
+
+        assertThat(result.route()).isEqualTo(conTrazado);
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(16));
+        assertThat(result.boarding()).isPresent();
+        assertThat(result.dropOff()).isPresent();
+    }
+
+    @Test
+    void solo_coordenadas_de_origen_la_de_destino_se_deriva_del_barrio() {
+        // Como en el frontend real: la geolocalizacion solo cubre el origen. El
+        // destino se resuelve igual, solo que a partir del nombre del barrio.
+        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(16));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.empty());
+
+        assertThat(result.route()).isEqualTo(conTrazado);
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(16));
+    }
+
+    @Test
+    void sin_coordenadas_el_filtro_de_ochocientos_metros_no_aplica() {
+        // Mismo trazado que "descarta_la_candidata_que_obliga_a_caminar_mas_de_
+        // ochocientos_metros" (corrido 1.1 km al norte de ORIGIN/DESTINATION): con
+        // esas coordenadas crudas la ruta se descartaria. Sin coordenadas del cliente,
+        // el punto es el del propio trazado (distancia ~0) y la ruta se sugiere.
+        Route lejanaDeOrigenCrudo = routeWithPath(1L, "Lejana", List.of(
+                new Coordinate(ORIGIN.latitude() + 0.01, ORIGIN.longitude()),
+                new Coordinate(DESTINATION.latitude() + 0.01, DESTINATION.longitude())),
+                "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(lejanaDeOrigenCrudo));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(16));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
+
+        assertThat(result.route()).isEqualTo(lejanaDeOrigenCrudo);
+    }
+
+    @Test
+    void sin_coordenadas_y_sin_trazado_no_hay_tiempo_conocido_pero_la_ruta_se_sugiere() {
+        // 7 de las 9 rutas sembradas no tienen trazado todavia: sin el, no hay como
+        // derivar un punto del nombre del barrio ni coordenadas del cliente que
+        // cronometrar. La ruta se sugiere igual, solo que sin tiempo.
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
+
+        assertThat(result.route()).isEqualTo(sinTrazado);
+        assertThat(result.travelTime()).isEmpty();
+        assertThat(result.boarding()).isEmpty();
+        assertThat(result.dropOff()).isEmpty();
+        verifyNoInteractions(travelTimePort);
+    }
+
+    @Test
+    void entre_una_candidata_con_tiempo_conocido_y_otra_sin_el_gana_la_que_si_tiene() {
+        // 45 minutos es ya un viaje largo en buseta por Fusagasuga; el centinela
+        // interno de la candidata sin tiempo (ver UNKNOWN_TIME_RANK) es de un dia
+        // entero a proposito, para que ningun tiempo real plausible le gane.
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        Route conTrazado = routeWithPath(2L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado, conTrazado));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(45));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
+
+        // La candidata sin tiempo real nunca debe ganarle a una que si tiene un
+        // tiempo real que reportar, aunque ese tiempo sea alto.
+        assertThat(result.route()).isEqualTo(conTrazado);
+        assertThat(result.travelTime()).isPresent();
+    }
+
+    @Test
+    void offline_sin_coordenadas_usa_el_punto_derivado_del_barrio() {
+        Route conTrazado = routeWithPath(1L, "Con trazado", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
+
+        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.empty(), "Terminal", Optional.empty());
+
+        assertThat(result.route()).isEqualTo(conTrazado);
+        assertThat(result.travelDistance()).isPresent();
+        verifyNoInteractions(travelTimePort);
+    }
+
+    @Test
+    void offline_sin_coordenadas_y_sin_trazado_no_hay_distancia_pero_se_sugiere_igual() {
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
+
+        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.empty(), "Terminal", Optional.empty());
+
+        assertThat(result.route()).isEqualTo(sinTrazado);
+        assertThat(result.travelDistance()).isEmpty();
+    }
+
+    @Test
+    void la_busqueda_online_aplica_solo_las_tarifas_vigentes_a_la_ruta_sugerida() {
+        // Caso de la ruta Pasca que V3 documenta: dos series de vigencia con order_index
+        // solapados (Alaska aparece en las dos). Sin filtrar por vigencia, Alaska saldria
+        // dos veces y fuera de orden en el resultado de busqueda.
+        List<Fare> fares = List.of(
+                new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
+                new Fare("Corregimiento", new BigDecimal("3000.00"), 0, LocalDate.of(2025, 1, 16)),
+                new Fare("Alaska", new BigDecimal("3300.00"), 3, LocalDate.of(2025, 1, 16)),
+                new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16)));
+        Route pasca = routeWithFares(8L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, fares,
+                "Fusagasugá", "Alaska", "Pasca");
+        when(routeRepository.findAll()).thenReturn(List.of(pasca));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of())).thenReturn(Duration.ofMinutes(40));
+
+        RouteSearchResult result = service().findBestRoute("Fusagasugá", Optional.of(ORIGIN), "Pasca", Optional.of(DESTINATION));
+
+        assertThat(result.route().fares()).extracting(Fare::referencePoint)
+                .containsExactly("Corregimiento", "Alaska", "Pasca");
+        assertThat(result.route().fares()).extracting(f -> f.amount().intValue())
+                .containsExactly(3000, 3550, 4300);
+        assertThat(result.route().lastFareUpdate()).contains(LocalDate.of(2026, 2, 5));
+    }
+
+    @Test
+    void la_busqueda_offline_aplica_solo_las_tarifas_vigentes_a_la_ruta_sugerida() {
+        // Mismo caso, pero por el camino de findBestRouteOffline: tambien debe filtrar.
+        List<Fare> fares = List.of(
+                new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
+                new Fare("Corregimiento", new BigDecimal("3000.00"), 0, LocalDate.of(2025, 1, 16)),
+                new Fare("Alaska", new BigDecimal("3300.00"), 3, LocalDate.of(2025, 1, 16)),
+                new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16)));
+        Route pasca = routeWithFares(8L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, fares,
+                "Fusagasugá", "Alaska", "Pasca");
+        when(routeRepository.findAll()).thenReturn(List.of(pasca));
+
+        RouteSearchResult result = service().findBestRouteOffline("Fusagasugá", Optional.of(ORIGIN), "Pasca", Optional.of(DESTINATION));
+
+        assertThat(result.route().fares()).extracting(Fare::referencePoint)
+                .containsExactly("Corregimiento", "Alaska", "Pasca");
+        assertThat(result.route().lastFareUpdate()).contains(LocalDate.of(2026, 2, 5));
     }
 }

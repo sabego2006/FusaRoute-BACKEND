@@ -89,12 +89,8 @@ Cuando `domain/` y `application/` tengan código real y el gate verde sea alcanz
 2. En `ci.yml`, cambiar `qualitygate.wait=false` a `qualitygate.wait=true`.
 3. Ahora un gate rojo tumba el PR.
 
-## VM de Oracle y `infra/sonarqube/`
+## Retiro del SonarQube autohospedado
 
-El montaje autohospedado (`infra/sonarqube/compose.yaml` y `.env.example`) queda **obsoleto**.
-Se conserva en este PR para no mezclar la migración con un borrado. Pasos pendientes, tras
-confirmar que el análisis en SonarCloud queda verde:
-
-1. Dar de baja la VM de Oracle (si llegó a crearse) y su IP pública.
-2. Borrar `infra/sonarqube/` en un commit aparte.
-3. Borrar el secret `SONAR_HOST_URL` del repo si sigue ahí.
+El montaje autohospedado (`infra/sonarqube/`) se borró del repo. Si llegó a crearse la VM de
+Oracle, darla de baja junto con su IP pública, y borrar el secret `SONAR_HOST_URL` del repo si
+sigue ahí (el CI ya no lo lee).

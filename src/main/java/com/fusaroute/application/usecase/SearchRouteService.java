@@ -9,7 +9,9 @@ import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -23,19 +25,30 @@ public class SearchRouteService implements SearchRouteUseCase {
 
     private static final String LATENCY_METRIC = "fusaroute.search.route.latency";
 
+    /**
+     * Centinela interno para ordenar candidatas sin tiempo real conocido (ver el
+     * comentario en {@link #findBestRoute}). Nunca se expone: {@code bestBusTime} se
+     * reporta aparte, y queda en {@code null} si la candidata ganadora nunca tuvo un
+     * tiempo real.
+     */
+    private static final Duration UNKNOWN_TIME_RANK = Duration.ofDays(1);
+
     private final RouteRepositoryPort routeRepository;
     private final TravelTimePort travelTimePort;
     private final MeterRegistry meterRegistry;
+    private final Clock clock;
 
-    public SearchRouteService(RouteRepositoryPort routeRepository, TravelTimePort travelTimePort, MeterRegistry meterRegistry) {
+    public SearchRouteService(RouteRepositoryPort routeRepository, TravelTimePort travelTimePort,
+                               MeterRegistry meterRegistry, Clock clock) {
         this.routeRepository = routeRepository;
         this.travelTimePort = travelTimePort;
         this.meterRegistry = meterRegistry;
+        this.clock = clock;
     }
 
     @Override
-    public RouteSearchResult findBestRoute(String originNeighborhood, Coordinate originCoord,
-                               String destNeighborhood, Coordinate destCoord) {
+    public RouteSearchResult findBestRoute(String originNeighborhood, Optional<Coordinate> originCoord,
+                               String destNeighborhood, Optional<Coordinate> destCoord) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             List<Route> candidates = candidatesFor(originNeighborhood, originCoord, destNeighborhood, destCoord);
@@ -59,29 +72,50 @@ public class SearchRouteService implements SearchRouteUseCase {
             Duration bestBusTime = null;
             Optional<BoardingPoint> bestBoarding = Optional.empty();
             Optional<BoardingPoint> bestDropOff = Optional.empty();
-            Duration bestDoorToDoor = null;
+            Duration bestDoorToDoorRank = null;
             for (Route candidate : candidates) {
-                Optional<BoardingPoint> boarding = candidate.boardingPointFor(originCoord);
-                Optional<BoardingPoint> dropOff = candidate.boardingPointFor(destCoord);
+                // SCRUM-130: el cliente ya no esta obligado a mandar coordenadas. Si no
+                // las mando, se deriva un punto aproximado del nombre del barrio sobre
+                // el trazado propio de ESTA candidata (cada ruta reparte sus barrios
+                // distinto, asi que el punto derivado no es el mismo para todas).
+                Optional<Coordinate> originPoint = originCoord.or(() -> candidate.pointAtNeighborhood(originNeighborhood));
+                Optional<Coordinate> destPoint = destCoord.or(() -> candidate.pointAtNeighborhood(destNeighborhood));
+
+                Optional<BoardingPoint> boarding = originPoint.flatMap(candidate::boardingPointFor);
+                Optional<BoardingPoint> dropOff = destPoint.flatMap(candidate::boardingPointFor);
 
                 // Sin trazado no hay abordaje ni bajada que proyectar: se cronometra el
-                // par origen-destino del usuario, sin caminata, como unica opcion.
-                Coordinate from = boarding.map(BoardingPoint::point).orElse(originCoord);
-                Coordinate to = dropOff.map(BoardingPoint::point).orElse(destCoord);
-                Duration busTime = travelTimePort.getTravelTime(from, to, candidate.path());
-                Duration doorToDoor = walkingTime(boarding).plus(busTime).plus(walkingTime(dropOff));
+                // punto crudo (del cliente o derivado) de cada punta, sin caminata.
+                Coordinate from = boarding.map(BoardingPoint::point).or(() -> originPoint).orElse(null);
+                Coordinate to = dropOff.map(BoardingPoint::point).or(() -> destPoint).orElse(null);
 
-                if (bestDoorToDoor == null || doorToDoor.compareTo(bestDoorToDoor) < 0) {
+                // Sin las dos puntas resueltas no hay par de puntos que cronometrar con
+                // Google: esta candidata queda sin tiempo real conocido, igual que hoy
+                // una ruta sin trazado queda sin ultima milla. No se descarta por esto —
+                // solo pierde siempre frente a cualquier candidata que si tenga tiempo.
+                Duration busTime = (from != null && to != null)
+                        ? travelTimePort.getTravelTime(from, to, candidate.path())
+                        : null;
+                Duration doorToDoorRank = busTime == null
+                        ? UNKNOWN_TIME_RANK
+                        : walkingTime(boarding).plus(busTime).plus(walkingTime(dropOff));
+
+                if (bestDoorToDoorRank == null || doorToDoorRank.compareTo(bestDoorToDoorRank) < 0) {
                     bestRoute = candidate;
                     bestBusTime = busTime;
                     bestBoarding = boarding;
                     bestDropOff = dropOff;
-                    bestDoorToDoor = doorToDoor;
+                    bestDoorToDoorRank = doorToDoorRank;
                 }
             }
             // estimatedTime es el tramo en buseta, no el puerta a puerta: la caminata ya
             // viaja aparte en cada BoardingPoint, y el front la suma con esos datos.
-            return RouteSearchResult.online(bestRoute, bestBusTime,
+            // Queda en null si la ganadora nunca tuvo un tiempo real que reportar.
+            //
+            // Las tarifas vigentes se aplican solo a la ganadora: connects() y el
+            // ranking por tiempo no miran tarifa, asi que filtrarla en las candidatas
+            // que pierden seria trabajo tirado (RF-06).
+            return RouteSearchResult.online(bestRoute.withCurrentFares(LocalDate.now(clock)), bestBusTime,
                     bestBoarding.orElse(null), bestDropOff.orElse(null),
                     travelDistanceOrNull(bestBoarding, bestDropOff));
         } finally {
@@ -94,30 +128,47 @@ public class SearchRouteService implements SearchRouteUseCase {
     }
 
     @Override
-    public RouteSearchResult findBestRouteOffline(String originNeighborhood, Coordinate originCoord,
-                               String destNeighborhood, Coordinate destCoord) {
+    public RouteSearchResult findBestRouteOffline(String originNeighborhood, Optional<Coordinate> originCoord,
+                               String destNeighborhood, Optional<Coordinate> destCoord) {
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             List<Route> candidates = candidatesFor(originNeighborhood, originCoord, destNeighborhood, destCoord);
 
             Route bestRoute = null;
             double bestDistance = Double.MAX_VALUE;
+            Optional<BoardingPoint> bestBoarding = Optional.empty();
+            Optional<BoardingPoint> bestDropOff = Optional.empty();
             for (Route candidate : candidates) {
-                // Sin trazado no hay con que medir, asi que queda de ultima: entra solo
-                // si ninguna otra candidata pudo compararse.
-                double distance = candidate.travelDistanceInMeters(originCoord, destCoord)
-                        .orElse(Double.MAX_VALUE);
+                // El modo offline nunca manda coordenadas (SCRUM-130): el unico origen
+                // de un punto es el nombre del barrio proyectado sobre el trazado propio
+                // de esta candidata, asi que hoy esto solo resuelve en las rutas que ya
+                // tienen trazado cargado.
+                Optional<Coordinate> originPoint = originCoord.or(() -> candidate.pointAtNeighborhood(originNeighborhood));
+                Optional<Coordinate> destPoint = destCoord.or(() -> candidate.pointAtNeighborhood(destNeighborhood));
+
+                // Sin con que medir, queda de ultima: entra solo si ninguna otra
+                // candidata pudo compararse.
+                double distance = (originPoint.isPresent() && destPoint.isPresent())
+                        ? candidate.travelDistanceInMeters(originPoint.get(), destPoint.get()).orElse(Double.MAX_VALUE)
+                        : Double.MAX_VALUE;
+
                 if (bestRoute == null || distance < bestDistance) {
                     bestRoute = candidate;
                     bestDistance = distance;
+                    bestBoarding = originPoint.flatMap(candidate::boardingPointFor);
+                    bestDropOff = destPoint.flatMap(candidate::boardingPointFor);
                 }
             }
             // Si gano una ruta sin trazado, la distancia queda vacia en vez de 0: no se
             // midio nada, y un 0 se leeria como "ya estas encima de la ruta".
-            return RouteSearchResult.offline(bestRoute,
+            //
+            // Misma razon que en el modo online: solo la ganadora pasa por
+            // withCurrentFares (RF-06).
+            Route bestRouteConTarifaVigente = bestRoute.withCurrentFares(LocalDate.now(clock));
+            return RouteSearchResult.offline(bestRouteConTarifaVigente,
                     bestDistance == Double.MAX_VALUE ? null : bestDistance,
-                    bestRoute.boardingPointFor(originCoord).orElse(null),
-                    bestRoute.boardingPointFor(destCoord).orElse(null));
+                    bestBoarding.orElse(null),
+                    bestDropOff.orElse(null));
         } finally {
             sample.stop(meterRegistry.timer(LATENCY_METRIC, "mode", "offline"));
         }
@@ -128,9 +179,13 @@ public class SearchRouteService implements SearchRouteUseCase {
      * llegar a pie (RF-04). Las rutas sin trazado pasan el filtro de distancia: no hay
      * con que medirlas, y descartarlas por un dato que falta las haria invisibles sin
      * una razon de negocio.
+     *
+     * El filtro de distancia solo evalua las coordenadas que el CLIENTE mando
+     * (SCRUM-130): un punto derivado del nombre del barrio esta siempre sobre el
+     * trazado, asi que aplicarselo seria dejar de filtrar sin decirlo.
      */
-    private List<Route> candidatesFor(String originNeighborhood, Coordinate originCoord,
-                                      String destNeighborhood, Coordinate destCoord) {
+    private List<Route> candidatesFor(String originNeighborhood, Optional<Coordinate> originCoord,
+                                      String destNeighborhood, Optional<Coordinate> destCoord) {
         List<Route> candidates = routeRepository.findAll().stream()
                 .filter(Route::isActive)
                 .filter(route -> connects(route, originNeighborhood, destNeighborhood))

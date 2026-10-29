@@ -1,17 +1,20 @@
--- V12 — Historial de las ultimas busquedas por usuario (RF-07, SCRUM-20).
+-- V13 — Historial de las ultimas busquedas por usuario (RF-07, SCRUM-20).
 --
--- Flyway es el dueno del esquema. V1..V11 ya se aplicaron y NO se tocan: editar
+-- Flyway es el dueno del esquema. V1..V12 ya se aplicaron y NO se tocan: editar
 -- una migracion ya aplicada cambia su checksum y rompe el arranque.
 --
 -- Esta migracion llegaba tarde: el commit 6124d84 introdujo
 -- SearchHistoryJpaEntity y su repositorio sin el .sql correspondiente, asi que
 -- el arranque en DEV fallaba con
 -- "Schema-validation: missing table [search_history]" (ddl-auto=validate).
--- Va como V12 y no como V10 porque la base ya esta en v11 y Flyway no acepta
--- migraciones fuera de orden.
+-- Va como V13 porque V12 ya la ocupa V12__rutas_gaitan_san_antonio_siboney.sql,
+-- que entro en main por el PR #64 mientras esta rama estaba abierta. Dos
+-- migraciones con el mismo numero rompen el arranque con un error de version
+-- duplicada, asi que la que llega despues renumera.
 --
--- Numero de version libre: V10 nunca existio en el repo (la plantilla
--- docs/datos/plantilla-V10-sectores-congestion.sql se aplico finalmente como V9).
+-- V10 nunca existio en el repo: la plantilla
+-- docs/datos/plantilla-V10-sectores-congestion.sql se aplico finalmente como V9.
+-- No se reutiliza ese hueco porque Flyway no acepta migraciones fuera de orden.
 
 
 -- ---------------------------------------------------------------------------

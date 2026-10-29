@@ -21,6 +21,12 @@ GET {{baseUrl}}/api/routes/1
 ### Ruta inexistente → 404
 GET {{baseUrl}}/api/routes/99999
 
+### Costo del pasaje (RF-06): tarifas vigentes de menor a mayor + lastUpdatedAt
+GET {{baseUrl}}/api/routes/8/fare
+
+### Costo del pasaje de ruta inexistente → 404
+GET {{baseUrl}}/api/routes/99999/fare
+
 ### ──────────────── 2. REGISTRO ────────────────
 
 ### Registro válido
