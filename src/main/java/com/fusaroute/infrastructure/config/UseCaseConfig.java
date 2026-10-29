@@ -94,8 +94,8 @@ public class UseCaseConfig {
     @Bean
     public SearchRouteUseCase searchRouteUseCase(RouteRepositoryPort routeRepository,
                                                   TravelTimePort travelTimePort,
-                                                  MeterRegistry meterRegistry) {
-        return new SearchRouteService(routeRepository, travelTimePort, meterRegistry);
+                                                  MeterRegistry meterRegistry, Clock clock) {
+        return new SearchRouteService(routeRepository, travelTimePort, meterRegistry, clock);
     }
 
     @Bean
