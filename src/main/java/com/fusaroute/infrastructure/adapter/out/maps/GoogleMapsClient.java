@@ -124,8 +124,14 @@ public class GoogleMapsClient implements TravelTimePort {
             throw new TravelTimeUnavailableException("Respuesta de Distance Matrix vacia", null);
         }
         if (!"OK".equals(response.status())) {
+            // Google explica el motivo en error_message cuando el status no es OK
+            // (clave invalida, API no habilitada, dominio no autorizado...). Se
+            // incluye en el mensaje para que el operador no tenga que ir al log
+            // de Google a adivinar. El filtrado quita la clave por si Google la
+            // repitiera por error — hoy no lo hace, pero no cuesta nada.
             throw new TravelTimeUnavailableException(
-                    "Distance Matrix respondio status=" + response.status(), null);
+                    "Distance Matrix respondio status=" + response.status()
+                            + sanitize(response.errorMessage()), null);
         }
         if (response.rows().isEmpty()) {
             throw new TravelTimeUnavailableException(
@@ -154,5 +160,19 @@ public class GoogleMapsClient implements TravelTimePort {
 
     private String toLatLng(Coordinate coordinate) {
         return String.format(Locale.ROOT, "%.6f,%.6f", coordinate.latitude(), coordinate.longitude());
+    }
+
+    /**
+     * Devuelve ": <mensaje>" o cadena vacia si Google no mando error_message. El
+     * mensaje se recorta por si fuera largo y, por seguridad, se le quita la clave
+     * si por alguna razon aparece: hoy Google no la incluye en {@code error_message},
+     * pero el log y la ProblemDetail no deben depender de que eso siga asi.
+     */
+    private String sanitize(String errorMessage) {
+        if (errorMessage == null || errorMessage.isBlank()) {
+            return "";
+        }
+        String safe = errorMessage.replace(apiKey, "***");
+        return ": " + (safe.length() > 240 ? safe.substring(0, 240) + "..." : safe);
     }
 }

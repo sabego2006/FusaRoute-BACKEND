@@ -414,6 +414,36 @@ class RouteControllerTest {
     }
 
     @Test
+    void busqueda_devuelve_el_trazado_para_pintar_el_mapa_del_resultado() throws Exception {
+        // Que el trazado viaje en /search y no solo en /{id} evita una segunda llamada
+        // para pintar el mapa: la busqueda ya decidio cual ruta sugerir.
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(urbanaConTrazado(), Duration.ofMinutes(18), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("destinationNeighborhood", "La Pampa"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.path.type").value("LineString"))
+                .andExpect(jsonPath("$.path.coordinates[0][0]").value(-74.3661))
+                .andExpect(jsonPath("$.path.coordinates[0][1]").value(4.3433));
+    }
+
+    @Test
+    void busqueda_de_ruta_sin_trazado_responde_path_null() throws Exception {
+        // El cliente tiene que poder distinguir "no hay dato" de "hay una linea vacia";
+        // igual que RouteDetailResponse, GeoJsonLineStringResponse.from devuelve null.
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("destinationNeighborhood", "La Pampa"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.path").value(nullValue()));
+    }
+
+    @Test
     void busqueda_de_ruta_sin_trazado_responde_sin_ultima_milla() throws Exception {
         // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON. La sugerencia se devuelve
         // igual; lo que no se puede decir es por donde acercarse a pie.
