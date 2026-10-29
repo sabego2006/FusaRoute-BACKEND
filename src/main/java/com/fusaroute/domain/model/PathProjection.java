@@ -58,6 +58,53 @@ final class PathProjection {
     }
 
     /**
+     * Punto del trazado a una fraccion [0, 1] de su longitud total, midiendo por la
+     * distancia real acumulada entre vertices y no por indice de vertice: un tramo
+     * largo entre dos vertices no debe pesar lo mismo que uno corto.
+     *
+     * Existe para {@link Route#pointAtNeighborhood(String)}: cuando el cliente no
+     * manda coordenadas propias (el selector de barrio solo da un nombre), es la unica
+     * forma de ubicar un punto aproximado sobre el trazado sin pedirle a nadie que
+     * camine la ruta con un GPS.
+     *
+     * @param path trazado con al menos 2 puntos; se asume ya validado por el llamador
+     * @param fraction posicion relativa dentro del recorrido; se recorta a [0, 1]
+     */
+    static Coordinate pointAtFraction(List<Coordinate> path, double fraction) {
+        double clamped = Math.clamp(fraction, 0d, 1d);
+        double totalLength = totalLength(path);
+        if (totalLength == 0) {
+            // Trazado degenerado (todos los vertices en el mismo punto): no hay nada
+            // que recorrer, asi que cualquier fraccion cae en el mismo lugar.
+            return path.get(0);
+        }
+
+        double target = clamped * totalLength;
+        double traversed = 0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            Coordinate start = path.get(i);
+            Coordinate end = path.get(i + 1);
+            double segmentLength = start.distanceInMetersTo(end);
+            boolean esUltimoSegmento = i == path.size() - 2;
+
+            if (traversed + segmentLength >= target || esUltimoSegmento) {
+                double ratio = segmentLength == 0 ? 0 : (target - traversed) / segmentLength;
+                return interpolate(start, end, Math.clamp(ratio, 0d, 1d));
+            }
+            traversed += segmentLength;
+        }
+        return path.get(path.size() - 1);
+    }
+
+    private static double totalLength(List<Coordinate> path) {
+        double total = 0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            total += path.get(i).distanceInMetersTo(path.get(i + 1));
+        }
+        return total;
+    }
+
+    /**
      * Posicion del pie de la perpendicular dentro del segmento, en [0, 1]. Se recorta
      * a ese rango a proposito: si la perpendicular cae fuera del tramo, el punto mas
      * cercano del tramo es uno de sus extremos.
