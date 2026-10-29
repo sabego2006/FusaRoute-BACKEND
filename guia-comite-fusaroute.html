@@ -1,0 +1,1396 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FusaRoute Backend — Dossier Técnico de Combate</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&family=Plus+Jakarta+Sans:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-canvas: #090b0e;
+      --bg-surface: #11151b;
+      --bg-card: #161b22;
+      --bg-card-hover: #1c232c;
+      --border-subtle: #242c38;
+      --border-bold: #3b4758;
+      --accent-yellow: #f59e0b;
+      --accent-yellow-light: #fbbf24;
+      --accent-amber-glow: rgba(245, 158, 11, 0.15);
+      --accent-cyan: #06b6d4;
+      --accent-cyan-light: #38bdf8;
+      --accent-emerald: #10b981;
+      --accent-rose: #f43f5e;
+      --accent-purple: #a855f7;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --text-dim: #64748b;
+      --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+      background-color: var(--bg-canvas);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+    }
+
+    body {
+      line-height: 1.6;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(245, 158, 11, 0.04) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.04) 0%, transparent 40%),
+        linear-gradient(rgba(255, 255, 255, 0.015) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.015) 1px, transparent 1px);
+      background-size: 100% 100%, 100% 100%, 32px 32px, 32px 32px;
+      min-height: 100vh;
+    }
+
+    /* Top Navigation HUD */
+    .hud-header {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      background: rgba(9, 11, 14, 0.92);
+      backdrop-filter: blur(16px);
+      border-bottom: 2px solid var(--border-subtle);
+      padding: 0.75rem 1.5rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: border-color 0.2s;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 0.85rem;
+    }
+
+    .bus-badge {
+      background: var(--accent-yellow);
+      color: #000;
+      font-weight: 900;
+      font-size: 0.8rem;
+      padding: 0.2rem 0.6rem;
+      border-radius: 4px;
+      font-family: var(--font-mono);
+      letter-spacing: 1px;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+    }
+
+    .brand-title {
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      color: var(--text-main);
+    }
+
+    .brand-title span {
+      color: var(--accent-yellow);
+    }
+
+    .hud-nav {
+      display: flex;
+      gap: 0.5rem;
+      overflow-x: auto;
+      max-width: 60%;
+      padding-bottom: 2px;
+    }
+
+    .nav-chip {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 0.8rem;
+      font-weight: 600;
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      border: 1px solid transparent;
+      white-space: nowrap;
+      transition: all 0.15s ease;
+      font-family: var(--font-mono);
+    }
+
+    .nav-chip:hover {
+      color: var(--accent-yellow);
+      border-color: var(--border-bold);
+      background: var(--bg-surface);
+    }
+
+    .hud-actions {
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .hud-btn {
+      background: var(--bg-surface);
+      color: var(--text-main);
+      border: 1px solid var(--border-bold);
+      padding: 0.4rem 0.85rem;
+      border-radius: 4px;
+      font-size: 0.78rem;
+      font-family: var(--font-mono);
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.4rem;
+      transition: all 0.2s ease;
+    }
+
+    .hud-btn:hover {
+      background: var(--accent-yellow);
+      color: #000;
+      border-color: var(--accent-yellow);
+      transform: translateY(-1px);
+    }
+
+    /* Container */
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 2.5rem 1.5rem 6rem;
+    }
+
+    /* Hero Banner */
+    .hero-banner {
+      background: linear-gradient(180deg, var(--bg-surface) 0%, var(--bg-card) 100%);
+      border: 2px solid var(--border-bold);
+      border-top: 4px solid var(--accent-yellow);
+      border-radius: 8px;
+      padding: 2.5rem;
+      margin-bottom: 3.5rem;
+      position: relative;
+      box-shadow: 0 20px 40px -15px rgba(0, 0, 0, 0.7);
+    }
+
+    .hero-tags {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      margin-bottom: 1.25rem;
+    }
+
+    .tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+      padding: 0.25rem 0.6rem;
+      border-radius: 4px;
+      background: #1f2733;
+      color: var(--accent-cyan-light);
+      border: 1px solid var(--border-subtle);
+    }
+
+    .tag.yellow {
+      background: rgba(245, 158, 11, 0.12);
+      color: var(--accent-yellow-light);
+      border-color: rgba(245, 158, 11, 0.3);
+    }
+
+    .tag.green {
+      background: rgba(16, 185, 129, 0.12);
+      color: var(--accent-emerald);
+      border-color: rgba(16, 185, 129, 0.3);
+    }
+
+    .hero-title {
+      font-size: 2.6rem;
+      font-weight: 900;
+      line-height: 1.1;
+      letter-spacing: -1.5px;
+      margin-bottom: 1rem;
+      color: #fff;
+    }
+
+    .hero-subtitle {
+      font-size: 1.15rem;
+      color: var(--text-muted);
+      max-width: 860px;
+      margin-bottom: 2rem;
+    }
+
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.25rem;
+      padding-top: 1.5rem;
+      border-top: 1px solid var(--border-subtle);
+    }
+
+    .meta-item {
+      display: flex;
+      flex-direction: column;
+    }
+
+    .meta-label {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      color: var(--text-dim);
+      font-family: var(--font-mono);
+      letter-spacing: 0.5px;
+      margin-bottom: 0.2rem;
+    }
+
+    .meta-value {
+      font-size: 0.95rem;
+      font-weight: 700;
+      color: var(--text-main);
+    }
+
+    /* Section Structure */
+    .section-block {
+      margin-bottom: 4rem;
+      scroll-margin-top: 80px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      margin-bottom: 1.75rem;
+      padding-bottom: 0.85rem;
+      border-bottom: 2px solid var(--border-bold);
+    }
+
+    .section-num {
+      font-family: var(--font-mono);
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: var(--accent-yellow);
+    }
+
+    .section-title {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.7px;
+      color: #fff;
+    }
+
+    /* Cards */
+    .brutalist-card {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 8px;
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+      position: relative;
+      transition: border-color 0.2s, transform 0.2s;
+    }
+
+    .brutalist-card:hover {
+      border-color: var(--border-bold);
+    }
+
+    .card-header-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.5rem;
+      font-family: var(--font-mono);
+      font-size: 0.75rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      padding: 0.35rem 0.75rem;
+      border-radius: 4px;
+      margin-bottom: 1.25rem;
+    }
+
+    .badge-rigor {
+      background: rgba(6, 182, 212, 0.12);
+      color: var(--accent-cyan-light);
+      border: 1px solid rgba(6, 182, 212, 0.3);
+    }
+
+    .badge-teen {
+      background: rgba(245, 158, 11, 0.15);
+      color: var(--accent-yellow-light);
+      border: 1px solid rgba(245, 158, 11, 0.4);
+    }
+
+    .badge-defense {
+      background: rgba(16, 185, 129, 0.15);
+      color: var(--accent-emerald);
+      border: 1px solid rgba(16, 185, 129, 0.4);
+    }
+
+    .badge-code {
+      background: rgba(168, 85, 247, 0.15);
+      color: var(--accent-purple);
+      border: 1px solid rgba(168, 85, 247, 0.4);
+    }
+
+    /* Teen Card Special Styling */
+    .teen-card {
+      background: linear-gradient(135deg, #181c22 0%, #1a160d 100%);
+      border-left: 4px solid var(--accent-yellow);
+    }
+
+    .teen-quote {
+      font-size: 1.05rem;
+      font-style: normal;
+      font-weight: 500;
+      color: #fde68a;
+      line-height: 1.55;
+    }
+
+    .teen-quote strong {
+      color: #fff;
+      font-weight: 700;
+      background: rgba(245, 158, 11, 0.2);
+      padding: 0.1rem 0.35rem;
+      border-radius: 3px;
+    }
+
+    /* Committee Defense Card */
+    .defense-card {
+      background: linear-gradient(135deg, #131d18 0%, #161b22 100%);
+      border-left: 4px solid var(--accent-emerald);
+    }
+
+    .defense-q {
+      font-weight: 800;
+      color: #fff;
+      margin-bottom: 0.5rem;
+      font-size: 1.02rem;
+    }
+
+    .defense-a {
+      color: #d1fae5;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .defense-a strong {
+      color: #fff;
+    }
+
+    /* Code Blocks */
+    .code-container {
+      background: #0a0d12;
+      border: 1px solid var(--border-bold);
+      border-radius: 6px;
+      overflow: hidden;
+      margin: 1.25rem 0;
+      font-family: var(--font-mono);
+    }
+
+    .code-header {
+      background: #11161f;
+      padding: 0.5rem 1rem;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: 0.75rem;
+      color: var(--text-dim);
+    }
+
+    .code-title {
+      font-weight: 700;
+      color: var(--accent-cyan);
+    }
+
+    .copy-btn {
+      background: transparent;
+      border: 1px solid var(--border-subtle);
+      color: var(--text-muted);
+      padding: 0.2rem 0.5rem;
+      border-radius: 3px;
+      cursor: pointer;
+      font-size: 0.7rem;
+      font-family: var(--font-mono);
+      transition: all 0.2s;
+    }
+
+    .copy-btn:hover {
+      color: var(--accent-yellow);
+      border-color: var(--accent-yellow);
+    }
+
+    pre {
+      padding: 1.25rem;
+      overflow-x: auto;
+      font-size: 0.85rem;
+      line-height: 1.5;
+      color: #e2e8f0;
+    }
+
+    .kwd { color: #f43f5e; font-weight: 600; }
+    .typ { color: #38bdf8; font-weight: 600; }
+    .fn { color: #fbbf24; }
+    .str { color: #34d399; }
+    .num { color: #fb923c; }
+    .ann { color: #c084fc; }
+    .cmt { color: #64748b; font-style: italic; }
+
+    /* Tables */
+    .table-wrap {
+      overflow-x: auto;
+      margin: 1.5rem 0;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 0.88rem;
+    }
+
+    th {
+      background: #111620;
+      padding: 0.85rem 1.15rem;
+      font-weight: 700;
+      color: var(--text-muted);
+      border-bottom: 2px solid var(--border-bold);
+      text-transform: uppercase;
+      font-size: 0.72rem;
+      font-family: var(--font-mono);
+      letter-spacing: 0.6px;
+    }
+
+    td {
+      padding: 0.9rem 1.15rem;
+      border-bottom: 1px solid var(--border-subtle);
+      color: #cbd5e1;
+    }
+
+    tr:last-child td {
+      border-bottom: none;
+    }
+
+    tr:hover td {
+      background: rgba(255, 255, 255, 0.015);
+    }
+
+    .mono-cell {
+      font-family: var(--font-mono);
+      font-size: 0.82rem;
+      color: var(--accent-cyan-light);
+    }
+
+    /* Diagram visualizer */
+    .diagram-hud {
+      background: #0a0d13;
+      border: 2px solid var(--border-bold);
+      border-radius: 8px;
+      padding: 1.5rem;
+      margin: 1.5rem 0;
+      display: flex;
+      flex-direction: column;
+      gap: 1.25rem;
+    }
+
+    .diagram-layer {
+      background: #111620;
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      padding: 1rem 1.25rem;
+      position: relative;
+    }
+
+    .diagram-layer.infra {
+      border-left: 5px solid var(--accent-rose);
+    }
+
+    .diagram-layer.app {
+      border-left: 5px solid var(--accent-cyan);
+    }
+
+    .diagram-layer.dom {
+      border-left: 5px solid var(--accent-yellow);
+      background: #171b22;
+    }
+
+    .layer-tag {
+      font-family: var(--font-mono);
+      font-size: 0.72rem;
+      font-weight: 800;
+      text-transform: uppercase;
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 0.5rem;
+    }
+
+    .layer-tag span.badge {
+      padding: 0.1rem 0.4rem;
+      border-radius: 3px;
+      font-size: 0.68rem;
+    }
+
+    .arrow-indicator {
+      text-align: center;
+      color: var(--accent-yellow);
+      font-family: var(--font-mono);
+      font-size: 0.85rem;
+      font-weight: 800;
+      letter-spacing: 1px;
+    }
+
+    /* Interactive Flashcard Simulator */
+    .simulator-box {
+      background: var(--bg-surface);
+      border: 2px solid var(--accent-yellow);
+      border-radius: 8px;
+      padding: 2rem;
+      margin: 3.5rem 0;
+    }
+
+    .sim-item {
+      background: var(--bg-card);
+      border: 1px solid var(--border-subtle);
+      border-radius: 6px;
+      margin-bottom: 1rem;
+      overflow: hidden;
+    }
+
+    .sim-q {
+      padding: 1.1rem 1.25rem;
+      cursor: pointer;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-weight: 700;
+      font-size: 1rem;
+      user-select: none;
+      transition: background 0.2s;
+    }
+
+    .sim-q:hover {
+      background: #19202a;
+    }
+
+    .sim-a {
+      padding: 0 1.25rem 1.25rem;
+      display: none;
+      border-top: 1px dashed var(--border-subtle);
+      color: #94a3b8;
+      font-size: 0.95rem;
+      line-height: 1.6;
+    }
+
+    .sim-a.open {
+      display: block;
+      padding-top: 1rem;
+    }
+
+    .sim-a strong {
+      color: var(--accent-yellow);
+    }
+
+    /* Quick Toast */
+    #toast {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      background: var(--accent-yellow);
+      color: #000;
+      font-family: var(--font-mono);
+      font-weight: 800;
+      font-size: 0.8rem;
+      padding: 0.6rem 1.2rem;
+      border-radius: 4px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
+      opacity: 0;
+      transform: translateY(20px);
+      transition: all 0.3s ease;
+      pointer-events: none;
+      z-index: 1000;
+    }
+
+    #toast.show {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    /* Print adjustments */
+    @media print {
+      .hud-header, .hud-actions, .copy-btn { display: none !important; }
+      body { background: #fff !important; color: #000 !important; }
+      .container { max-width: 100% !important; padding: 0 !important; }
+      .brutalist-card, .code-container, .diagram-hud { border-color: #ccc !important; background: #fff !important; color: #000 !important; }
+      pre { color: #000 !important; }
+    }
+
+    /* Responsive */
+    @media (max-width: 768px) {
+      .hud-nav { display: none; }
+      .hero-title { font-size: 1.9rem; }
+      .container { padding: 1.25rem 1rem 4rem; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Sticky HUD -->
+  <header class="hud-header" id="hud">
+    <div class="brand-wrap">
+      <span class="bus-badge">🚌 FUSAROUTE</span>
+      <h1 class="brand-title">Dossier Técnico <span>Backend</span></h1>
+    </div>
+
+    <nav class="hud-nav" aria-label="Navegación rápida">
+      <a href="#arquitectura" class="nav-chip">1. Arquitectura</a>
+      <a href="#estructura" class="nav-chip">2. Estructura</a>
+      <a href="#funcionamiento" class="nav-chip">3. Funcionamiento</a>
+      <a href="#archivos" class="nav-chip">4. Archivos</a>
+      <a href="#lineas" class="nav-chip">5. Líneas Top</a>
+      <a href="#decisiones" class="nav-chip">6. Decisiones</a>
+      <a href="#base-de-datos" class="nav-chip">7. Base de Datos</a>
+      <a href="#simulador" class="nav-chip">⚔️ Simulador</a>
+    </nav>
+
+    <div class="hud-actions">
+      <button class="hud-btn" onclick="window.print()" title="Guardar o imprimir como PDF">
+        🖨️ PDF / Imprimir
+      </button>
+      <button class="hud-btn" onclick="toggleAllCards()" id="toggleBtn" title="Alternar detalles de estudio">
+        ⚡ Expandir Todo
+      </button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- Hero Banner -->
+    <section class="hero-banner">
+      <div class="hero-tags">
+        <span class="tag yellow">Ingeniería de Software I</span>
+        <span class="tag">Java 25 (LTS)</span>
+        <span class="tag">Spring Boot 3.5.16</span>
+        <span class="tag">Arquitectura Hexagonal</span>
+        <span class="tag green">PostgreSQL (Supabase)</span>
+        <span class="tag">Flyway Versioning</span>
+      </div>
+
+      <h1 class="hero-title">MANUAL BRUTALISTA DE COMBATE TÉCNICO</h1>
+      <p class="hero-subtitle">
+        Documento maestro de preparación para la sustentación ante el Comité de Arquitectura y el docente <strong>Ing. Luiferney Ortiz Parra</strong>. Rigor de ingeniería estricto, justificación matemática de reglas y traducción instantánea a conceptos fundamentales.
+      </p>
+
+      <div class="meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">Desarrolladores Responsables</span>
+          <span class="meta-value">Santiago Bermúdez &amp; Angélica Aranguren</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Métrica RNF-03 (Mantenibilidad)</span>
+          <span class="meta-value">0 violaciones ArchUnit · ≥ 70% JaCoCo</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Métrica RNF-01 (Rendimiento)</span>
+          <span class="meta-value">p95 &lt; 8.0 s end-to-end · Caché 5m</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Métrica RNF-05 (Seguridad)</span>
+          <span class="meta-value">BCrypt coste 12 · Anti-Timing Attacks</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- ITEM 1: ARQUITECTURA -->
+    <section class="section-block" id="arquitectura">
+      <div class="section-header">
+        <span class="section-num">01</span>
+        <h2 class="section-title">Arquitectura del Proyecto</h2>
+      </div>
+
+      <!-- Explicación Técnica -->
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-rigor">
+          🏛️ Rigor de Ingeniería · Nivel Comité Evaluador
+        </div>
+        <p>
+          FusaRoute implementa una <strong>Arquitectura Hexagonal (Puertos y Adaptadores)</strong> con inversión de dependencias estricta. La regla canónica inquebrantable es: <strong>la dependencia siempre apunta hacia adentro</strong>.
+        </p>
+
+        <!-- Diagrama visual HUD -->
+        <div class="diagram-hud">
+          <div class="diagram-layer infra">
+            <div class="layer-tag">
+              <span>Capa Externa: INFRASTRUCTURE</span>
+              <span class="badge" style="background:#f43f5e; color:#fff">Spring Boot &amp; Adaptadores</span>
+            </div>
+            <p style="font-size: 0.85rem; color: #94a3b8;">
+              <code>adapter/in/web</code> (@RestController, DTOs, GlobalExceptionHandler) &bull; 
+              <code>adapter/out/persistence</code> (JPA, Supabase) &bull; 
+              <code>adapter/out/security</code> (BCrypt, Nimbus JWT) &bull; 
+              <code>config</code> (SecurityConfig, UseCaseConfig)
+            </p>
+          </div>
+
+          <div class="arrow-indicator">&darr; &darr; &darr; &nbsp; DEPENDE DE &nbsp; &darr; &darr; &darr;</div>
+
+          <div class="diagram-layer app">
+            <div class="layer-tag">
+              <span>Capa Intermedia: APPLICATION</span>
+              <span class="badge" style="background:#06b6d4; color:#000">Casos de Uso (POJOs)</span>
+            </div>
+            <p style="font-size: 0.85rem; color: #94a3b8;">
+              <code>RegisterUserService</code>, <code>LoginService</code>, <code>ListActiveRoutesService</code>, <code>GetRouteDetailService</code>.<br>
+              <strong>Cero anotaciones de Spring:</strong> reciben sus puertos por constructor para permitir pruebas unitarias con Mockito en milisegundos sin arrancar el contexto.
+            </p>
+          </div>
+
+          <div class="arrow-indicator">&darr; &darr; &darr; &nbsp; DEPENDE DE &nbsp; &darr; &darr; &darr;</div>
+
+          <div class="diagram-layer dom">
+            <div class="layer-tag">
+              <span>Capa Central: DOMAIN (El Núcleo Intocable)</span>
+              <span class="badge" style="background:#f59e0b; color:#000">Cero Frameworks</span>
+            </div>
+            <p style="font-size: 0.85rem; color: #fde68a;">
+              <strong>Java 25 Puro:</strong> Modelos (<code>Route</code>, <code>User</code>, <code>Fare</code>, <code>Email</code>, <code>PasswordPolicy</code>), Puertos In/Out y Excepciones de negocio. 
+              <strong>Terminantemente prohibido</strong> importar Spring, JPA, Jackson o HTTP.
+            </p>
+          </div>
+        </div>
+
+        <p style="margin-top: 1rem;">
+          <strong>Vigilancia Automatizada con ArchUnit:</strong> La pureza arquitectónica no se vigila a mano en los Pull Requests; se evalúa en tiempo de compilación con <a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/test/java/com/fusaroute/architecture/HexagonalArchitectureTest.java" style="color:var(--accent-cyan); font-weight:700;">HexagonalArchitectureTest.java</a>. Si un desarrollador agrega un <code>@Entity</code> o <code>@Autowired</code> en el dominio, Maven aborta el build automáticamente.
+        </p>
+      </article>
+
+      <!-- Mini Teen Explanation -->
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "El <strong>Dominio</strong> es como el motor de un Ferrari. El motor solo sabe acelerar y quemar gasolina; le importa un carajo si el carro tiene llantas de repuesto, si la carrocería es azul o si el chofer habla inglés o chino. Los <strong>Puertos</strong> son los huecos universales para los tornillos y las mangueras. La <strong>Infraestructura</strong> (Spring Boot, Supabase, Google Maps) son los repuestos intercambiables que le conectamos afuera. Si la base de datos se incendia mañana y cambiamos a otra, el motor sigue andando idéntico porque no depende de nadie."
+        </p>
+      </article>
+
+      <!-- Tarjeta de Choque ante el Comité -->
+      <article class="brutalist-card defense-card">
+        <div class="card-header-badge badge-defense">
+          🛡️ Respuesta de Choque ante el Comité
+        </div>
+        <div class="defense-q">
+          Pregunta del Profe Luiferney: "¿Por qué no anotaron los Use Cases directamente con @Service en vez de crear UseCaseConfig?"
+        </div>
+        <div class="defense-a">
+          <strong>Respuesta contundente:</strong> "Para respetar el principio de desacoplamiento de la Arquitectura Hexagonal. Al no acoplar la capa <code>application</code> al framework de Spring con anotaciones propietarias, nuestros casos de uso son POJOs puros testeables en milisegundos sin levantar el contenedor de inversión de control de Spring, y el cableado de dependencias se aísla de forma explícita en la infraestructura a través de <a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/infrastructure/config/UseCaseConfig.java" style="color:#6ee7b7;">UseCaseConfig</a>."
+        </div>
+      </article>
+    </section>
+
+    <!-- ITEM 2: ESTRUCTURA -->
+    <section class="section-block" id="estructura">
+      <div class="section-header">
+        <span class="section-num">02</span>
+        <h2 class="section-title">Estructura del Proyecto</h2>
+      </div>
+
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-rigor">
+          🏛️ Rigor de Ingeniería · Organización Paquete a Paquete
+        </div>
+
+        <p>El código fuente se estructura en paquetes semánticos que reflejan los límites del hexágono:</p>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Paquete / Ruta</th>
+                <th>Rol Arquitectónico</th>
+                <th>Responsabilidad Concreta</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono-cell">com.fusaroute.domain.model</td>
+                <td>Entidades &amp; VOs</td>
+                <td>Modelos inmutables (Java records) y Value Objects autocontenidos: <code>Route</code>, <code>Fare</code>, <code>User</code>, <code>Email</code>, <code>PasswordPolicy</code>.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">com.fusaroute.domain.port.in</td>
+                <td>Inbound Ports</td>
+                <td>Interfaces de lo que el exterior puede solicitar: <code>RegisterUserUseCase</code>, <code>LoginUseCase</code>, <code>ListActiveRoutesUseCase</code>, <code>GetRouteDetailUseCase</code>.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">com.fusaroute.domain.port.out</td>
+                <td>Outbound Ports</td>
+                <td>Interfaces de lo que el dominio necesita: <code>UserRepositoryPort</code>, <code>RouteRepositoryPort</code>, <code>PasswordHasherPort</code>, <code>TokenIssuerPort</code>.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">com.fusaroute.application.usecase</td>
+                <td>Application Services</td>
+                <td>Orquestación de casos de uso (<code>*Service.java</code>). Aplican reglas, llaman puertos de salida y coordinan el flujo sin tocar SQL ni HTTP.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">infrastructure.adapter.in.web</td>
+                <td>Adaptador Web (REST)</td>
+                <td><code>@RestController</code>, DTOs de petición y respuesta, y el manejador global de excepciones con estándar RFC 9457.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">infrastructure.adapter.out.persistence</td>
+                <td>Persistencia Relacional</td>
+                <td>Entidades JPA (<code>RouteJpaEntity</code>, <code>UserJpaEntity</code>), repositorios Spring Data y mappers de traducción a objetos de dominio.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">infrastructure.adapter.out.security</td>
+                <td>Mecanismos Criptográficos</td>
+                <td>Implementación concreta de BCrypt con factor de costo 12 y emisor de tokens JWT con Nimbus JOSE.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">infrastructure.config</td>
+                <td>IoC &amp; Security Setup</td>
+                <td>Configuración del firewall Spring Security, reglas CORS estrictas, configuración de firma JWT y ensamblaje de Beans.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p style="margin-top: 1rem;">
+          <strong>Dos Modelos Distintos a Propósito:</strong> Tenemos <code>Route</code> (dominio) y <code>RouteJpaEntity</code> (persistencia). Duplicar estos campos no es redundancia; es la barrera que permite alterar la estructura de la base de datos o el motor relacional sin quebrar una sola regla de negocio en el frontend o en los casos de uso.
+        </p>
+      </article>
+
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "Es como tener tu casa organizada por pisos: en el ático bajo llave está el <strong>Dominio</strong> (tus joyas y tu plata que nadie toca); en el segundo piso está la <strong>Aplicación</strong> (donde planeas tu día); y en la entrada y el garaje está la <strong>Infraestructura</strong> (el timbre para que toquen los clientes y la tubería de aguas negras para que salgan los datos a la base). Nadie de la calle entra directo al ático."
+        </p>
+      </article>
+    </section>
+
+    <!-- ITEM 3: FUNCIONAMIENTO -->
+    <section class="section-block" id="funcionamiento">
+      <div class="section-header">
+        <span class="section-num">03</span>
+        <h2 class="section-title">Funcionamiento por Separado y Todo Junto</h2>
+      </div>
+
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-rigor">
+          🏛️ Rigor de Ingeniería · Ciclo de Vida y Flujos Integrados
+        </div>
+
+        <h3 style="color: var(--accent-yellow); margin-bottom: 0.75rem;">A. Los 3 Flujos Críticos de la API en Acción:</h3>
+
+        <div style="display: flex; flex-direction: column; gap: 1rem; margin: 1.25rem 0;">
+          <div style="background: #0d1117; border-left: 3px solid var(--accent-cyan); padding: 1rem; border-radius: 4px;">
+            <strong style="color: #fff;">1. Registro de Usuario (<code>POST /api/auth/register</code> - RF-01):</strong>
+            <p style="font-size: 0.88rem; color: #94a3b8; margin-top: 0.3rem;">
+              Llega JSON al <code>AuthController</code> &rarr; Construye <code>RegisterUserCommand</code> &rarr; Invoca <code>RegisterUserService</code> &rarr; Valida nombre (máx 120), correo normalizado (trim + lowercase) y contraseña (mín 8 chars, 1 mayús, 1 num, máx 72 bytes) acumulando todos los fallos en una lista &rarr; Verifica que el correo no exista en <code>UserRepositoryPort</code> &rarr; Hashea con BCrypt (costo 12) &rarr; Crea entidad <code>User.register(...)</code> con <code>active=true</code> y rol <code>USER</code> &rarr; Persiste en PostgreSQL &rarr; Retorna <code>201 Created</code> con DTO limpio (sin el hash).
+            </p>
+          </div>
+
+          <div style="background: #0d1117; border-left: 3px solid var(--accent-yellow); padding: 1rem; border-radius: 4px;">
+            <strong style="color: #fff;">2. Inicio de Sesión Blindado (<code>POST /api/auth/login</code> - RF-02 / RNF-05):</strong>
+            <p style="font-size: 0.88rem; color: #94a3b8; margin-top: 0.3rem;">
+              Llega JSON al <code>AuthController</code> &rarr; Invoca <code>LoginService</code> &rarr; Busca el usuario por correo normalizado &rarr; <strong>Verificación a Tiempo Constante:</strong> si el correo existe, compara con BCrypt contra su hash; si el correo NO existe, ejecuta BCrypt contra un hash fantasma (<em>dummyHash</em>) para consumir exactamente la misma cantidad de CPU y no delatar si el correo existe o no &rarr; Si es inválido lanza <code>InvalidCredentialsException</code> (401 genérico) &rarr; Si es válido emite JWT firmado HS256 válido por 7 días (RNF-04) con claims <code>sub=id</code> y <code>role=USER</code> &rarr; Retorna <code>200 OK</code>.
+            </p>
+          </div>
+
+          <div style="background: #0d1117; border-left: 3px solid var(--accent-emerald); padding: 1rem; border-radius: 4px;">
+            <strong style="color: #fff;">3. Catálogo y Resolución de Tarifas (<code>GET /api/routes</code> - RF-15):</strong>
+            <p style="font-size: 0.88rem; color: #94a3b8; margin-top: 0.3rem;">
+              Llamada pública sin token &rarr; <code>RouteController</code> llama a <code>ListActiveRoutesUseCase</code> &rarr; Consulta <code>RouteRepositoryPort.findAll()</code> &rarr; El adaptador ejecuta consulta optimizada con <code>@BatchSize(50)</code> para evitar el problema de N+1 consultas en barrios y tarifas &rarr; Filtra rutas activas &rarr; Ejecuta en cada ruta <code>withCurrentFares(today)</code> resolviendo la tarifa vigente hoy (zona horaria Bogotá) y descartando futuras &rarr; Ordena con <code>Collator</code> de Colombia ("es-CO") &rarr; Retorna <code>200 OK</code>.
+            </p>
+          </div>
+        </div>
+      </article>
+
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "Por separado, cada archivo es un especialista: el validador es el guardia que mira tu cédula, el hasher es el que te pasa por rayos X, y el mapper es el traductor de idiomas. Todo junto es el aeropuerto de FusaRoute: cuando pides login, el guardia y el de los rayos X revisan tu boleto al mismo tiempo exacto para que ningún espía sepa si ya tienes cuenta, y al final te dan una manilla VIP que te deja subir a la buseta por una semana entera."
+        </p>
+      </article>
+    </section>
+
+    <!-- ITEM 4: ARCHIVOS IMPORTANTES -->
+    <section class="section-block" id="archivos">
+      <div class="section-header">
+        <span class="section-num">04</span>
+        <h2 class="section-title">Significado y Uso de los Archivos Importantes</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Archivo Clave</th>
+              <th>Capa</th>
+              <th>Misión Crítica / Para qué sirve</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/infrastructure/config/UseCaseConfig.java" style="color:var(--accent-cyan);">UseCaseConfig.java</a></td>
+              <td>Infrastructure (Config)</td>
+              <td>Instancia los casos de uso inyectándoles los adaptadores y configura el <code>Clock</code> del sistema fijado a <code>America/Bogota</code> para que los servidores en UTC no desfasen las tarifas.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/infrastructure/config/SecurityConfig.java" style="color:var(--accent-cyan);">SecurityConfig.java</a></td>
+              <td>Infrastructure (Config)</td>
+              <td>Firewall HTTP: Desactiva CSRF (la API es STATELESS con JWT), enumera orígenes CORS permitidos (sin comodín '*'), abre <code>/health</code>, <code>/api/auth/*</code> y el catálogo de rutas, y cierra todo lo demás.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/infrastructure/config/JwtConfig.java" style="color:var(--accent-cyan);">JwtConfig.java</a></td>
+              <td>Infrastructure (Config)</td>
+              <td>Crea el <code>JwtEncoder</code> y <code>JwtDecoder</code> con algoritmo HS256. Falla el arranque de la app si el <code>JWT_SECRET</code> no tiene al menos 32 bytes (256 bits).</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/infrastructure/adapter/in/web/GlobalExceptionHandler.java" style="color:var(--accent-cyan);">GlobalExceptionHandler.java</a></td>
+              <td>Infrastructure (Web)</td>
+              <td>Atrapa excepciones y genera respuestas uniformes basadas en el estándar <strong>RFC 9457 (ProblemDetail)</strong>. Evita 500 no controlados.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/domain/model/PasswordPolicy.java" style="color:var(--accent-cyan);">PasswordPolicy.java</a></td>
+              <td>Domain (Model)</td>
+              <td>Aplica la política de contraseñas de RF-01. Impone el límite crítico de <strong>72 bytes en UTF-8</strong> derivado de la limitación algorítmica de BCrypt.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/domain/model/Route.java" style="color:var(--accent-cyan);">Route.java</a></td>
+              <td>Domain (Model)</td>
+              <td>Record inmutable. Contiene la función pura <code>withCurrentFares(today)</code> que descarta tarifas futuras y resuelve la última vigente por hito.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/java/com/fusaroute/infrastructure/adapter/out/security/BCryptPasswordHasher.java" style="color:var(--accent-cyan);">BCryptPasswordHasher.java</a></td>
+              <td>Infrastructure (Security)</td>
+              <td>Hasheador seguro con costo 12 (superior al 10 por defecto de Spring). Implementa el dummy hash para neutralizar ataques de enumeración por temporización.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/test/java/com/fusaroute/architecture/HexagonalArchitectureTest.java" style="color:var(--accent-cyan);">HexagonalArchitectureTest.java</a></td>
+              <td>Test (Architecture)</td>
+              <td>Test de ArchUnit que analiza los paquetes en el CI. Rompe la compilación si <code>com.fusaroute.domain..</code> toca Spring o JPA.</td>
+            </tr>
+            <tr>
+              <td class="mono-cell"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/pom.xml" style="color:var(--accent-cyan);">pom.xml</a></td>
+              <td>Root</td>
+              <td>Gestiona dependencias de Java 25, Spring Boot 3.5.16, JaCoCo (bloqueante si la cobertura de domain/application es menor a 70%) y OWASP Dependency Check.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "Es la alineación titular del equipo: <code>PasswordPolicy</code> y <code>Email</code> son los defensas que no dejan pasar basura; <code>RegisterUserService</code> y <code>LoginService</code> son los volantes 10 que arman las jugadas; <code>Route</code> es el delantero goleador que define las tarifas; y <code>SecurityConfig</code> es el arquero que manda a volar a cualquiera que venga sin su manilla VIP."
+        </p>
+      </article>
+    </section>
+
+    <!-- ITEM 5: LÍNEAS DE CÓDIGO CRÍTICAS -->
+    <section class="section-block" id="lineas">
+      <div class="section-header">
+        <span class="section-num">05</span>
+        <h2 class="section-title">Líneas de Código Críticas que Jamás Debes Olvidar</h2>
+      </div>
+
+      <!-- Snippet 1 -->
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-code">01. Límite de 72 Bytes UTF-8 en PasswordPolicy.java</div>
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-title">PasswordPolicy.java (Líneas 46-48)</span>
+            <button class="copy-btn" onclick="copySnippet(this)">Copiar</button>
+          </div>
+          <pre><code><span class="kwd">if</span> (raw.<span class="fn">getBytes</span>(StandardCharsets.UTF_8).length &gt; MAX_BYTES) {
+    violations.<span class="fn">add</span>(<span class="kwd">new</span> <span class="typ">FieldViolation</span>(FIELD, <span class="str">"La contrasena supera los "</span> + MAX_BYTES + <span class="str">" bytes permitidos"</span>));
+}</code></pre>
+        </div>
+        <p style="font-size: 0.88rem; color: #94a3b8;">
+          <strong>Por qué es vital:</strong> BCrypt procesa <strong>únicamente los primeros 72 bytes</strong> y descarta silenciosamente el resto. Si dos contraseñas comparten los primeros 72 bytes, tendrían el mismo hash. Medimos en bytes y no en caracteres porque tildes y caracteres especiales ocupan múltiples bytes en UTF-8.
+        </p>
+      </article>
+
+      <!-- Snippet 2 -->
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-code">02. Mitigación de Timing Attacks en BCryptPasswordHasher.java</div>
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-title">BCryptPasswordHasher.java (Líneas 25 y 33-39)</span>
+            <button class="copy-btn" onclick="copySnippet(this)">Copiar</button>
+          </div>
+          <pre><code><span class="kwd">private final</span> <span class="typ">String</span> dummyHash = encoder.<span class="fn">encode</span>(<span class="str">"relleno-para-igualar-tiempos"</span>);
+...
+<span class="ann">@Override</span>
+<span class="kwd">public boolean</span> <span class="fn">matches</span>(<span class="typ">String</span> raw, <span class="typ">String</span> hashOrNull) {
+    <span class="kwd">if</span> (hashOrNull == <span class="kwd">null</span>) {
+        encoder.<span class="fn">matches</span>(raw, dummyHash); <span class="cmt">// Quema el mismo tiempo de CPU con BCrypt</span>
+        <span class="kwd">return false</span>;
+    }
+    <span class="kwd">return</span> encoder.<span class="fn">matches</span>(raw, hashOrNull);
+}</code></pre>
+        </div>
+        <p style="font-size: 0.88rem; color: #94a3b8;">
+          <strong>Por qué es vital:</strong> Evita que un atacante descubra qué correos electrónicos están registrados en la plataforma midiendo los milisegundos que tarda la API en responder (ataque de canal lateral por temporización).
+        </p>
+      </article>
+
+      <!-- Snippet 3 -->
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-code">03. Resolución de Tarifas Vigentes en Route.java</div>
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-title">Route.java (Líneas 40-47)</span>
+            <button class="copy-btn" onclick="copySnippet(this)">Copiar</button>
+          </div>
+          <pre><code><span class="typ">Map</span>&lt;<span class="typ">String</span>, <span class="typ">Fare</span>&gt; latestByPoint = <span class="kwd">new</span> <span class="typ">HashMap</span>&lt;&gt;();
+<span class="kwd">for</span> (<span class="typ">Fare</span> fare : fares) {
+    <span class="kwd">if</span> (fare.<span class="fn">validFrom</span>().<span class="fn">isAfter</span>(today)) <span class="kwd">continue</span>; <span class="cmt">// Descarta tarifas futuras</span>
+    latestByPoint.<span class="fn">merge</span>(fare.<span class="fn">referencePoint</span>(), fare,
+            (a, b) -&gt; b.<span class="fn">validFrom</span>().<span class="fn">isAfter</span>(a.<span class="fn">validFrom</span>()) ? b : a);
+}</code></pre>
+        </div>
+        <p style="font-size: 0.88rem; color: #94a3b8;">
+          <strong>Por qué es vital:</strong> Se usa <code>HashMap</code> directo y no <code>Collectors.toMap</code> porque en las rutas urbanas el <code>referencePoint</code> es <code>null</code> (tarifa única fija) y los colectores de Java Stream arrojan <code>NullPointerException</code> con claves nulas.
+        </p>
+      </article>
+
+      <!-- Snippet 4 -->
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-code">04. Reloj Anclado a Bogotá en UseCaseConfig.java</div>
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-title">UseCaseConfig.java (Líneas 35-38)</span>
+            <button class="copy-btn" onclick="copySnippet(this)">Copiar</button>
+          </div>
+          <pre><code><span class="ann">@Bean</span>
+<span class="kwd">public</span> <span class="typ">Clock</span> <span class="fn">clock</span>() {
+    <span class="kwd">return</span> <span class="typ">Clock</span>.<span class="fn">system</span>(<span class="typ">ZoneId</span>.<span class="fn">of</span>(<span class="str">"America/Bogota"</span>));
+}</code></pre>
+        </div>
+        <p style="font-size: 0.88rem; color: #94a3b8;">
+          <strong>Por qué es vital:</strong> El backend se despliega en Render (servidores en UTC). A las 7:01 PM en Colombia, en UTC ya es el día siguiente. Si usáramos la hora por defecto del contenedor, una tarifa programada para mañana empezaría a regir 5 horas antes de tiempo.
+        </p>
+      </article>
+
+      <!-- Snippet 5 -->
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-code">05. ElementCollection con @BatchSize en RouteJpaEntity.java</div>
+        <div class="code-container">
+          <div class="code-header">
+            <span class="code-title">RouteJpaEntity.java (Líneas 56-60)</span>
+            <button class="copy-btn" onclick="copySnippet(this)">Copiar</button>
+          </div>
+          <pre><code><span class="ann">@ElementCollection</span>(fetch = <span class="typ">FetchType</span>.LAZY)
+<span class="ann">@CollectionTable</span>(name = <span class="str">"route_neighborhoods"</span>, joinColumns = <span class="ann">@JoinColumn</span>(name = <span class="str">"route_id"</span>))
+<span class="ann">@MapKeyColumn</span>(name = <span class="str">"order_index"</span>)
+<span class="ann">@Column</span>(name = <span class="str">"neighborhood_name"</span>, nullable = <span class="kwd">false</span>, length = <span class="num">120</span>)
+<span class="ann">@BatchSize</span>(size = <span class="num">50</span>)</code></pre>
+        </div>
+        <p style="font-size: 0.88rem; color: #94a3b8;">
+          <strong>Por qué es vital:</strong> Hibernate prohíbe hacer un <code>JOIN FETCH</code> simultáneo sobre dos listas hijas (generaría <code>MultipleBagFetchException</code>). Usando <code>@BatchSize(size = 50)</code>, Hibernate agrupa las consultas en lotes de 50 en un solo <code>WHERE route_id IN (...)</code>, evitando el problema del N+1.
+        </p>
+      </article>
+
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "Estas 5 líneas son tus 'superpoderes': con una evitas que los hackers te engañen con contraseñas gigantes; con otra evitas que sepan si un usuario existe; con otra calculas los precios del bus sin que la app se estrelle; con otra corriges el reloj de los gringos para que no cobren antes de hora en Fusa; y con la última haces que la base de datos descargue 50 rutas de un solo viaje en vez de hacer 50 viajes pendejos por la red."
+        </p>
+      </article>
+    </section>
+
+    <!-- ITEM 6: DECISIONES DEL PROYECTO -->
+    <section class="section-block" id="decisiones">
+      <div class="section-header">
+        <span class="section-num">06</span>
+        <h2 class="section-title">El Porqué de las Decisiones del Proyecto</h2>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th>Decisión Estratégica</th>
+              <th>Alternativa Rechazada</th>
+              <th>Justificación Técnica Contundente</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>Spring Boot 3.5.16</strong></td>
+              <td>Spring Boot 4.x</td>
+              <td>La rama 4 es un cambio mayor reciente. En un primer acercamiento a Spring, las librerías satélite, tutoriales y resolución de fallos probados residen en la línea 3.x. Evita perder sprints resolviendo breaking changes del framework.</td>
+            </tr>
+            <tr>
+              <td><strong>Java 25 (LTS)</strong></td>
+              <td>Java 17 o 21</td>
+              <td>Aprovecha la versión de soporte a largo plazo más reciente con Records inmutables nativos, Pattern Matching de alto rendimiento y APIs modernas de colecciones sin bibliotecas de terceros.</td>
+            </tr>
+            <tr>
+              <td><strong>Supabase es SOLO PostgreSQL</strong></td>
+              <td>Supabase Auth / Storage</td>
+              <td>Cero Vendor Lock-In. Si usamos el Auth de Supabase nos volvemos dependientes de su infraestructura propietaria. La seguridad y lógica pertenecen a Spring Security + JWT propio en Java.</td>
+            </tr>
+            <tr>
+              <td><strong>Rol <code>fusaroute_dev</code> (Sin Superusuario)</strong></td>
+              <td>Usuario <code>postgres</code></td>
+              <td>Principio de Menor Privilegio: la app jamás se conecta con permisos de administrador general. Si la credencial de DEV se filtra, el impacto se aísla únicamente al esquema <code>fusaroute</code>.</td>
+            </tr>
+            <tr>
+              <td><strong>Flyway y <code>ddl-auto=validate</code></strong></td>
+              <td>Hibernate <code>update</code> o <code>create</code></td>
+              <td>Hibernate nunca debe alterar el esquema en producción. El DDL es código fuente versionado en scripts SQL auditables en Pull Requests y replicable idéntico en DEV, PRE y PROD.</td>
+            </tr>
+            <tr>
+              <td><strong>Sin paradas formales de bus</strong></td>
+              <td>Paradas geográficas fijas</td>
+              <td>En Fusagasugá la buseta se detiene sacando la mano en cualquier tramo (operación tipo taxi). Modelar polígonos geoespaciales requeriría PostGIS (fuera de alcance). Modelamos barrios ordenados y puntos de referencia.</td>
+            </tr>
+            <tr>
+              <td><strong>Dominio filtra la mejor ruta</strong></td>
+              <td>Google Maps elige la ruta</td>
+              <td>El catálogo y el cálculo pertenecen a FusaRoute. Google Maps solo se usa como oráculo de tiempo de tránsito sobre rutas ya filtradas. Dejar que Google elija violaría RNF-03 y dejaría el dominio sin cobertura JaCoCo.</td>
+            </tr>
+            <tr>
+              <td><strong>Caché de 5 minutos en Google Maps</strong></td>
+              <td>Consultar Maps en cada petición</td>
+              <td>Sostiene el compromiso de rendimiento de <strong>p95 &lt; 8.0 segundos</strong> y previene el agotamiento prematuro de la cuota gratuita de la API.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "Cada decisión fue para no pegarnos un tiro en el pie: no usamos tecnologías experimentales que se rompan a mitad de noche; no le damos la llave maestra del edificio al jardinero; no dejamos que Hibernate nos cambie la base de datos a sus espaldas; y no nos inventamos paradas estilo metro de Nueva York porque en Fusa la buseta se agarra sacando la mano en la esquina."
+        </p>
+      </article>
+    </section>
+
+    <!-- ITEM 7: BASE DE DATOS -->
+    <section class="section-block" id="base-de-datos">
+      <div class="section-header">
+        <span class="section-num">07</span>
+        <h2 class="section-title">Resumen, Explicación y Justificación de la Base de Datos</h2>
+      </div>
+
+      <article class="brutalist-card">
+        <div class="card-header-badge badge-rigor">
+          🏛️ Rigor de Ingeniería · Esquema Relacional y Restricciones DDL
+        </div>
+
+        <p>
+          La base de datos corre en <strong>PostgreSQL</strong> (alojada en Supabase bajo el esquema dedicado <code>fusaroute</code>). El control del esquema lo gestiona <strong>Flyway</strong> mediante migraciones versionadas inmutables.
+        </p>
+
+        <h3 style="color: var(--accent-yellow); margin: 1.25rem 0 0.5rem;">Las 4 Tablas del Modelo Actual:</h3>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Tabla</th>
+                <th>Columna Destacada</th>
+                <th>Tipo de Dato</th>
+                <th>Justificación Técnica de Ingeniería</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td class="mono-cell">users</td>
+                <td class="mono-cell">password_hash</td>
+                <td class="mono-cell">VARCHAR(72)</td>
+                <td>BCrypt produce siempre 60 caracteres. Configurar 72 deja holgura y bloquea strings desmesurados. La contraseña en texto claro jamás toca la base.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">users</td>
+                <td class="mono-cell">failed_login_attempts / locked_until</td>
+                <td class="mono-cell">SMALLINT / TIMESTAMPTZ</td>
+                <td>Se guardan en la fila del usuario y <strong>no en memoria RAM</strong> para que el bloqueo temporal de cuenta sobreviva a los reinicios y cold starts de Render.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">users</td>
+                <td class="mono-cell">active</td>
+                <td class="mono-cell">BOOLEAN DEFAULT FALSE</td>
+                <td>Agregada en V4. Nace <code>DEFAULT FALSE</code> para proteger inserciones manuales por SQL; la activación en <code>true</code> la decide el dominio en Java (<code>User.register</code>).</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">routes</td>
+                <td class="mono-cell">path_geojson</td>
+                <td class="mono-cell">JSONB (NULLABLE)</td>
+                <td>Postgres valida que sea JSON bien formado. Es <code>NULLABLE</code> porque la búsqueda del catálogo opera por barrios; el GeoJSON solo lo usará el mapa y el modo offline.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">route_neighborhoods</td>
+                <td class="mono-cell">(route_id, order_index)</td>
+                <td class="mono-cell">BIGINT, INT (PK Compuesta)</td>
+                <td>Garantiza el orden estricto de recorrido. La restricción <code>uq_route_neighborhoods_name</code> impide que el mismo barrio se repita dentro de una ruta.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">fares</td>
+                <td class="mono-cell">amount</td>
+                <td class="mono-cell">NUMERIC(10, 2)</td>
+                <td><strong>El dinero nunca se almacena en FLOAT o DOUBLE</strong> debido a los errores de redondeo de punto flotante binario (IEEE 754). NUMERIC asegura precisión exacta en pesos.</td>
+              </tr>
+              <tr>
+                <td class="mono-cell">fares</td>
+                <td class="mono-cell">uq_fares_route_point</td>
+                <td class="mono-cell">UNIQUE NULLS NOT DISTINCT</td>
+                <td>Característica de PostgreSQL 15+. Hace que dos valores <code>NULL</code> en <code>reference_point</code> (rutas urbanas) choquen entre sí si tienen la misma fecha de vigencia.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="color: var(--accent-cyan); margin: 1.5rem 0 0.5rem;">Evolución del Esquema en las 4 Migraciones Flyway:</h3>
+        <ul style="padding-left: 1.5rem; color: #94a3b8; font-size: 0.9rem; line-height: 1.8;">
+          <li><strong style="color:#fff;"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/resources/db/migration/V1__crear_usuarios_y_rutas.sql" style="color:#38bdf8;">V1__crear_usuarios_y_rutas.sql</a>:</strong> Estructura inicial con tablas <code>users</code>, <code>routes</code>, <code>route_neighborhoods</code> y <code>fares</code>, más índices de búsqueda por barrio y estado.</li>
+          <li><strong style="color:#fff;"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/resources/db/migration/V2__semilla_rutas_fusagasuga.sql" style="color:#38bdf8;">V2__semilla_rutas_fusagasuga.sql</a>:</strong> Semilla con el catálogo oficial de rutas urbanas (Comuneros, Coburgo, Pekín) y veredales decretadas.</li>
+          <li><strong style="color:#fff;"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/resources/db/migration/V3__tarifas_cootransfusa_ruta_pasca.sql" style="color:#38bdf8;">V3__tarifas_cootransfusa_ruta_pasca.sql</a>:</strong> Carga de la tabla oficial de tarifas de <strong>Cootransfusa</strong> (trayecto Fusagasugá–Pasca con hitos: Sauces $3.000, Alaska $3.550, Pasca $4.300). Demuestra la coexistencia de vigencias 2025 y 2026.</li>
+          <li><strong style="color:#fff;"><a href="file:///c:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND/src/main/resources/db/migration/V4__usuarios_activos.sql" style="color:#38bdf8;">V4__usuarios_activos.sql</a>:</strong> Evolución que agrega la columna <code>active</code> sin alterar los checksums inmutables de V1 a V3.</li>
+        </ul>
+      </article>
+
+      <article class="brutalist-card teen-card">
+        <div class="card-header-badge badge-teen">
+          🧒 Mini Teen-Explanation · Modo Pelao / Flash Mental
+        </div>
+        <p class="teen-quote">
+          "La base de datos es como una libreta contable que no se borra con corrector. Si el pasaje sube de precio, no tachamos el precio viejo; escribimos un renglón nuevo diciendo 'a partir de hoy rige esto'. Las reglas son tan estrictas que no te deja meter centavos fantasmas, ni registrar dos cuentas con el mismo correo, y si el servidor se duerme, las cuentas bloqueadas siguen bloqueadas."
+        </p>
+      </article>
+    </section>
+
+    <!-- SIMULADOR INTERACTIVO DE PREGUNTAS TRAMPA -->
+    <section class="simulator-box" id="simulador">
+      <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+        <div>
+          <span class="tag yellow">Simulador de Combate</span>
+          <h2 style="font-size: 1.6rem; font-weight: 800; color: #fff; margin-top: 0.35rem;">
+            ⚔️ Preguntas Trampa del Comité (Haz click para entrenar)
+          </h2>
+        </div>
+        <span style="font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent-yellow);">Click para revelar respuesta</span>
+      </div>
+
+      <div class="sim-item">
+        <div class="sim-q" onclick="toggleSim(this)">
+          1. "¿Por qué duplicaron clases y crearon Route y RouteJpaEntity? ¿No es código duplicado innecesario?"
+          <span>&darr;</span>
+        </div>
+        <div class="sim-a">
+          <strong>Respuesta:</strong> "No es código duplicado; es la separación fundamental de la Arquitectura Hexagonal. <code>Route</code> es un modelo inmutable que contiene únicamente reglas de negocio del transporte de Fusagasugá (como el cálculo de tarifas vigentes), mientras que <code>RouteJpaEntity</code> es un modelo de infraestructura atado a las restricciones relacionales de Hibernate y PostgreSQL. Si mañana cambiamos de base de datos o de ORM, el objeto de dominio no sufre una sola alteración."
+        </div>
+      </div>
+
+      <div class="sim-item">
+        <div class="sim-q" onclick="toggleSim(this)">
+          2. "¿Cómo garantizan que la arquitectura hexagonal no se degrade cuando otro compañero haga commits?"
+          <span>&darr;</span>
+        </div>
+        <div class="sim-a">
+          <strong>Respuesta:</strong> "Mediante pruebas automatizadas de arquitectura con <strong>ArchUnit</strong> en el archivo <code>HexagonalArchitectureTest.java</code>. Este test se ejecuta en cada compilación de Maven (<code>mvn test</code>) y en el pipeline de GitHub Actions; si una clase del paquete <code>domain</code> importa Spring, JPA o Jackson, el build falla inmediatamente de manera bloqueante."
+        </div>
+      </div>
+
+      <div class="sim-item">
+        <div class="sim-q" onclick="toggleSim(this)">
+          3. "¿Por qué no usan las paradas que ofrece la API de Google Maps?"
+          <span>&darr;</span>
+        </div>
+        <div class="sim-a">
+          <strong>Respuesta:</strong> "Porque en Fusagasugá el sistema de busetas no opera mediante paraderos fijos tipo TransMilenio o metro; se para con la mano en cualquier esquina. Por lo tanto, el catálogo de rutas y barrios es dato propio de FusaRoute. Google Maps únicamente se consulta como un oráculo para cronometrar el tiempo de viaje de rutas ya preseleccionadas por nuestro dominio."
+        </div>
+      </div>
+
+      <div class="sim-item">
+        <div class="sim-q" onclick="toggleSim(this)">
+          4. "¿Por qué la validación de la contraseña mide 72 bytes en UTF-8 y no caracteres?"
+          <span>&darr;</span>
+        </div>
+        <div class="sim-a">
+          <strong>Respuesta:</strong> "Porque el algoritmo de cifrado BCrypt trunca y procesa exclusivamente los primeros 72 bytes del texto. En UTF-8, caracteres especiales, tildes o emojis ocupan de 2 a 4 bytes cada uno; si validáramos por caracteres, una contraseña con caracteres especiales podría sobrepasar el límite de 72 bytes y dos contraseñas distintas generarían el mismo hash."
+        </div>
+      </div>
+
+      <div class="sim-item">
+        <div class="sim-q" onclick="toggleSim(this)">
+          5. "¿Por qué la contraseña hasheada usa factor de coste 12 y qué es ese 'dummyHash'?"
+          <span>&darr;</span>
+        </div>
+        <div class="sim-a">
+          <strong>Respuesta:</strong> "El factor 12 responde a la métrica RNF-05 (que exige &gt;= 10), garantizando robustez ante hardware moderno sin penalizar la latencia del registro. El <code>dummyHash</code> es una mitigación activa de <em>Timing Attacks</em>: cuando un usuario intenta iniciar sesión con un correo inexistente, ejecutamos BCrypt contra ese hash fantasma para que la CPU tarde exactamente el mismo tiempo en responder, evitando que un atacante descubra qué correos existen en el sistema."
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer style="text-align: center; border-top: 1px solid var(--border-subtle); padding-top: 2rem; color: var(--text-dim); font-size: 0.85rem; font-family: var(--font-mono);">
+      FusaRoute Backend &bull; Proyecto Integrador Ingeniería de Software I &bull; Universidad de Cundinamarca<br>
+      Santiago Bermúdez &amp; Angélica Aranguren &bull; Septiembre 2026
+    </footer>
+
+  </main>
+
+  <div id="toast">Copiado al portapapeles</div>
+
+  <script>
+    function copySnippet(btn) {
+      const code = btn.closest('.code-container').querySelector('pre code').innerText;
+      navigator.clipboard.writeText(code).then(() => {
+        showToast("Código copiado al portapapeles");
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.innerText = msg;
+      toast.classList.add('show');
+      setTimeout(() => {
+        toast.classList.remove('show');
+      }, 2000);
+    }
+
+    function toggleSim(el) {
+      const answer = el.nextElementSibling;
+      const arrow = el.querySelector('span');
+      if (answer.classList.contains('open')) {
+        answer.classList.remove('open');
+        arrow.innerHTML = '&darr;';
+      } else {
+        answer.classList.add('open');
+        arrow.innerHTML = '&uarr;';
+      }
+    }
+
+    let allExpanded = false;
+    function toggleAllCards() {
+      const simAnswers = document.querySelectorAll('.sim-a');
+      const btn = document.getElementById('toggleBtn');
+      allExpanded = !allExpanded;
+      simAnswers.forEach(a => {
+        if (allExpanded) {
+          a.classList.add('open');
+        } else {
+          a.classList.remove('open');
+        }
+      });
+      btn.innerText = allExpanded ? '⚡ Colapsar Todo' : '⚡ Expandir Todo';
+    }
+  </script>
+</body>
+</html>

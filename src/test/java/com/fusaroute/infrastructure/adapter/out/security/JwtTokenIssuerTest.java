@@ -41,7 +41,7 @@ class JwtTokenIssuerTest {
     }
 
     @Test
-    void el_token_vale_siete_dias_lleva_el_id_del_usuario_y_scope_full() {
+    void token_is_valid_for_seven_days_contains_userId_and_full_scope() {
         IssuedToken token = issuerAt(Instant.now(), SECRET).issue(user, Duration.ofDays(7));
 
         Jwt jwt = decoder().decode(token.value());
@@ -55,7 +55,7 @@ class JwtTokenIssuerTest {
     }
 
     @Test
-    void el_token_de_enrolamiento_lleva_scope_totp_enroll_y_vida_corta() {
+    void enrollment_token_contains_totp_enroll_scope_and_has_short_lifespan() {
         IssuedToken token = issuerAt(Instant.now(), SECRET).issueEnrollmentToken(user, Duration.ofMinutes(10));
 
         Jwt jwt = decoder().decode(token.value());
@@ -66,7 +66,7 @@ class JwtTokenIssuerTest {
     }
 
     @Test
-    void un_token_vencido_es_rechazado_al_validar() {
+    void expired_token_is_rejected_during_validation() {
         // Emitido hace 8 dias con vigencia de 7: venció hace un dia.
         IssuedToken token = issuerAt(Instant.now().minus(Duration.ofDays(8)), SECRET)
                 .issue(user, Duration.ofDays(7));
@@ -76,7 +76,7 @@ class JwtTokenIssuerTest {
     }
 
     @Test
-    void un_token_firmado_con_otra_clave_es_rechazado() {
+    void token_signed_with_different_key_is_rejected() {
         IssuedToken token = issuerAt(NOW, OTHER_SECRET).issue(user, Duration.ofDays(7));
 
         assertThatThrownBy(() -> decoder().decode(token.value()))
@@ -84,7 +84,7 @@ class JwtTokenIssuerTest {
     }
 
     @Test
-    void el_secreto_corto_o_no_base64_rompe_el_arranque() {
+    void short_or_non_base64_secret_causes_startup_failure() {
         assertThatThrownBy(() -> new JwtConfig("Y29ydG8="))
                 .isInstanceOf(IllegalStateException.class)
                 .hasMessageContaining("32 bytes");

@@ -7,7 +7,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Prueba el adaptador real de respaldos. No mockea BCrypt — queremos verificar
+ * Prueba el adaptador real de respaldos. No mockea BCrypt â€” queremos verificar
  * que el hash guardado efectivamente verifica contra el plain correspondiente.
  */
 class BCryptRecoveryCodeAdapterTest {
@@ -15,7 +15,7 @@ class BCryptRecoveryCodeAdapterTest {
     private final BCryptRecoveryCodeAdapter adapter = new BCryptRecoveryCodeAdapter();
 
     @Test
-    void genera_codigos_del_largo_y_alfabeto_esperados() {
+    void generate_codes_of_expected_length_and_alphabet() {
         List<String> codes = adapter.generatePlainCodes(10);
 
         assertThat(codes).hasSize(10);
@@ -30,7 +30,7 @@ class BCryptRecoveryCodeAdapterTest {
     }
 
     @Test
-    void hash_y_matches_verifican_el_mismo_codigo() {
+    void hash_and_matches_verify_same_code() {
         String plain = adapter.generatePlainCodes(1).get(0);
 
         String hash = adapter.hash(plain);
@@ -40,9 +40,10 @@ class BCryptRecoveryCodeAdapterTest {
     }
 
     @Test
-    void matches_con_hash_o_plain_nulos_devuelve_false_sin_lanzar() {
+    void matches_with_null_hash_or_plain_returns_false_without_throwing() {
         assertThat(adapter.matches(null, "$2a$12$hash")).isFalse();
         assertThat(adapter.matches("AAAA1111BB", null)).isFalse();
         assertThat(adapter.matches(null, null)).isFalse();
     }
 }
+

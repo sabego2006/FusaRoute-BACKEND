@@ -77,7 +77,7 @@ class UserPersistenceAdapterIT {
     private UserPersistenceAdapter adapter;
 
     @Test
-    void guarda_y_relee_un_usuario() {
+    void save_and_re_read_user() {
         User saved = adapter.save(User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash"));
 
         assertThat(saved.getId()).isNotNull();
@@ -87,7 +87,7 @@ class UserPersistenceAdapterIT {
     }
 
     @Test
-    void exists_by_email_encuentra_lo_guardado() {
+    void exists_by_email_finds_saved_user() {
         adapter.save(User.register("Beto", Email.of("beto@x.co"), "$2a$12$hash"));
 
         assertThat(adapter.existsByEmail(Email.of("beto@x.co"))).isTrue();
@@ -95,7 +95,7 @@ class UserPersistenceAdapterIT {
     }
 
     @Test
-    void find_by_email_devuelve_el_usuario_con_su_hash_o_vacio() {
+    void find_by_email_returns_user_with_hash_or_empty() {
         adapter.save(User.register("Dora", Email.of("dora@x.co"), "$2a$12$hashdora"));
 
         assertThat(adapter.findByEmail(Email.of("dora@x.co")))
@@ -108,10 +108,11 @@ class UserPersistenceAdapterIT {
     }
 
     @Test
-    void el_unique_se_traduce_a_email_ya_registrado() {
+    void unique_constraint_translates_to_email_already_registered() {
         adapter.save(User.register("Cira", Email.of("cira@x.co"), "$2a$12$hash"));
 
         assertThatThrownBy(() -> adapter.save(User.register("Otra", Email.of("cira@x.co"), "$2a$12$hash")))
                 .isInstanceOf(EmailAlreadyRegisteredException.class);
     }
 }
+

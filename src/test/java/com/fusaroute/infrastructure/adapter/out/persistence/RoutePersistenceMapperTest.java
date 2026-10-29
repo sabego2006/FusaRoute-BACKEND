@@ -30,7 +30,7 @@ class RoutePersistenceMapperTest {
     }
 
     @Test
-    void ordena_los_barrios_por_indice_y_tolera_huecos_sin_nulls() {
+    void sort_neighborhoods_by_index_and_tolerates_gaps_without_nulls() {
         // Caso real de la semilla V2: la ruta "100" no tiene indice 2 (tramo sin datos).
         Map<Integer, String> neighborhoods = new HashMap<>();
         neighborhoods.put(3, "Centro");
@@ -44,7 +44,7 @@ class RoutePersistenceMapperTest {
     }
 
     @Test
-    void traduce_tarifas_y_campos_de_la_ruta() {
+    void translate_fares_and_route_fields() {
         FareJpaEntity fare = new FareJpaEntity();
         ReflectionTestUtils.setField(fare, "amount", new BigDecimal("2600.00"));
         ReflectionTestUtils.setField(fare, "orderIndex", 0);
@@ -62,14 +62,14 @@ class RoutePersistenceMapperTest {
     }
 
     @Test
-    void sin_trazado_el_path_es_una_lista_vacia() {
+    void without_tracing_the_path_is_an_empty_list() {
         Route route = RoutePersistenceMapper.toDomain(entity(Map.of(0, "Centro"), List.of()));
 
         assertThat(route.path()).isEmpty();
     }
 
     @Test
-    void parsea_el_linestring_de_geojson_invirtiendo_lng_lat_a_coordinate() {
+    void parse_geojson_linestring_reversing_lng_lat_to_coordinate() {
         RouteJpaEntity entity = entity(Map.of(0, "Centro"), List.of());
         // GeoJSON ordena [longitud, latitud]; Coordinate es (latitud, longitud).
         ReflectionTestUtils.setField(entity, "pathGeoJson",
@@ -83,7 +83,7 @@ class RoutePersistenceMapperTest {
     }
 
     @Test
-    void geojson_invalido_lanza_en_vez_de_devolver_un_path_vacio_en_silencio() {
+    void invalid_geojson_throws_instead_of_returning_empty_path_silently() {
         RouteJpaEntity entity = entity(Map.of(0, "Centro"), List.of());
         ReflectionTestUtils.setField(entity, "pathGeoJson", "esto no es json");
 
@@ -91,3 +91,4 @@ class RoutePersistenceMapperTest {
                 .isInstanceOf(IllegalStateException.class);
     }
 }
+

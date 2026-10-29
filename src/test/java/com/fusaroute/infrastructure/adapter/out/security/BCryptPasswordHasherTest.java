@@ -10,26 +10,26 @@ class BCryptPasswordHasherTest {
     private final BCryptPasswordHasher hasher = new BCryptPasswordHasher();
 
     @Test
-    void hashea_con_bcrypt_costo_12() {
+    void hash_with_bcrypt_cost_12() {
         String hash = hasher.hash("Abcdef12");
         // El prefijo $2a$12$ confirma algoritmo BCrypt y factor de trabajo 12.
         assertThat(hash).startsWith("$2a$12$");
     }
 
     @Test
-    void el_hash_nunca_es_el_texto_plano() {
+    void hash_is_never_the_plain_text() {
         assertThat(hasher.hash("Abcdef12")).isNotEqualTo("Abcdef12");
     }
 
     @Test
-    void el_hash_verifica_contra_la_contrasena_original() {
+    void hash_verifies_against_original_password() {
         String hash = hasher.hash("Abcdef12");
         assertThat(new BCryptPasswordEncoder().matches("Abcdef12", hash)).isTrue();
         assertThat(new BCryptPasswordEncoder().matches("otra", hash)).isFalse();
     }
 
     @Test
-    void matches_acepta_la_contrasena_correcta_y_rechaza_otra() {
+    void matches_accepts_correct_password_and_rejects_other() {
         String hash = hasher.hash("Abcdef12");
 
         assertThat(hasher.matches("Abcdef12", hash)).isTrue();
@@ -37,7 +37,8 @@ class BCryptPasswordHasherTest {
     }
 
     @Test
-    void matches_con_hash_nulo_devuelve_false_sin_lanzar() {
+    void matches_with_null_hash_returns_false_without_throwing() {
         assertThat(hasher.matches("Abcdef12", null)).isFalse();
     }
 }
+

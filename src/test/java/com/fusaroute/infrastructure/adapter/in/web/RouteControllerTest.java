@@ -40,8 +40,6 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @Import({SecurityConfig.class, JwtConfig.class})
 @TestPropertySource(properties = {
         "app.cors.allowed-origins=http://localhost:4200",
-        // SecurityConfig es resource server y necesita el JwtDecoder de JwtConfig;
-        // 32 bytes en Base64, el minimo que exige.
         "app.jwt.secret=MDEyMzQ1Njc4OWFiY2RlZmdoaWprbG1ub3BxcnN0dXY="
 })
 class RouteControllerTest {
@@ -77,7 +75,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void listado_es_publico_y_devuelve_barrios_en_orden_y_tarifas() throws Exception {
+    void list_is_public_and_returns_neighborhoods_in_order_and_fares() throws Exception {
         when(listActiveRoutesUseCase.listActive()).thenReturn(List.of(urbana(), intermunicipal()));
 
         mockMvc.perform(get("/api/routes"))
@@ -98,7 +96,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void listado_no_expone_estado_ni_campos_internos() throws Exception {
+    void list_does_not_expose_status_or_internal_fields() throws Exception {
         when(listActiveRoutesUseCase.listActive()).thenReturn(List.of(urbana()));
 
         mockMvc.perform(get("/api/routes"))
@@ -107,7 +105,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void listado_vacio_responde_200_con_arreglo_vacio() throws Exception {
+    void empty_list_responds_200_with_empty_array() throws Exception {
         when(listActiveRoutesUseCase.listActive()).thenReturn(List.of());
 
         mockMvc.perform(get("/api/routes"))
@@ -116,7 +114,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void detalle_es_publico_y_tiene_la_misma_forma() throws Exception {
+    void detail_is_public_and_has_same_shape() throws Exception {
         when(getRouteDetailUseCase.getById(2L)).thenReturn(intermunicipal());
 
         mockMvc.perform(get("/api/routes/2"))
@@ -128,7 +126,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void detalle_de_ruta_inexistente_o_suspendida_responde_404() throws Exception {
+    void non_existent_or_suspended_route_detail_responds_404() throws Exception {
         when(getRouteDetailUseCase.getById(99L)).thenThrow(new RouteNotFoundException());
 
         mockMvc.perform(get("/api/routes/99"))
@@ -137,7 +135,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void costo_del_pasaje_es_publico_y_devuelve_tarifas_y_ultima_actualizacion() throws Exception {
+    void fare_cost_is_public_and_returns_fares_and_last_update() throws Exception {
         RouteFare fare = new RouteFare(2L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL,
                 List.of(new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
                         new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16))),
@@ -155,7 +153,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void costo_del_pasaje_de_ruta_inexistente_o_suspendida_responde_404() throws Exception {
+    void non_existent_or_suspended_route_fare_responds_404() throws Exception {
         when(getRouteFareUseCase.getByRouteId(99L)).thenThrow(new RouteNotFoundException());
 
         mockMvc.perform(get("/api/routes/99/fare"))
@@ -164,13 +162,13 @@ class RouteControllerTest {
     }
 
     @Test
-    void id_no_numerico_responde_400() throws Exception {
+    void non_numeric_id_responds_400() throws Exception {
         mockMvc.perform(get("/api/routes/abc"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void busqueda_es_publica_y_devuelve_la_ruta_con_el_tiempo_estimado() throws Exception {
+    void search_is_public_and_returns_route_with_estimated_time() throws Exception {
         when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
                 .thenReturn(new RouteSearchResult(urbana(), Duration.ofMinutes(18)));
 
@@ -188,7 +186,7 @@ class RouteControllerTest {
     }
 
     @Test
-    void busqueda_sin_rutas_candidatas_responde_404_con_mensaje_explicito() throws Exception {
+    void search_without_candidate_routes_responds_404_with_explicit_message() throws Exception {
         when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
                 .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
 
@@ -204,15 +202,13 @@ class RouteControllerTest {
     }
 
     @Test
-    void busqueda_sin_parametros_obligatorios_responde_400() throws Exception {
+    void search_without_required_parameters_responds_400() throws Exception {
         mockMvc.perform(get("/api/routes/search").param("originNeighborhood", "Centro"))
                 .andExpect(status().isBadRequest());
     }
 
     @Test
-    void escribir_sobre_rutas_sigue_exigiendo_autenticacion() throws Exception {
-        // Hoy responde 403 (aun no hay punto de entrada de autenticacion); con el JWT de
-        // SCRUM-13 sera 401. Lo que se fija aqui es que el permitAll es solo para GET.
+    void write_on_routes_still_requires_authentication() throws Exception {
         mockMvc.perform(post("/api/routes"))
                 .andExpect(status().is(oneOf(401, 403)));
         mockMvc.perform(delete("/api/routes/1"))

@@ -1,0 +1,56 @@
+name: network-diagnostic-supabase
+
+on:
+  workflow_dispatch:
+
+jobs:
+  diagnose:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install tools
+        run: sudo apt-get update && sudo apt-get install -y dnsutils iputils-ping traceroute netcat-openbsd openssl
+
+      - name: DNS Analysis
+        run: |
+          echo "--- NSLOOKUP ---"
+          nslookup ${{ secrets.SUPABASE_DB_HOST }}
+          echo "--- DIG A (IPv4) ---"
+          dig A ${{ secrets.SUPABASE_DB_HOST }}
+          echo "--- DIG AAAA (IPv6) ---"
+          dig AAAA ${{ secrets.SUPABASE_DB_HOST }}
+
+      - name: Connectivity Test (IPv4)
+        run: |
+          # Extract first IPv4 address
+          IPV4=$(dig +short A ${{ secrets.SUPABASE_DB_HOST }} | grep -E '^[0-9.]+$' | head -n 1)
+          echo "Testing IPv4: $IPV4"
+          if [ -z "$IPV4" ]; then
+            echo "No IPv4 found"
+          else
+            nc -zv -w 5 $IPV4 5432 || echo "NC IPv4 failed"
+            ping -c 3 -4 $IPV4 || echo "Ping IPv4 failed"
+          fi
+
+      - name: Connectivity Test (IPv6)
+        run: |
+          # Extract first IPv6 address
+          IPV6=$(dig +short AAAA ${{ secrets.SUPABASE_DB_HOST }} | grep -E '([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}' | head -n 1)
+          echo "Testing IPv6: $IPV6"
+          if [ -z "$IPV6" ]; then
+            echo "No IPv6 found"
+          else
+            nc -zv6 -w 5 $IPV6 5432 || echo "NC IPv6 failed"
+            ping6 -c 3 $IPV6 || echo "Ping IPv6 failed"
+          fi
+
+      - name: Traceroute to DB
+        run: |
+          echo "--- Traceroute IPv4 ---"
+          traceroute -4 ${{ secrets.SUPABASE_DB_HOST }}
+          echo "--- Traceroute IPv6 ---"
+          traceroute -6 ${{ secrets.SUPABASE_DB_HOST }} || echo "Traceroute IPv6 failed"
+
+      - name: SSL Handshake Test
+        run: |
+          echo "--- SSL Handshake ---"
+          openssl s_client -connect ${{ secrets.SUPABASE_DB_HOST }}:5432 -timeout 5 < /dev/null 2>&1 | head -n 20
