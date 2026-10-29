@@ -16,6 +16,7 @@ import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase.RouteFare;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
+import com.fusaroute.domain.port.in.RecordSearchUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
@@ -39,6 +40,9 @@ import static org.hamcrest.Matchers.nullValue;
 import static org.hamcrest.Matchers.oneOf;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -72,6 +76,9 @@ class RouteControllerTest {
 
     @MockitoBean
     private SearchRouteUseCase searchRouteUseCase;
+
+    @MockitoBean
+    private RecordSearchUseCase recordSearchUseCase;
 
     /** Por defecto no hay trancones: cada test que los necesite los declara. */
     @BeforeEach
@@ -386,5 +393,81 @@ class RouteControllerTest {
                 .andExpect(status().is(oneOf(401, 403)));
         mockMvc.perform(delete("/api/routes/1"))
                 .andExpect(status().is(oneOf(401, 403)));
+    }
+
+    // --- Historial de busquedas (RF-07, SCRUM-20) ---
+
+    @Test
+    void la_busqueda_con_sesion_queda_en_el_historial() throws Exception {
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .with(jwt().jwt(j -> j.subject("42").claim("scope", "full")))
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isOk());
+
+        // Se guardan los barrios, no las coordenadas: el historial sirve para repetir
+        // la consulta, y la pantalla vuelve a pedir el punto exacto.
+        verify(recordSearchUseCase).record(42L, "Centro", "La Pampa");
+    }
+
+    @Test
+    void la_busqueda_anonima_no_escribe_historial() throws Exception {
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isOk());
+
+        verifyNoInteractions(recordSearchUseCase);
+    }
+
+    @Test
+    void la_busqueda_offline_tambien_queda_en_el_historial() throws Exception {
+        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.offline(urbanaConTrazado(), 2_400d, null, null));
+
+        mockMvc.perform(get("/api/routes/search/offline")
+                        .with(jwt().jwt(j -> j.subject("42").claim("scope", "full")))
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isOk());
+
+        verify(recordSearchUseCase).record(42L, "Centro", "La Pampa");
+    }
+
+    @Test
+    void una_busqueda_sin_ruta_disponible_no_ensucia_el_historial() throws Exception {
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .with(jwt().jwt(j -> j.subject("42").claim("scope", "full")))
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "Pasca")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isNotFound());
+
+        // Una consulta que termino en 404 no es una busqueda que valga la pena repetir.
+        verifyNoInteractions(recordSearchUseCase);
     }
 }
