@@ -59,3 +59,9 @@ bin/
 
 # Base local de OWASP Dependency-Check (la baja el escaneo, no se versiona)
 .nvd-data/
+
+# Andamiaje que Postman Desktop crea al abrir el repo como workspace local.
+# La coleccion versionada es docs/postman/; estos dos archivos son estado de la
+# herramienta (id del workspace y globals vacias), propios de cada maquina.
+.postman/
+postman/
