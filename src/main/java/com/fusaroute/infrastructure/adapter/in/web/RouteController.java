@@ -110,6 +110,12 @@ public class RouteController {
                 getRouteSignsUseCase.forRoute(route.id()));
     }
 
+    @Operation(summary = "Costo del pasaje de una ruta",
+            description = "Retorna solo las tarifas vigentes de una ruta, de menor a mayor precio, "
+                    + "y la fecha en que se actualizó por última vez alguna de ellas. "
+                    + "La ruta urbana trae una sola tarifa con referencePoint en null.")
+    @ApiResponse(responseCode = "200", description = "Costo del pasaje recuperado exitosamente")
+    @ApiResponse(responseCode = "404", description = "La ruta especificada no existe")
     @GetMapping("/{id}/fare")
     public RouteFareResponse fare(@PathVariable Long id) {
         return RouteFareResponse.from(getRouteFareUseCase.getByRouteId(id));
