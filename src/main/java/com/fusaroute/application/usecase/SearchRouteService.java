@@ -1,6 +1,7 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
+import com.fusaroute.domain.model.BoardingPoint;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
@@ -10,7 +11,7 @@ import com.fusaroute.domain.port.out.TravelTimePort;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.OptionalDouble;
+import java.util.Optional;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
@@ -39,22 +40,50 @@ public class SearchRouteService implements SearchRouteUseCase {
         try {
             List<Route> candidates = candidatesFor(originNeighborhood, originCoord, destNeighborhood, destCoord);
 
+            // Se cronometra el TRAMO EN BUSETA de cada candidata, de su abordaje a su
+            // bajada, no el par origen-destino del usuario: Distance Matrix no sigue el
+            // trazado (cotiza por par de puntos), asi que lo unico que distingue a una
+            // ruta de otra es por donde se toma y por donde se deja. Cronometrar siempre
+            // origen->destino daria el mismo tiempo a todas y "la mejor" seria la primera
+            // del repositorio, no la mas rapida.
+            //
+            // Y se elige por tiempo puerta a puerta = caminata al abordaje + buseta +
+            // caminata desde la bajada: una buseta un poco mas rapida no compensa si deja
+            // al usuario a 700 m del destino. La caminata es geometria del dominio
+            // (BoardingPoint, a 5 km/h), no una llamada a Google.
+            //
             // Un bucle en vez de Comparator.comparing(keyExtractor): ese extractor se
             // reevalua en cada comparacion, llamando a travelTimePort mas veces de las
-            // necesarias; ademas, aqui hace falta el Duration ganador, no solo la ruta.
+            // necesarias; ademas, aqui hacen falta el Duration ganador y sus puntos.
             Route bestRoute = null;
-            Duration bestTime = null;
+            Duration bestBusTime = null;
+            Optional<BoardingPoint> bestBoarding = Optional.empty();
+            Optional<BoardingPoint> bestDropOff = Optional.empty();
+            Duration bestDoorToDoor = null;
             for (Route candidate : candidates) {
-                Duration time = travelTimePort.getTravelTime(originCoord, destCoord, candidate.path());
-                if (bestTime == null || time.compareTo(bestTime) < 0) {
+                Optional<BoardingPoint> boarding = candidate.boardingPointFor(originCoord);
+                Optional<BoardingPoint> dropOff = candidate.boardingPointFor(destCoord);
+
+                // Sin trazado no hay abordaje ni bajada que proyectar: se cronometra el
+                // par origen-destino del usuario, sin caminata, como unica opcion.
+                Coordinate from = boarding.map(BoardingPoint::point).orElse(originCoord);
+                Coordinate to = dropOff.map(BoardingPoint::point).orElse(destCoord);
+                Duration busTime = travelTimePort.getTravelTime(from, to, candidate.path());
+                Duration doorToDoor = walkingTime(boarding).plus(busTime).plus(walkingTime(dropOff));
+
+                if (bestDoorToDoor == null || doorToDoor.compareTo(bestDoorToDoor) < 0) {
                     bestRoute = candidate;
-                    bestTime = time;
+                    bestBusTime = busTime;
+                    bestBoarding = boarding;
+                    bestDropOff = dropOff;
+                    bestDoorToDoor = doorToDoor;
                 }
             }
-            return RouteSearchResult.online(bestRoute, bestTime,
-                    bestRoute.boardingPointFor(originCoord).orElse(null),
-                    bestRoute.boardingPointFor(destCoord).orElse(null),
-                    travelDistanceOrNull(bestRoute, originCoord, destCoord));
+            // estimatedTime es el tramo en buseta, no el puerta a puerta: la caminata ya
+            // viaja aparte en cada BoardingPoint, y el front la suma con esos datos.
+            return RouteSearchResult.online(bestRoute, bestBusTime,
+                    bestBoarding.orElse(null), bestDropOff.orElse(null),
+                    travelDistanceOrNull(bestBoarding, bestDropOff));
         } finally {
             // Etiquetado por modo a proposito: el p95 < 8 s de RNF-01 es sobre la
             // busqueda que consulta a Google. La offline no sale a la red y es ordenes
@@ -114,9 +143,21 @@ public class SearchRouteService implements SearchRouteUseCase {
         return candidates;
     }
 
-    private static Double travelDistanceOrNull(Route route, Coordinate originCoord, Coordinate destCoord) {
-        OptionalDouble distance = route.travelDistanceInMeters(originCoord, destCoord);
-        return distance.isPresent() ? distance.getAsDouble() : null;
+    /** Caminata hasta/desde un punto del trazado; cero si la ruta no tiene trazado. */
+    private static Duration walkingTime(Optional<BoardingPoint> point) {
+        return point.map(BoardingPoint::walkingTime).orElse(Duration.ZERO);
+    }
+
+    /**
+     * Recorrido en buseta entre abordaje y bajada, reusando los puntos ya proyectados en
+     * el bucle. Vacio si la ruta no tiene trazado: no se midio nada, que es distinto de
+     * cero metros.
+     */
+    private static Double travelDistanceOrNull(Optional<BoardingPoint> boarding, Optional<BoardingPoint> dropOff) {
+        if (boarding.isEmpty() || dropOff.isEmpty()) {
+            return null;
+        }
+        return Math.abs(dropOff.get().distanceAlongPathInMeters() - boarding.get().distanceAlongPathInMeters());
     }
 
     private boolean connects(Route route, String origin, String destination) {

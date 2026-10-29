@@ -2,9 +2,11 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
+import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.RecordSearchUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
@@ -31,19 +33,22 @@ public class RouteController {
     private final GetRouteFareUseCase getRouteFareUseCase;
     private final SearchRouteUseCase searchRouteUseCase;
     private final RecordSearchUseCase recordSearchUseCase;
+    private final GetRouteSignsUseCase getRouteSignsUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
                            GetRouteDetailUseCase getRouteDetailUseCase,
                            GetCongestionWarningUseCase getCongestionWarningUseCase,
                            GetRouteFareUseCase getRouteFareUseCase,
                            SearchRouteUseCase searchRouteUseCase,
-                           RecordSearchUseCase recordSearchUseCase) {
+                           RecordSearchUseCase recordSearchUseCase,
+                           GetRouteSignsUseCase getRouteSignsUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
         this.getCongestionWarningUseCase = getCongestionWarningUseCase;
         this.getRouteFareUseCase = getRouteFareUseCase;
         this.searchRouteUseCase = searchRouteUseCase;
         this.recordSearchUseCase = recordSearchUseCase;
+        this.getRouteSignsUseCase = getRouteSignsUseCase;
     }
 
     /**
@@ -80,11 +85,11 @@ public class RouteController {
                                       @RequestParam double destinationLat,
                                       @RequestParam double destinationLng,
                                       @AuthenticationPrincipal Jwt jwt) {
-        RouteSearchResponse response = RouteSearchResponse.from(searchRouteUseCase.findBestRoute(
+        RouteSearchResult result = searchRouteUseCase.findBestRoute(
                 originNeighborhood, new Coordinate(originLat, originLng),
-                destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
+                destinationNeighborhood, new Coordinate(destinationLat, destinationLng));
         recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
-        return response;
+        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
     }
 
     /**
@@ -105,13 +110,13 @@ public class RouteController {
                                       @RequestParam double destinationLat,
                                       @RequestParam double destinationLng,
                                       @AuthenticationPrincipal Jwt jwt) {
-        RouteSearchResponse response = RouteSearchResponse.from(searchRouteUseCase.findBestRouteOffline(
+        RouteSearchResult result = searchRouteUseCase.findBestRouteOffline(
                 originNeighborhood, new Coordinate(originLat, originLng),
-                destinationNeighborhood, new Coordinate(destinationLat, destinationLng)));
+                destinationNeighborhood, new Coordinate(destinationLat, destinationLng));
         // El historial no distingue online de offline: para el usuario fue la misma
         // busqueda, y lo que repite despues es el par origen-destino.
         recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
-        return response;
+        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
     }
 
     @Operation(summary = "Detalle de ruta",
@@ -126,7 +131,9 @@ public class RouteController {
         // El aviso se evalua sobre TODOS los barrios de la ruta: en el detalle se ve el
         // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
         // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
-        return RouteDetailResponse.from(route, getCongestionWarningUseCase.forRoute(route.neighborhoods()));
+        return RouteDetailResponse.from(route,
+                getCongestionWarningUseCase.forRoute(route.neighborhoods()),
+                getRouteSignsUseCase.forRoute(route.id()));
     }
 
     @GetMapping("/{id}/fare")
