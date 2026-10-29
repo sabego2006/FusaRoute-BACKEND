@@ -5,8 +5,8 @@
 API REST para el sistema de información de transporte público de Fusagasugá.
 Arquitectura hexagonal (puertos y adaptadores), Java 25, Spring Boot 3.5, PostgreSQL en Supabase.
 
-> El badge apunta a SonarCloud (SCRUM-181). Queda **roto hasta que se importe el repo en
-> SonarCloud y corra el primer análisis en CI**. Ver `docs/calidad/sonarqube.md`.
+> El badge apunta a SonarCloud (SCRUM-181); el análisis corre en el CI en cada PR y push a
+> `main`. Ver `docs/calidad/sonarqube.md`.
 
 ## Cómo correr
 
