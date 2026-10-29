@@ -2,6 +2,7 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.model.CongestionWarning;
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.model.RouteSign;
 
 import java.util.List;
 
@@ -18,12 +19,15 @@ import java.util.List;
  * @param path {@code null} si la ruta todavia no tiene trazado cargado
  * @param congestionSectors sectores que el recorrido atraviesa y estan en su franja de
  *     trancon en este momento (RF-09); lista vacia si ninguno
+ * @param signs letreros fisicos de la ruta (SCRUM-176); lista vacia si todavia no hay
+ *     evidencia de campo que la respalde — no se inventa un letrero para rellenarla
  */
 public record RouteDetailResponse(Long id, String name, String type, List<String> neighborhoods,
                                   List<FareResponse> fares, GeoJsonLineStringResponse path,
-                                  List<CongestionSectorResponse> congestionSectors) {
+                                  List<CongestionSectorResponse> congestionSectors,
+                                  List<RouteSignResponse> signs) {
 
-    static RouteDetailResponse from(Route route, CongestionWarning congestion) {
+    static RouteDetailResponse from(Route route, CongestionWarning congestion, List<RouteSign> signs) {
         return new RouteDetailResponse(
                 route.id(),
                 route.name(),
@@ -31,6 +35,7 @@ public record RouteDetailResponse(Long id, String name, String type, List<String
                 route.neighborhoods(),
                 route.fares().stream().map(FareResponse::from).toList(),
                 GeoJsonLineStringResponse.from(route.path()),
-                CongestionSectorResponse.from(congestion));
+                CongestionSectorResponse.from(congestion),
+                RouteSignResponse.from(signs));
     }
 }
