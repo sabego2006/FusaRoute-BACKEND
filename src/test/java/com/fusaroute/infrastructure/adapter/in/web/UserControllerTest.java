@@ -5,10 +5,12 @@ import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.model.Email;
+import com.fusaroute.domain.model.SearchRecord;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.model.UserRole;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
+import com.fusaroute.domain.port.in.GetSearchHistoryUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
@@ -21,6 +23,7 @@ import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import java.time.Instant;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
@@ -52,6 +55,9 @@ class UserControllerTest {
 
     @MockitoBean
     private ChangePasswordUseCase changePassword;
+
+    @MockitoBean
+    private GetSearchHistoryUseCase getSearchHistory;
 
     private final User user = new User(1L, "Ana", Email.of("ana@x.co"),
             "$2a$12$hash", "3101234567", UserRole.USER, true, 0);
@@ -163,5 +169,50 @@ class UserControllerTest {
                                 {"currentPassword":"ViejaPass1","newPassword":"abc"}"""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.errors[0].field").value("password"));
+    }
+
+    // --- GET /api/users/me/search-history (RF-07, SCRUM-20) ---
+
+    @Test
+    void devuelve_el_historial_del_usuario_autenticado() throws Exception {
+        when(getSearchHistory.historyOf(1L)).thenReturn(List.of(
+                new SearchRecord(9L, 1L, "Siboney", "Centro", Instant.parse("2026-10-29T14:30:00Z")),
+                new SearchRecord(8L, 1L, "Gaitan", "Terminal", Instant.parse("2026-10-29T13:00:00Z"))));
+
+        mockMvc.perform(get("/api/users/me/search-history")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2))
+                // El mas reciente va primero: es lo que el usuario quiere repetir.
+                .andExpect(jsonPath("$[0].origin").value("Siboney"))
+                .andExpect(jsonPath("$[0].destination").value("Centro"))
+                .andExpect(jsonPath("$[1].origin").value("Gaitan"));
+    }
+
+    @Test
+    void el_historial_no_expone_el_id_del_dueno() throws Exception {
+        when(getSearchHistory.historyOf(1L)).thenReturn(List.of(
+                new SearchRecord(9L, 1L, "Siboney", "Centro", Instant.parse("2026-10-29T14:30:00Z"))));
+
+        mockMvc.perform(get("/api/users/me/search-history")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].userId").doesNotExist());
+    }
+
+    @Test
+    void el_historial_vacio_es_una_lista_vacia_no_un_404() throws Exception {
+        when(getSearchHistory.historyOf(1L)).thenReturn(List.of());
+
+        mockMvc.perform(get("/api/users/me/search-history")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(0));
+    }
+
+    @Test
+    void el_historial_exige_sesion() throws Exception {
+        mockMvc.perform(get("/api/users/me/search-history"))
+                .andExpect(status().isUnauthorized());
     }
 }

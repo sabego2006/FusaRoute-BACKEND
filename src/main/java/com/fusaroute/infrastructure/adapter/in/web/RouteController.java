@@ -8,9 +8,12 @@ import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
+import com.fusaroute.domain.port.in.RecordSearchUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -30,6 +33,7 @@ public class RouteController {
     private final GetCongestionWarningUseCase getCongestionWarningUseCase;
     private final GetRouteFareUseCase getRouteFareUseCase;
     private final SearchRouteUseCase searchRouteUseCase;
+    private final RecordSearchUseCase recordSearchUseCase;
     private final GetRouteSignsUseCase getRouteSignsUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
@@ -37,13 +41,29 @@ public class RouteController {
                            GetCongestionWarningUseCase getCongestionWarningUseCase,
                            GetRouteFareUseCase getRouteFareUseCase,
                            SearchRouteUseCase searchRouteUseCase,
+                           RecordSearchUseCase recordSearchUseCase,
                            GetRouteSignsUseCase getRouteSignsUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
         this.getCongestionWarningUseCase = getCongestionWarningUseCase;
         this.getRouteFareUseCase = getRouteFareUseCase;
         this.searchRouteUseCase = searchRouteUseCase;
+        this.recordSearchUseCase = recordSearchUseCase;
         this.getRouteSignsUseCase = getRouteSignsUseCase;
+    }
+
+    /**
+     * Anota la busqueda en el historial del usuario (RF-07), solo si hay sesion.
+     * Buscar es publico, asi que {@code jwt} llega nulo para un anonimo y entonces
+     * no hay historial donde escribir.
+     *
+     * Se llama despues de que la busqueda tuvo exito: una consulta que termino en
+     * 404 no es una busqueda que valga la pena repetir.
+     */
+    private void recordIfAuthenticated(Jwt jwt, String origin, String destination) {
+        if (jwt != null) {
+            recordSearchUseCase.record(Long.parseLong(jwt.getSubject()), origin, destination);
+        }
     }
 
     @Operation(summary = "Listar rutas activas", description = "Retorna la lista de todas las rutas de buseta que se encuentran activas")
@@ -70,10 +90,12 @@ public class RouteController {
                                       @RequestParam(required = false) Double originLng,
                                       @RequestParam String destinationNeighborhood,
                                       @RequestParam(required = false) Double destinationLat,
-                                      @RequestParam(required = false) Double destinationLng) {
+                                      @RequestParam(required = false) Double destinationLng,
+                                      @AuthenticationPrincipal Jwt jwt) {
         RouteSearchResult result = searchRouteUseCase.findBestRoute(
                 originNeighborhood, coordinateOf(originLat, originLng),
                 destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
+        recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
         return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
     }
 
@@ -94,10 +116,14 @@ public class RouteController {
                                       @RequestParam(required = false) Double originLng,
                                       @RequestParam String destinationNeighborhood,
                                       @RequestParam(required = false) Double destinationLat,
-                                      @RequestParam(required = false) Double destinationLng) {
+                                      @RequestParam(required = false) Double destinationLng,
+                                      @AuthenticationPrincipal Jwt jwt) {
         RouteSearchResult result = searchRouteUseCase.findBestRouteOffline(
                 originNeighborhood, coordinateOf(originLat, originLng),
                 destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
+        // El historial no distingue online de offline: para el usuario fue la misma
+        // busqueda, y lo que repite despues es el par origen-destino.
+        recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
         return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
     }
 

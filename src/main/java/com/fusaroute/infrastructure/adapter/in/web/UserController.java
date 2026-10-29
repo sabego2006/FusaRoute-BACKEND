@@ -4,6 +4,7 @@ import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.port.in.ChangePasswordCommand;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
+import com.fusaroute.domain.port.in.GetSearchHistoryUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileCommand;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,12 +18,15 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.util.List;
+
 /**
  * Endpoints del perfil de usuario (RF-03, SCRUM-14):
  * <ul>
- *   <li>GET  /api/users/me           → datos del perfil</li>
- *   <li>PUT  /api/users/me           → actualizar nombre, correo y telefono</li>
- *   <li>PUT  /api/users/me/password  → cambiar contrasena (exige la actual)</li>
+ *   <li>GET  /api/users/me                 → datos del perfil</li>
+ *   <li>PUT  /api/users/me                 → actualizar nombre, correo y telefono</li>
+ *   <li>PUT  /api/users/me/password        → cambiar contrasena (exige la actual)</li>
+ *   <li>GET  /api/users/me/search-history  → ultimas busquedas (RF-07, SCRUM-20)</li>
  * </ul>
  * El id del usuario sale del claim {@code sub} del JWT.
  */
@@ -33,13 +37,26 @@ public class UserController {
     private final GetProfileUseCase getProfile;
     private final UpdateProfileUseCase updateProfile;
     private final ChangePasswordUseCase changePassword;
+    private final GetSearchHistoryUseCase getSearchHistory;
 
     public UserController(GetProfileUseCase getProfile,
                           UpdateProfileUseCase updateProfile,
-                          ChangePasswordUseCase changePassword) {
+                          ChangePasswordUseCase changePassword,
+                          GetSearchHistoryUseCase getSearchHistory) {
         this.getProfile = getProfile;
         this.updateProfile = updateProfile;
         this.changePassword = changePassword;
+        this.getSearchHistory = getSearchHistory;
+    }
+
+    @Operation(summary = "Historial de búsquedas",
+            description = "Últimas búsquedas del usuario, de la más reciente a la más antigua (RF-07)")
+    @ApiResponse(responseCode = "200", description = "Historial recuperado exitosamente")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @GetMapping("/search-history")
+    public List<SearchHistoryResponse> searchHistory(@AuthenticationPrincipal Jwt jwt) {
+        Long userId = Long.parseLong(jwt.getSubject());
+        return getSearchHistory.historyOf(userId).stream().map(SearchHistoryResponse::from).toList();
     }
 
     @Operation(summary = "Obtener perfil", description = "Retorna la información del usuario autenticado")
