@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.adapter.in.web;
 import com.fusaroute.domain.model.CongestionWarning;
 import com.fusaroute.domain.model.Route;
 
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -15,12 +16,16 @@ import java.util.List;
  * frontend es LCP < 2.5 s en 4G lento, asi que el trazado viaja solo cuando se abre la
  * ruta que se va a ver.
  *
+ * @param lastUpdatedAt el {@code validFrom} mas reciente entre las tarifas vigentes (RF-06);
+ *     {@code null} si la ruta no tiene ninguna. En una intermunicipal es la fecha del precio
+ *     que mas recientemente cambio, no la de todos: cada fila de {@code fares} trae la suya
  * @param path {@code null} si la ruta todavia no tiene trazado cargado
  * @param congestionSectors sectores que el recorrido atraviesa y estan en su franja de
  *     trancon en este momento (RF-09); lista vacia si ninguno
  */
 public record RouteDetailResponse(Long id, String name, String type, List<String> neighborhoods,
-                                  List<FareResponse> fares, GeoJsonLineStringResponse path,
+                                  List<FareResponse> fares, LocalDate lastUpdatedAt,
+                                  GeoJsonLineStringResponse path,
                                   List<CongestionSectorResponse> congestionSectors) {
 
     static RouteDetailResponse from(Route route, CongestionWarning congestion) {
@@ -30,6 +35,7 @@ public record RouteDetailResponse(Long id, String name, String type, List<String
                 route.type().name(),
                 route.neighborhoods(),
                 route.fares().stream().map(FareResponse::from).toList(),
+                route.lastFareUpdate().orElse(null),
                 GeoJsonLineStringResponse.from(route.path()),
                 CongestionSectorResponse.from(congestion));
     }
