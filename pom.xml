@@ -45,6 +45,13 @@
 		<!-- JaCoCo ya escribe este XML en la fase test (plugin configurado
 		     abajo). Sonar lo ingiere sin duplicar configuracion de cobertura. -->
 		<sonar.coverage.jacoco.xmlReportPaths>target/site/jacoco/jacoco.xml</sonar.coverage.jacoco.xmlReportPaths>
+		<!-- Las migraciones de Flyway son datos de siembra (INSERT de rutas,
+		     barrios y tarifas), no logica: el mismo patron de INSERT se repite
+		     por cada ruta a proposito, igual que ya ocurre en V2, V5 y V7. CPD
+		     lo marca como duplicacion, pero no es deuda tecnica, es la forma
+		     natural de un script de datos, y una migracion ya aplicada no se
+		     puede refactorizar (ver regla de Flyway en el CLAUDE.md). -->
+		<sonar.cpd.exclusions>src/main/resources/db/migration/**</sonar.cpd.exclusions>
 	</properties>
 	<dependencies>
 		<dependency>
