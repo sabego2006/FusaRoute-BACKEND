@@ -532,6 +532,49 @@ class RouteControllerTest {
     }
 
     @Test
+    void busqueda_sin_coordenadas_responde_200_el_barrio_sigue_siendo_obligatorio() throws Exception {
+        // SCRUM-130: el frontend ya no pide coordenadas a mano. Sin ellas, la busqueda
+        // sigue siendo valida — solo el nombre del barrio es obligatorio.
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("destinationNeighborhood", "La Pampa"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estimatedMinutes").value(18));
+    }
+
+    @Test
+    void busqueda_con_solo_coordenadas_de_origen_responde_200() throws Exception {
+        // Como en el frontend real: la geolocalizacion solo cubre el origen.
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "La Pampa"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estimatedMinutes").value(18));
+    }
+
+    @Test
+    void busqueda_offline_sin_coordenadas_responde_200() throws Exception {
+        // El modo offline nunca manda coordenadas: sin red no hay geolocalizacion
+        // fiable que pedir.
+        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.offline(urbana(), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search/offline")
+                        .param("originNeighborhood", "Centro")
+                        .param("destinationNeighborhood", "La Pampa"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estimatedMinutes").value(nullValue()));
+    }
+
+    @Test
     void escribir_sobre_rutas_sigue_exigiendo_autenticacion() throws Exception {
         // Hoy responde 403 (aun no hay punto de entrada de autenticacion); con el JWT de
         // SCRUM-13 sera 401. Lo que se fija aqui es que el permitAll es solo para GET.

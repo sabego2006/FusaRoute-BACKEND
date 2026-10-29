@@ -90,6 +90,69 @@ class RouteTest {
                 .isTrue();
     }
 
+    // --- SCRUM-130: punto derivado del nombre del barrio, sin coordenadas del cliente ---
+
+    @Test
+    void el_primer_barrio_cae_al_inicio_del_trazado() {
+        // routeConTrazado() tiene barrios ["A", "B"] y un trazado de 2 puntos: "A" es
+        // el indice 0, que corresponde a la fraccion 0 del recorrido.
+        Coordinate punto = routeConTrazado().pointAtNeighborhood("A").orElseThrow();
+
+        assertThat(punto).isEqualTo(new Coordinate(4.000, -74.000));
+    }
+
+    @Test
+    void el_ultimo_barrio_cae_al_final_del_trazado() {
+        Coordinate punto = routeConTrazado().pointAtNeighborhood("B").orElseThrow();
+
+        assertThat(punto).isEqualTo(new Coordinate(4.000, -74.010));
+    }
+
+    @Test
+    void un_barrio_intermedio_cae_a_su_fraccion_del_recorrido() {
+        // Trazado recto de 3 barrios en orden: "B" (indice 1 de 3) cae a la mitad.
+        Route tresBarrios = new Route(1L, "Ruta", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of("A", "B", "C"), List.of(),
+                List.of(new Coordinate(4.000, -74.000), new Coordinate(4.000, -74.010)));
+
+        Coordinate punto = tresBarrios.pointAtNeighborhood("B").orElseThrow();
+
+        assertThat(punto.longitude()).isCloseTo(-74.005, org.assertj.core.data.Offset.offset(0.0001));
+    }
+
+    @Test
+    void un_barrio_que_no_esta_en_la_ruta_no_tiene_punto() {
+        assertThat(routeConTrazado().pointAtNeighborhood("Z")).isEmpty();
+    }
+
+    @Test
+    void una_ruta_sin_trazado_no_puede_derivar_el_punto_de_ningun_barrio() {
+        Route sinTrazado = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of());
+
+        assertThat(sinTrazado.pointAtNeighborhood("A")).isEmpty();
+    }
+
+    @Test
+    void sin_coordenada_del_cliente_en_ninguna_punta_el_filtro_de_distancia_no_aplica() {
+        // El overload que solo mira lo que el cliente mando: con las dos puntas
+        // vacias, no hay nada que medir, asi que pasa sin importar la geometria real.
+        assertThat(routeConTrazado().isWithinWalkingDistance(Optional.empty(), Optional.empty()))
+                .isTrue();
+    }
+
+    @Test
+    void con_coordenada_del_cliente_solo_en_una_punta_esa_punta_si_se_evalua() {
+        // La punta con coordenada del cliente, a ~1.1 km del trazado, si se mide y
+        // descarta; si la otra punta fuera la unica mandada (cerca), pasaria.
+        Coordinate lejos = new Coordinate(4.010, -74.005);
+
+        assertThat(routeConTrazado().isWithinWalkingDistance(Optional.of(lejos), Optional.empty()))
+                .isFalse();
+        assertThat(routeConTrazado().isWithinWalkingDistance(
+                Optional.empty(), Optional.of(new Coordinate(4.001, -74.005))))
+                .isTrue();
+    }
+
     @Test
     void tarifa_urbana_unica_con_punto_null_se_conserva() {
         Route route = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of(fare(null, 2600, 0, "2026-02-05")));
