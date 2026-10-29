@@ -179,6 +179,40 @@ class RouteControllerTest {
     }
 
     @Test
+    void el_detalle_trae_la_fecha_de_ultima_actualizacion_del_pasaje() throws Exception {
+        when(getRouteDetailUseCase.getById(2L)).thenReturn(intermunicipal());
+
+        mockMvc.perform(get("/api/routes/2"))
+                .andExpect(status().isOk())
+                // El maximo entre las filas (Alaska 2026-02-05, Pasca 2025-01-16), no la primera.
+                .andExpect(jsonPath("$.lastUpdatedAt").value("2026-02-05"));
+    }
+
+    @Test
+    void el_detalle_de_una_ruta_sin_tarifas_vigentes_responde_lastUpdatedAt_null() throws Exception {
+        Route sinTarifas = new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of("Centro", "La Pampa"), List.of(), List.of());
+        when(getRouteDetailUseCase.getById(1L)).thenReturn(sinTarifas);
+
+        mockMvc.perform(get("/api/routes/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.fares.length()").value(0))
+                .andExpect(jsonPath("$.lastUpdatedAt").value(nullValue()));
+    }
+
+    @Test
+    void el_listado_no_trae_la_fecha_de_ultima_actualizacion() throws Exception {
+        // La tarjeta del listado muestra un solo precio ("$ 2.600" o "Desde $ 3.000"); una
+        // fecha suelta colgada de "Desde" pertenece al piso de varios precios, no al mostrado.
+        // La fecha viaja solo en el detalle, igual que el trazado.
+        when(listActiveRoutesUseCase.listActive()).thenReturn(List.of(intermunicipal()));
+
+        mockMvc.perform(get("/api/routes"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].lastUpdatedAt").doesNotExist());
+    }
+
+    @Test
     void el_detalle_trae_el_trazado_como_linestring_de_geojson() throws Exception {
         when(getRouteDetailUseCase.getById(1L)).thenReturn(urbanaConTrazado());
 
@@ -348,7 +382,8 @@ class RouteControllerTest {
                 .andExpect(jsonPath("$.boarding.latitude").value(4.3430))
                 .andExpect(jsonPath("$.boarding.distanceInMeters").value(240))
                 .andExpect(jsonPath("$.boarding.walkingMinutes").value(2))
-                .andExpect(jsonPath("$.dropOff.distanceInMeters").value(90));
+                .andExpect(jsonPath("$.dropOff.distanceInMeters").value(90))
+                .andExpect(jsonPath("$.lastUpdatedAt").value("2026-02-05"));
     }
 
     @Test

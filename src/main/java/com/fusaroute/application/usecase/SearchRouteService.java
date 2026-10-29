@@ -9,7 +9,9 @@ import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 
+import java.time.Clock;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import io.micrometer.core.instrument.MeterRegistry;
@@ -34,11 +36,14 @@ public class SearchRouteService implements SearchRouteUseCase {
     private final RouteRepositoryPort routeRepository;
     private final TravelTimePort travelTimePort;
     private final MeterRegistry meterRegistry;
+    private final Clock clock;
 
-    public SearchRouteService(RouteRepositoryPort routeRepository, TravelTimePort travelTimePort, MeterRegistry meterRegistry) {
+    public SearchRouteService(RouteRepositoryPort routeRepository, TravelTimePort travelTimePort,
+                               MeterRegistry meterRegistry, Clock clock) {
         this.routeRepository = routeRepository;
         this.travelTimePort = travelTimePort;
         this.meterRegistry = meterRegistry;
+        this.clock = clock;
     }
 
     @Override
@@ -106,7 +111,11 @@ public class SearchRouteService implements SearchRouteUseCase {
             // estimatedTime es el tramo en buseta, no el puerta a puerta: la caminata ya
             // viaja aparte en cada BoardingPoint, y el front la suma con esos datos.
             // Queda en null si la ganadora nunca tuvo un tiempo real que reportar.
-            return RouteSearchResult.online(bestRoute, bestBusTime,
+            //
+            // Las tarifas vigentes se aplican solo a la ganadora: connects() y el
+            // ranking por tiempo no miran tarifa, asi que filtrarla en las candidatas
+            // que pierden seria trabajo tirado (RF-06).
+            return RouteSearchResult.online(bestRoute.withCurrentFares(LocalDate.now(clock)), bestBusTime,
                     bestBoarding.orElse(null), bestDropOff.orElse(null),
                     travelDistanceOrNull(bestBoarding, bestDropOff));
         } finally {
@@ -152,7 +161,11 @@ public class SearchRouteService implements SearchRouteUseCase {
             }
             // Si gano una ruta sin trazado, la distancia queda vacia en vez de 0: no se
             // midio nada, y un 0 se leeria como "ya estas encima de la ruta".
-            return RouteSearchResult.offline(bestRoute,
+            //
+            // Misma razon que en el modo online: solo la ganadora pasa por
+            // withCurrentFares (RF-06).
+            Route bestRouteConTarifaVigente = bestRoute.withCurrentFares(LocalDate.now(clock));
+            return RouteSearchResult.offline(bestRouteConTarifaVigente,
                     bestDistance == Double.MAX_VALUE ? null : bestDistance,
                     bestBoarding.orElse(null),
                     bestDropOff.orElse(null));
