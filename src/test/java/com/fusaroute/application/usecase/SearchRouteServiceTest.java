@@ -11,14 +11,19 @@ import com.fusaroute.domain.port.out.TravelTimePort;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.time.Duration;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -53,20 +58,115 @@ class SearchRouteServiceTest {
                 new Coordinate(DESTINATION.latitude() + desvio, DESTINATION.longitude() + desvio));
     }
 
+    /**
+     * Trazado paralelo al de origen->destino pero corrido ~metros al norte, asi la
+     * caminata hasta el abordaje es de ese orden de magnitud (un solo eje para que no
+     * se dispare por encima de los 800 m). 1 grado de latitud ~ 111 km.
+     */
+    private static List<Coordinate> trazadoCorridoAlNorte(double metros) {
+        double delta = metros / 111_000d;
+        return List.of(
+                new Coordinate(ORIGIN.latitude() + delta, ORIGIN.longitude()),
+                new Coordinate(DESTINATION.latitude() + delta, DESTINATION.longitude()));
+    }
+
+    /**
+     * Devuelve el tiempo en buseta segun el trazado de la candidata, imitando al
+     * adaptador real: Google cotiza por el par de puntos (abordaje-bajada) de cada
+     * ruta, que es distinto para cada trazado. Clave por {@code path} para no tener que
+     * predecir las coordenadas exactas de la proyeccion.
+     */
+    private void stubBusTimePorTrazado(Map<List<Coordinate>, Duration> porTrazado) {
+        when(travelTimePort.getTravelTime(any(), any(), any()))
+                .thenAnswer(inv -> porTrazado.get(inv.<List<Coordinate>>getArgument(2)));
+    }
+
     @Test
     void elige_la_candidata_con_menor_tiempo_estimado() {
-        // Trazados distintos (no List.of() en ambas) para que el mock de travelTimePort
-        // pueda distinguir una llamada de la otra por argumentos.
+        // Dos trazados distintos que pasan por origen y destino: en produccion cada ruta
+        // tiene su propio par abordaje-bajada, asi que Google les da tiempos distintos.
         Route lenta = routeWithPath(1L, "Lenta", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        Route rapida = routeWithPath(2L, "Rapida", trazadoQuePasaPorAmbos(0.0001), "Centro", "Terminal");
+        Route rapida = routeWithPath(2L, "Rapida", trazadoCorridoAlNorte(80), "Centro", "Terminal");
         when(routeRepository.findAll()).thenReturn(List.of(lenta, rapida));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, lenta.path())).thenReturn(Duration.ofMinutes(25));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, rapida.path())).thenReturn(Duration.ofMinutes(12));
+        stubBusTimePorTrazado(Map.of(
+                lenta.path(), Duration.ofMinutes(25),
+                rapida.path(), Duration.ofMinutes(12)));
 
         RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
 
         assertThat(result.route()).isEqualTo(rapida);
         assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(12));
+    }
+
+    @Test
+    void cronometra_el_tramo_de_abordaje_a_bajada_no_el_par_origen_destino() {
+        // Guarda de la regresion que hacia pasar el test viejo mientras produccion fallaba:
+        // el trazado NO pasa por el origen, asi que los puntos que se le pasan a Google
+        // son la proyeccion (abordaje/bajada), no el origen/destino crudos del usuario.
+        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoCorridoAlNorte(300), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(14));
+
+        service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        ArgumentCaptor<Coordinate> from = ArgumentCaptor.forClass(Coordinate.class);
+        ArgumentCaptor<Coordinate> to = ArgumentCaptor.forClass(Coordinate.class);
+        verify(travelTimePort).getTravelTime(from.capture(), to.capture(), eq(conTrazado.path()));
+
+        assertThat(from.getValue()).isNotEqualTo(ORIGIN);
+        assertThat(to.getValue()).isNotEqualTo(DESTINATION);
+        assertThat(from.getValue()).isEqualTo(conTrazado.boardingPointFor(ORIGIN).orElseThrow().point());
+        assertThat(to.getValue()).isEqualTo(conTrazado.boardingPointFor(DESTINATION).orElseThrow().point());
+    }
+
+    @Test
+    void la_caminata_cuenta_en_el_ranking() {
+        // La lejana tiene una buseta mas rapida (19 vs 20 min) pero deja al usuario a
+        // ~700 m de cada punta; a 5 km/h esa caminata la vuelve mas lenta puerta a puerta.
+        Route cercana = routeWithPath(1L, "Cercana", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        Route lejana = routeWithPath(2L, "Lejana", trazadoCorridoAlNorte(700), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(cercana, lejana));
+        stubBusTimePorTrazado(Map.of(
+                cercana.path(), Duration.ofMinutes(20),
+                lejana.path(), Duration.ofMinutes(19)));
+
+        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(cercana);
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(20));
+    }
+
+    @Test
+    void el_tiempo_estimado_es_el_tramo_en_buseta_no_el_puerta_a_puerta() {
+        // Con ~400 m de caminata a cada punta el puerta a puerta pasa de 14 min, pero lo
+        // que se reporta es el tramo en buseta: la caminata viaja aparte en cada punto.
+        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoCorridoAlNorte(400), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(14));
+
+        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(14));
+    }
+
+    @Test
+    void con_tiempos_iguales_gana_la_primera() {
+        // Desempate determinista: a igual tiempo puerta a puerta se queda la primera que
+        // devuelve el repositorio. Trazados distintos (uno con vertice intermedio sobre
+        // la misma linea) para no colisionar la clave del stub, pero misma caminata ~0.
+        Coordinate medio = new Coordinate(
+                (ORIGIN.latitude() + DESTINATION.latitude()) / 2,
+                (ORIGIN.longitude() + DESTINATION.longitude()) / 2);
+        Route primera = routeWithPath(1L, "Primera", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
+        Route segunda = routeWithPath(2L, "Segunda", List.of(ORIGIN, medio, DESTINATION), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(primera, segunda));
+        stubBusTimePorTrazado(Map.of(
+                primera.path(), Duration.ofMinutes(15),
+                segunda.path(), Duration.ofMinutes(15)));
+
+        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(primera);
     }
 
     @Test
@@ -119,6 +219,24 @@ class SearchRouteServiceTest {
     }
 
     @Test
+    void una_ruta_sin_trazado_se_cronometra_de_origen_a_destino() {
+        // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON todavia. Sin trazado no hay
+        // abordaje que proyectar, asi que se cronometra el par origen-destino del usuario
+        // y se sugiere igual, solo que sin ultima milla.
+        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of()))
+                .thenReturn(Duration.ofMinutes(20));
+
+        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
+
+        assertThat(result.route()).isEqualTo(sinTrazado);
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(20));
+        assertThat(result.boarding()).isEmpty();
+        assertThat(result.dropOff()).isEmpty();
+    }
+
+    @Test
     void offline_elige_la_de_menor_recorrido_y_no_consulta_a_google() {
         // Las dos conectan los mismos barrios y arrancan y terminan en el mismo punto;
         // la "larga" se desvia por el noroeste antes de llegar.
@@ -166,21 +284,5 @@ class SearchRouteServiceTest {
 
         assertThatThrownBy(() -> service().findBestRouteOffline("Centro", ORIGIN, "Terminal", DESTINATION))
                 .isInstanceOf(NoRouteAvailableException.class);
-    }
-
-    @Test
-    void una_ruta_sin_trazado_sigue_siendo_candidata() {
-        // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON todavia. Se sugieren igual,
-        // solo que sin ultima milla.
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of()))
-                .thenReturn(Duration.ofMinutes(20));
-
-        RouteSearchResult result = service().findBestRoute("Centro", ORIGIN, "Terminal", DESTINATION);
-
-        assertThat(result.route()).isEqualTo(sinTrazado);
-        assertThat(result.boarding()).isEmpty();
-        assertThat(result.dropOff()).isEmpty();
     }
 }
