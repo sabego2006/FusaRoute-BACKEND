@@ -1,6 +1,7 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
+import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.model.BoardingPoint;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
@@ -8,6 +9,8 @@ import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -22,6 +25,8 @@ import io.micrometer.core.instrument.Timer;
  * Orquesta el filtrado de rutas candidatas y la selección de la mejor basada en tiempo.
  */
 public class SearchRouteService implements SearchRouteUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(SearchRouteService.class);
 
     private static final String LATENCY_METRIC = "fusaroute.search.route.latency";
 
@@ -73,6 +78,8 @@ public class SearchRouteService implements SearchRouteUseCase {
             Optional<BoardingPoint> bestBoarding = Optional.empty();
             Optional<BoardingPoint> bestDropOff = Optional.empty();
             Duration bestDoorToDoorRank = null;
+            boolean anyAttempted = false;
+            boolean anySucceeded = false;
             for (Route candidate : candidates) {
                 // SCRUM-130: el cliente ya no esta obligado a mandar coordenadas. Si no
                 // las mando, se deriva un punto aproximado del nombre del barrio sobre
@@ -93,9 +100,24 @@ public class SearchRouteService implements SearchRouteUseCase {
                 // Google: esta candidata queda sin tiempo real conocido, igual que hoy
                 // una ruta sin trazado queda sin ultima milla. No se descarta por esto —
                 // solo pierde siempre frente a cualquier candidata que si tenga tiempo.
-                Duration busTime = (from != null && to != null)
-                        ? travelTimePort.getTravelTime(from, to, candidate.path())
-                        : null;
+                //
+                // Que el puerto falle (p. ej. Distance Matrix caida o quota agotada) no
+                // tumba la busqueda: esta candidata queda sin tiempo real, igual que una
+                // sin trazado, y entra al ranking con UNKNOWN_TIME_RANK. Si al final del
+                // bucle NINGUNA pudo cronometrarse pero alguna lo intento, la busqueda
+                // online cae en modo offline: la primera del repositorio ganaria por el
+                // UNKNOWN_TIME_RANK compartido y es casi seguro peor que la de menor
+                // recorrido.
+                Duration busTime = null;
+                if (from != null && to != null) {
+                    anyAttempted = true;
+                    try {
+                        busTime = travelTimePort.getTravelTime(from, to, candidate.path());
+                        anySucceeded = true;
+                    } catch (TravelTimeUnavailableException e) {
+                        log.warn("Candidata '{}' sin tiempo real: {}", candidate.name(), e.getMessage());
+                    }
+                }
                 Duration doorToDoorRank = busTime == null
                         ? UNKNOWN_TIME_RANK
                         : walkingTime(boarding).plus(busTime).plus(walkingTime(dropOff));
@@ -107,6 +129,15 @@ public class SearchRouteService implements SearchRouteUseCase {
                     bestDropOff = dropOff;
                     bestDoorToDoorRank = doorToDoorRank;
                 }
+            }
+            // Degradacion: si todo lo que se intento cronometrar fallo, la busqueda online
+            // delega en la offline. No se inventa un tiempo (seria peor que no darlo), y
+            // elegir por menor recorrido es mejor que caer en la primera del repositorio
+            // por el UNKNOWN_TIME_RANK compartido. El timer de offline se registra ademas
+            // del de online: queda visible en metricas que esta ejecucion degrado.
+            if (anyAttempted && !anySucceeded) {
+                log.warn("Ninguna candidata pudo cronometrarse: delegando en modo offline");
+                return findBestRouteOffline(originNeighborhood, originCoord, destNeighborhood, destCoord);
             }
             // estimatedTime es el tramo en buseta, no el puerta a puerta: la caminata ya
             // viaja aparte en cada BoardingPoint, y el front la suma con esos datos.

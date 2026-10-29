@@ -1,6 +1,7 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
+import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
@@ -407,6 +408,48 @@ class SearchRouteServiceTest {
 
         assertThat(result.route()).isEqualTo(sinTrazado);
         assertThat(result.travelDistance()).isEmpty();
+    }
+
+    // --- Degradación cuando Google no responde ---
+
+    @Test
+    void si_una_candidata_falla_la_otra_que_responde_gana() {
+        // Produccion: a veces Google rechaza una llamada (quota, bloqueo pasajero) y
+        // responde la otra. La busqueda no se cae: la candidata que si tuvo tiempo gana.
+        Route caida = routeWithPath(1L, "Caida", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        Route viva = routeWithPath(2L, "Viva", trazadoCorridoAlNorte(80), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(caida, viva));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenAnswer(inv -> {
+            List<Coordinate> path = inv.getArgument(2);
+            if (path.equals(caida.path())) {
+                throw new TravelTimeUnavailableException("Distance Matrix fallo", null);
+            }
+            return Duration.ofMinutes(12);
+        });
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(viva);
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(12));
+    }
+
+    @Test
+    void si_google_falla_para_todas_las_candidatas_delega_en_offline_sin_tirar_la_busqueda() {
+        // Caso de PROD de 2026-10-29: REQUEST_DENIED en toda la busqueda. En vez de
+        // propagar un 503, se devuelve el resultado del modo offline: sin tiempo, con
+        // distancia, y la ganadora elegida por menor recorrido.
+        Route corta = routeWithPath(1L, "Corta", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
+        Route larga = routeWithPath(2L, "Larga",
+                List.of(ORIGIN, new Coordinate(4.3500, -74.3800), DESTINATION), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(larga, corta));
+        when(travelTimePort.getTravelTime(any(), any(), any()))
+                .thenThrow(new TravelTimeUnavailableException("Distance Matrix respondio status=REQUEST_DENIED", null));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(corta);
+        assertThat(result.travelTime()).isEmpty();
+        assertThat(result.travelDistance()).isPresent();
     }
 
     @Test
