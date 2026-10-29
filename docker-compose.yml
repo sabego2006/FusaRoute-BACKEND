@@ -1,4 +1,11 @@
-version: '3.8'
+# Entorno local completo del backend: Postgres propio + el backend empaquetado
+# con el Dockerfile de este repo. NO es el flujo del dia a dia (para eso sigue
+# estando `mvn spring-boot:run -Dspring-boot.run.profiles=dev` contra Supabase):
+# esto sirve para probar migraciones de Flyway contra una base vacia sin tocar
+# la base compartida del equipo.
+#
+# La clave `version:` se quito a proposito: Compose v2 la ignora y avisa que es
+# obsoleta.
 
 services:
   # Base de datos PostgreSQL para desarrollo local.
@@ -20,6 +27,10 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
+    # Tiene que estar en la MISMA red que el backend. Sin esto Compose lo deja
+    # en la red `default` y `db:5432` no resuelve desde el contenedor backend.
+    networks:
+      - fusaroute-network
 
   # Aplicación Backend de FusaRoute
   backend:
@@ -32,12 +43,22 @@ services:
       - "8080:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
+      # El esquema no existe en una base recien creada; Flyway lo crea porque
+      # spring.flyway.schemas lo declara (ver application.properties).
       - DB_URL=jdbc:postgresql://db:5432/postgres?currentSchema=fusaroute
       - DB_USERNAME=fusaroute_dev
       - DB_PASSWORD=dev_password
       - DB_SCHEMA=fusaroute
       - PORT=8080
-      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY}
+      # Secretos: NO van literales aqui, se leen del .env local (que no se
+      # versiona). El .env del repo no entra a la imagen (.dockerignore), asi
+      # que spring.config.import no lo encuentra dentro del contenedor: la
+      # unica via son estas variables de entorno.
+      # Sin JWT_SECRET ni TOTP_ENCRYPTION_KEY el arranque falla: ninguna de las
+      # dos tiene valor por defecto (JwtConfig / app.totp.encryption-key).
+      - JWT_SECRET=${JWT_SECRET:?falta JWT_SECRET en el .env}
+      - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:?falta TOTP_ENCRYPTION_KEY en el .env}
+      - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
     depends_on:
       db:
         condition: service_healthy
