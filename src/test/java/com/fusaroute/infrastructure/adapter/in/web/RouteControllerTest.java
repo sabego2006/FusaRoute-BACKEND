@@ -279,11 +279,40 @@ class RouteControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.route.id").value(1))
                 .andExpect(jsonPath("$.route.name").value("Camino Real - La Pampa"))
+                .andExpect(jsonPath("$.route.neighborhoods[0]").value("Centro"))
+                .andExpect(jsonPath("$.route.neighborhoods[1]").value("La Pampa"))
                 .andExpect(jsonPath("$.estimatedMinutes").value(18))
                 .andExpect(jsonPath("$.boarding.latitude").value(4.3430))
                 .andExpect(jsonPath("$.boarding.distanceInMeters").value(240))
                 .andExpect(jsonPath("$.boarding.walkingMinutes").value(2))
                 .andExpect(jsonPath("$.dropOff.distanceInMeters").value(90));
+    }
+
+    @Test
+    void busqueda_devuelve_los_barrios_completos_y_en_orden_de_recorrido() throws Exception {
+        // RF-05: la respuesta lleva TODOS los barrios en orden de recorrido. El recorte a 7
+        // es presentacion del frontend; el backend nunca trunca ni reordena la lista.
+        Route conMuchosBarrios = new Route(2L, "Ruta larga", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of("Centro", "Balmoral", "Pekin", "Antonia Santos", "Fusacatan",
+                        "Los Comuneros", "Ciudad Jardin", "Cooviprof", "Potosi"),
+                List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
+                List.of());
+        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+                .thenReturn(RouteSearchResult.online(conMuchosBarrios, Duration.ofMinutes(25), null, null, null));
+
+        mockMvc.perform(get("/api/routes/search")
+                        .param("originNeighborhood", "Centro")
+                        .param("originLat", "4.3433")
+                        .param("originLng", "-74.3661")
+                        .param("destinationNeighborhood", "Potosi")
+                        .param("destinationLat", "4.3300")
+                        .param("destinationLng", "-74.3600"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.route.neighborhoods.length()").value(9))
+                .andExpect(jsonPath("$.route.neighborhoods[0]").value("Centro"))
+                .andExpect(jsonPath("$.route.neighborhoods[1]").value("Balmoral"))
+                .andExpect(jsonPath("$.route.neighborhoods[4]").value("Fusacatan"))
+                .andExpect(jsonPath("$.route.neighborhoods[8]").value("Potosi"));
     }
 
     @Test
@@ -334,6 +363,8 @@ class RouteControllerTest {
                         .param("destinationLng", "-74.3600"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.route.name").value("Camino Real - La Pampa"))
+                .andExpect(jsonPath("$.route.neighborhoods[0]").value("Centro"))
+                .andExpect(jsonPath("$.route.neighborhoods[1]").value("La Pampa"))
                 // Sin red no se consulta a Google, asi que no hay tiempo que dar.
                 .andExpect(jsonPath("$.estimatedMinutes").value(nullValue()))
                 .andExpect(jsonPath("$.travelDistanceInMeters").value(2400))
