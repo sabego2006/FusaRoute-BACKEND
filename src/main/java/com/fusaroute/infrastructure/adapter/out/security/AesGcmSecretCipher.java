@@ -4,79 +4,100 @@ import com.fusaroute.domain.port.out.SecretCipherPort;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import javax.crypto.Cipher;
+import javax.crypto.spec.GCMParameterSpec;
+import javax.crypto.spec.SecretKeySpec;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.SecureRandom;
+import java.util.Arrays;
+import java.util.Base64;
+import java.util.Objects;
+
 /**
  * Cifrador AES-256-GCM para el secreto TOTP en reposo (SCRUM-179).
  *
- * SUBTASK MANUAL (regla del 30 % manual del CLAUDE.md del curso). Lo escribe un
- * integrante del equipo a mano; Claude solo guia. Esta clase queda como esqueleto
- * con el contrato y la configuracion; los metodos lanzan
- * {@link UnsupportedOperationException} hasta que esten implementados.
+ * <p>Formato de salida de {@link #encrypt(String)}: Base64 de {@code nonce(12) || ciphertext || tag(16)}.
+ * El tag de autenticacion ya viene al final del resultado de {@code Cipher.doFinal}, asi que el
+ * formato solo tiene que anteponer el nonce para poder descifrar.
  *
- * <h2>Que implementar (guia, no codigo)</h2>
- * <ol>
- *   <li>En el constructor: decodificar {@code app.totp.encryption-key} desde
- *       Base64 y exigir >= 32 bytes (AES-256). Igual que {@code JwtConfig} con
- *       el secreto JWT: si falta o es debil, el arranque falla. Guardar la
- *       clave como {@code SecretKeySpec("AES")}.</li>
- *   <li>{@code encrypt(plaintext)}:
- *     <ul>
- *       <li>generar un nonce de 12 bytes con {@link java.security.SecureRandom};</li>
- *       <li>crear {@code Cipher.getInstance("AES/GCM/NoPadding")} e inicializar
- *           con {@link javax.crypto.spec.GCMParameterSpec} de 128 bits de tag;</li>
- *       <li>cifrar el {@code plaintext.getBytes(StandardCharsets.UTF_8)};</li>
- *       <li>concatenar {@code nonce || ciphertext || tag} en un solo arreglo y
- *           codificarlo con {@code Base64.getEncoder()}. Devolverlo como String.</li>
- *     </ul>
- *   </li>
- *   <li>{@code decrypt(ciphertext)}:
- *     <ul>
- *       <li>decodificar el Base64;</li>
- *       <li>separar los primeros 12 bytes como nonce y el resto como payload+tag;</li>
- *       <li>descifrar y devolver {@code new String(..., UTF_8)}.</li>
- *     </ul>
- *   </li>
- * </ol>
- *
- * <h2>Reglas que no se rompen</h2>
+ * <p>Reglas que no se rompen:
  * <ul>
- *   <li>NUNCA reutilizar nonce con la misma clave. GCM pierde confidencialidad
- *       si eso pasa, por eso cada {@code encrypt} saca uno nuevo.</li>
- *   <li>NUNCA capturar y tragar la excepcion de autenticacion (tag invalido):
- *       si falla, debe propagarse para que la peticion caiga en 500 y quede en
- *       los logs. Un ciphertext manipulado NO debe parecer datos validos.</li>
- *   <li>NUNCA guardar la clave AES en {@code application.properties} con un
- *       default; va unicamente por variable de entorno
- *       ({@code TOTP_ENCRYPTION_KEY} en {@code .env.example}).</li>
+ *   <li>Cada {@code encrypt} genera un nonce nuevo: GCM pierde confidencialidad si se repite
+ *       con la misma clave.</li>
+ *   <li>La excepcion de autenticacion (tag invalido) se propaga y no se traga: un ciphertext
+ *       manipulado no debe parecer un dato valido, debe caer en 500 y quedar en los logs.</li>
+ *   <li>La clave llega solo por variable de entorno ({@code TOTP_ENCRYPTION_KEY}), sin valor por
+ *       defecto.</li>
  * </ul>
- *
- * <h2>Tests esperados</h2>
- * {@code AesGcmSecretCipherTest}: round-trip (encrypt + decrypt da el mismo
- * texto), dos encrypts del mismo texto producen ciphertext distintos (nonces
- * frescos), descifrar un ciphertext modificado un byte lanza excepcion, clave
- * corta o no-Base64 rompe el arranque.
  */
 @Component
 public class AesGcmSecretCipher implements SecretCipherPort {
 
+    private static final String TRANSFORMATION = "AES/GCM/NoPadding";
+    private static final int KEY_BYTES = 32;
+    private static final int NONCE_BYTES = 12;
+    private static final int TAG_BITS = 128;
+    private static final int TAG_BYTES = TAG_BITS / 8;
+
+    private final SecretKeySpec key;
+    private final SecureRandom random = new SecureRandom();
+
     public AesGcmSecretCipher(@Value("${app.totp.encryption-key}") String base64Key) {
-        // TODO (manual, SCRUM-179): validar la clave como describe el javadoc.
-        // Hoy no se usa; el campo se recibe para que al implementar no cambie
-        // la firma del constructor.
         if (base64Key == null || base64Key.isBlank()) {
             throw new IllegalStateException(
                     "app.totp.encryption-key (TOTP_ENCRYPTION_KEY) no definido");
         }
+        byte[] raw;
+        try {
+            raw = Base64.getDecoder().decode(base64Key.trim());
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException("app.totp.encryption-key (TOTP_ENCRYPTION_KEY) no es Base64 valido", e);
+        }
+        if (raw.length < KEY_BYTES) {
+            throw new IllegalStateException(
+                    "app.totp.encryption-key (TOTP_ENCRYPTION_KEY) debe decodificar a al menos " + KEY_BYTES
+                            + " bytes; genera una con: openssl rand -base64 32");
+        }
+        // AES-256 usa exactamente 32 bytes: si la clave trae mas, se toman los primeros 32.
+        this.key = new SecretKeySpec(Arrays.copyOf(raw, KEY_BYTES), "AES");
     }
 
     @Override
     public String encrypt(String plaintext) {
-        throw new UnsupportedOperationException(
-                "AesGcmSecretCipher.encrypt pendiente (subtask manual SCRUM-179).");
+        Objects.requireNonNull(plaintext, "plaintext");
+        byte[] nonce = new byte[NONCE_BYTES];
+        random.nextBytes(nonce);
+        try {
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.ENCRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
+            byte[] encrypted = cipher.doFinal(plaintext.getBytes(StandardCharsets.UTF_8));
+
+            byte[] out = new byte[NONCE_BYTES + encrypted.length];
+            System.arraycopy(nonce, 0, out, 0, NONCE_BYTES);
+            System.arraycopy(encrypted, 0, out, NONCE_BYTES, encrypted.length);
+            return Base64.getEncoder().encodeToString(out);
+        } catch (GeneralSecurityException e) {
+            throw new IllegalStateException("No se pudo cifrar el secreto", e);
+        }
     }
 
     @Override
     public String decrypt(String ciphertext) {
-        throw new UnsupportedOperationException(
-                "AesGcmSecretCipher.decrypt pendiente (subtask manual SCRUM-179).");
+        Objects.requireNonNull(ciphertext, "ciphertext");
+        byte[] in = Base64.getDecoder().decode(ciphertext);
+        if (in.length < NONCE_BYTES + TAG_BYTES) {
+            throw new IllegalArgumentException("Ciphertext demasiado corto para contener nonce y tag");
+        }
+        byte[] nonce = Arrays.copyOfRange(in, 0, NONCE_BYTES);
+        byte[] payload = Arrays.copyOfRange(in, NONCE_BYTES, in.length);
+        try {
+            Cipher cipher = Cipher.getInstance(TRANSFORMATION);
+            cipher.init(Cipher.DECRYPT_MODE, key, new GCMParameterSpec(TAG_BITS, nonce));
+            return new String(cipher.doFinal(payload), StandardCharsets.UTF_8);
+        } catch (GeneralSecurityException e) {
+            // Incluye AEADBadTagException: se propaga a proposito, un ciphertext alterado no se acepta.
+            throw new IllegalStateException("No se pudo descifrar el secreto (clave incorrecta o dato alterado)", e);
+        }
     }
 }
