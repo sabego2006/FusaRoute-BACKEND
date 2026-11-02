@@ -5,6 +5,7 @@ import com.fusaroute.domain.exception.UserNotFoundException;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.model.UserRole;
+import com.fusaroute.domain.port.in.EnrollTotpCommand;
 import com.fusaroute.domain.port.in.TotpEnrollmentResult;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
@@ -50,7 +51,7 @@ class EnrollTotpServiceTest {
         when(totp.qrPngBase64(any())).thenReturn("PNGBASE64");
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        TotpEnrollmentResult result = service().enroll(7L);
+        TotpEnrollmentResult result = service().enroll(new EnrollTotpCommand(7L, false));
 
         assertThat(result.secret()).isEqualTo("JBSWY3DPEHPK3PXP");
         assertThat(result.otpauthUri()).contains("secret=JBSWY3DPEHPK3PXP");
@@ -73,7 +74,7 @@ class EnrollTotpServiceTest {
         when(totp.qrPngBase64(any())).thenReturn("PNG");
         when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
 
-        service().enroll(7L);
+        service().enroll(new EnrollTotpCommand(7L, false));
 
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
         verify(userRepository).save(saved.capture());
@@ -81,12 +82,10 @@ class EnrollTotpServiceTest {
     }
 
     @Test
-    void enrolar_con_totp_ya_activo_lanza() {
-        User yaActivo = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, true, "SECRETO");
-        when(userRepository.findById(7L)).thenReturn(Optional.of(yaActivo));
+    void enrolar_con_totp_ya_activo_y_sin_permiso_de_reset_lanza() {
+        when(userRepository.findById(7L)).thenReturn(Optional.of(userConTotpActivo()));
 
-        assertThatThrownBy(() -> service().enroll(7L))
+        assertThatThrownBy(() -> service().enroll(new EnrollTotpCommand(7L, false)))
                 .isInstanceOf(TotpAlreadyEnabledException.class);
 
         verify(userRepository, never()).save(any());
@@ -94,10 +93,35 @@ class EnrollTotpServiceTest {
     }
 
     @Test
+    void enrolar_con_totp_ya_activo_y_permiso_de_reset_arranca_uno_nuevo() {
+        when(userRepository.findById(7L)).thenReturn(Optional.of(userConTotpActivo()));
+        when(totp.generateSecret()).thenReturn("SECRETO-NUEVO");
+        when(totp.provisioningUri(any(), any(), any())).thenReturn("otpauth://totp/x");
+        when(totp.qrPngBase64(any())).thenReturn("PNG");
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+
+        TotpEnrollmentResult result = service().enroll(new EnrollTotpCommand(7L, true));
+
+        assertThat(result.secret()).isEqualTo("SECRETO-NUEVO");
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        // El factor anterior quedo apagado y el secreto nuevo pendiente de confirmar:
+        // el usuario que cambio de telefono no queda con dos factores activos.
+        assertThat(saved.getValue().getTotpSecret()).isEqualTo("SECRETO-NUEVO");
+        assertThat(saved.getValue().isTotpEnabled()).isFalse();
+    }
+
+    private static User userConTotpActivo() {
+        return new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
+                UserRole.USER, true, 0, true, "SECRETO");
+    }
+
+    @Test
     void usuario_inexistente_lanza() {
         when(userRepository.findById(99L)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service().enroll(99L))
+        assertThatThrownBy(() -> service().enroll(new EnrollTotpCommand(99L, false)))
                 .isInstanceOf(UserNotFoundException.class);
     }
 }

@@ -11,6 +11,7 @@ import com.fusaroute.application.usecase.GetRouteSignsService;
 import com.fusaroute.application.usecase.GetTotpStatusService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
+import com.fusaroute.application.usecase.RegenerateRecoveryCodesService;
 import com.fusaroute.application.usecase.RegisterUserService;
 import com.fusaroute.application.usecase.SearchRouteService;
 import com.fusaroute.application.usecase.UpdateProfileService;
@@ -25,6 +26,7 @@ import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
+import com.fusaroute.domain.port.in.RegenerateRecoveryCodesUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
@@ -151,5 +153,13 @@ public class UseCaseConfig {
     @Bean
     public GetTotpStatusUseCase getTotpStatusUseCase(UserRepositoryPort userRepository) {
         return new GetTotpStatusService(userRepository);
+    }
+
+    @Bean
+    public RegenerateRecoveryCodesUseCase regenerateRecoveryCodesUseCase(
+            UserRepositoryPort userRepository,
+            RecoveryCodePort recoveryCodes,
+            RecoveryCodeRepositoryPort recoveryCodeRepository) {
+        return new RegenerateRecoveryCodesService(userRepository, recoveryCodes, recoveryCodeRepository);
     }
 }
