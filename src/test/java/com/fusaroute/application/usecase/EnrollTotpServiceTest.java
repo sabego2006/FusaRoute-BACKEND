@@ -38,7 +38,7 @@ class EnrollTotpServiceTest {
 
     private static User userSinTotp() {
         return new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, false, null);
+                UserRole.USER, true, 0, false, null, null);
     }
 
     @Test
@@ -66,7 +66,7 @@ class EnrollTotpServiceTest {
     @Test
     void re_enrolar_antes_de_confirmar_reemplaza_el_secreto_pendiente() {
         User conSecretoPendiente = new User(7L, "Ana", Email.of("ana@x.co"),
-                "$2a$12$hash", null, UserRole.USER, true, 0, false, "ANTERIOR");
+                "$2a$12$hash", null, UserRole.USER, true, 0, false, "ANTERIOR", null);
         when(userRepository.findById(7L)).thenReturn(Optional.of(conSecretoPendiente));
         when(totp.generateSecret()).thenReturn("NUEVO");
         when(totp.provisioningUri(any(), any(), any())).thenReturn("otpauth://...");
@@ -83,7 +83,7 @@ class EnrollTotpServiceTest {
     @Test
     void enrolar_con_totp_ya_activo_lanza() {
         User yaActivo = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, true, "SECRETO");
+                UserRole.USER, true, 0, true, "SECRETO", null);
         when(userRepository.findById(7L)).thenReturn(Optional.of(yaActivo));
 
         assertThatThrownBy(() -> service().enroll(7L))

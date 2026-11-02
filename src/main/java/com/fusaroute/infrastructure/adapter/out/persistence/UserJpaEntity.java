@@ -12,14 +12,16 @@ import jakarta.persistence.Table;
 import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.type.SqlTypes;
 
+import java.time.Instant;
+
 /**
  * Fila de la tabla {@code users}. Es el modelo de persistencia, distinto del
  * {@code domain.model.User} a proposito: un mapper traduce entre ambos.
  *
  * Solo mapea las columnas que el registro usa. {@code created_at}/{@code updated_at}
- * NO se mapean: los llena el default de la base (now()). De las columnas de
- * bloqueo solo se mapea failed_login_attempts (SCRUM-36); locked_until queda para
- * SCRUM-37.
+ * NO se mapean: los llena el default de la base (now()). {@code locked_until}
+ * (SCRUM-155) se mapea junto a {@code failed_login_attempts} (SCRUM-36): ambas
+ * columnas ya existian desde V1, reservadas para el bloqueo temporal.
  *
  * {@code totp_secret} guarda SIEMPRE el ciphertext (AES-GCM, V7, SCRUM-179):
  * en esta clase es solo una cadena; el cifrado y descifrado los hace el
@@ -64,13 +66,17 @@ public class UserJpaEntity {
     @Column(name = "totp_secret", length = 255)
     private String totpSecret;
 
+    /** Instante hasta el cual la cuenta esta bloqueada, o NULL si no lo esta (SCRUM-155). */
+    @Column(name = "locked_until")
+    private Instant lockedUntil;
+
     protected UserJpaEntity() {
         // Requerido por JPA.
     }
 
     public UserJpaEntity(Long id, String name, String email, String passwordHash,
                          String phone, UserRole role, boolean active, int failedLoginAttempts,
-                         boolean totpEnabled, String totpSecret) {
+                         boolean totpEnabled, String totpSecret, Instant lockedUntil) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -81,6 +87,7 @@ public class UserJpaEntity {
         this.failedLoginAttempts = failedLoginAttempts;
         this.totpEnabled = totpEnabled;
         this.totpSecret = totpSecret;
+        this.lockedUntil = lockedUntil;
     }
 
     public Long getId() {
@@ -121,5 +128,9 @@ public class UserJpaEntity {
 
     public String getTotpSecret() {
         return totpSecret;
+    }
+
+    public Instant getLockedUntil() {
+        return lockedUntil;
     }
 }
