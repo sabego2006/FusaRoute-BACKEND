@@ -37,6 +37,10 @@ services:
       # Base64 de >= 32 bytes, distinto del de DEV: openssl rand -base64 32
       - key: JWT_SECRET
         sync: false
+      # Cifra en reposo el secreto TOTP (AES-256-GCM). Base64 de >= 32 bytes, distinta de
+      # la de DEV: openssl rand -base64 32. Sin ella el arranque falla.
+      - key: TOTP_ENCRYPTION_KEY
+        sync: false
       # URL exacta del frontend en Vercel, sin "*".
       - key: CORS_ALLOWED_ORIGINS
         sync: false

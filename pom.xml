@@ -64,6 +64,16 @@
 			<artifactId>springdoc-openapi-starter-webmvc-ui</artifactId>
 			<version>2.8.6</version>
 		</dependency>
+		<!-- Fija el webjar de swagger-ui por encima del que trae springdoc (5.20.1): el 5.34.1
+		     empaqueta DOMPurify 3.4.17, que corrige CVE-2026-116803 (XSS, CVSS 10, publicado el
+		     2026-10-27). springdoc 2.8.17 (la mas reciente) sigue trayendo DOMPurify 3.3.2, asi
+		     que subir springdoc no lo arregla. Quitar este pin cuando springdoc empaquete
+		     swagger-ui >= 5.34.1. -->
+		<dependency>
+			<groupId>org.webjars</groupId>
+			<artifactId>swagger-ui</artifactId>
+			<version>5.34.1</version>
+		</dependency>
 		<!-- Cache de 5 min por par origen-destino para las llamadas a Google Maps (RNF-01):
 		     sostiene el p95 < 8 s comprometido y reduce el consumo de cuota. Caffeine en vez
 		     de un cache distribuido porque el backend corre en una sola instancia de Render;
