@@ -1,5 +1,6 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
+import com.fusaroute.domain.exception.AccountLockedException;
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
@@ -82,6 +83,20 @@ class AuthControllerTest {
                 .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Correo o contrasena incorrectos"))
                 .andExpect(jsonPath("$.error").doesNotExist());
+    }
+
+    @Test
+    void quinto_intento_fallido_responde_423_con_aviso_especifico_distinto_del_generico() throws Exception {
+        when(loginUseCase.login(any())).thenThrow(new AccountLockedException());
+
+        mockMvc.perform(post("/api/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"email\":\"ana@x.co\",\"password\":\"mala\"}"))
+                .andExpect(status().isLocked())
+                .andExpect(jsonPath("$.error").value("ACCOUNT_LOCKED"))
+                .andExpect(jsonPath("$.detail").value("Cuenta bloqueada temporalmente por intentos fallidos"))
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.not(
+                        "Correo o contrasena incorrectos")));
     }
 
     @Test

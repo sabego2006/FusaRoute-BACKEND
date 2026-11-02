@@ -29,7 +29,7 @@ class GetTotpStatusServiceTest {
     @Test
     void devuelve_true_cuando_el_usuario_tiene_totp_activo() {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, true, "SECRETO");
+                UserRole.USER, true, 0, true, "SECRETO", null);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         assertThat(service.isEnabled(1L)).isTrue();
@@ -38,7 +38,7 @@ class GetTotpStatusServiceTest {
     @Test
     void devuelve_false_cuando_el_usuario_no_lo_tiene() {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, false, null);
+                UserRole.USER, true, 0, false, null, null);
         when(userRepository.findById(1L)).thenReturn(Optional.of(user));
 
         assertThat(service.isEnabled(1L)).isFalse();
