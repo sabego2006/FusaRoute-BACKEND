@@ -69,6 +69,49 @@ Content-Type: application/json
   "password": "clave-incorrecta"
 }
 
+### Login con el segundo factor ya activo → 200 (sin totpCode da 401 TOTP_REQUIRED)
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "gladys.demo@fusaroute.co",
+  "password": "GladysPass1",
+  "totpCode": "123456"
+}
+
+### ──────────────── 3b. SEGUNDO FACTOR TOTP (SCRUM-179) ────────────────
+### El primer login de un usuario sin enrolar responde 401 TOTP_ENROLLMENT_REQUIRED
+### con un enrollmentToken de 10 minutos. Pegalo aqui para los dos primeros pasos;
+### despues usa el token completo de la respuesta de /confirm.
+@enrollmentToken = pega-aqui-el-enrollmentToken
+
+### Estado del segundo factor (exige token completo)
+GET {{baseUrl}}/api/users/me/totp
+Authorization: Bearer {{token}}
+
+### Paso 1 — enrolar: devuelve secret, otpauthUri y el QR en PNG Base64
+POST {{baseUrl}}/api/users/me/totp/enroll
+Authorization: Bearer {{enrollmentToken}}
+
+### Paso 2 — confirmar con el primer codigo de la app: activa el factor,
+### devuelve el JWT completo de 7 dias y los 10 codigos de respaldo
+POST {{baseUrl}}/api/users/me/totp/confirm
+Authorization: Bearer {{enrollmentToken}}
+Content-Type: application/json
+
+{
+  "code": "123456"
+}
+
+### Cambio de telefono: re-enrolar con el token COMPLETO apaga el factor anterior.
+### Con el enrollmentToken responde 409.
+POST {{baseUrl}}/api/users/me/totp/enroll
+Authorization: Bearer {{token}}
+
+### Regenerar los codigos de respaldo → los anteriores dejan de servir
+POST {{baseUrl}}/api/users/me/totp/recovery-codes
+Authorization: Bearer {{token}}
+
 ### ──────────────── 4. PERFIL ────────────────
 
 ### Ver perfil

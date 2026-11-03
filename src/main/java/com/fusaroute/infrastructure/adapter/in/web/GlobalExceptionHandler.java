@@ -13,6 +13,7 @@ import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
 import com.fusaroute.domain.exception.TotpAlreadyEnabledException;
 import com.fusaroute.domain.exception.TotpEnrollmentRequiredException;
+import com.fusaroute.domain.exception.TotpNotEnabledException;
 import com.fusaroute.domain.exception.TotpRequiredException;
 import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.exception.UserNotFoundException;
@@ -128,6 +129,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** TOTP ya estaba activo al pedir enrolamiento (SCRUM-179). */
     @ExceptionHandler(TotpAlreadyEnabledException.class)
     public ProblemDetail handleTotpAlreadyEnabled(TotpAlreadyEnabledException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    /** Se pidio algo que exige el segundo factor activo y no lo esta (SCRUM-179). */
+    @ExceptionHandler(TotpNotEnabledException.class)
+    public ProblemDetail handleTotpNotEnabled(TotpNotEnabledException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 

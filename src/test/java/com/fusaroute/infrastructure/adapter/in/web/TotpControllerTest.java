@@ -2,18 +2,23 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.exception.InvalidTotpException;
 import com.fusaroute.domain.exception.TotpAlreadyEnabledException;
+import com.fusaroute.domain.exception.TotpNotEnabledException;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.IssuedToken;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.model.UserRole;
 import com.fusaroute.domain.port.in.ConfirmTotpResult;
 import com.fusaroute.domain.port.in.ConfirmTotpUseCase;
+import com.fusaroute.domain.port.in.EnrollTotpCommand;
 import com.fusaroute.domain.port.in.EnrollTotpUseCase;
 import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
+import com.fusaroute.domain.port.in.RegenerateRecoveryCodesResult;
+import com.fusaroute.domain.port.in.RegenerateRecoveryCodesUseCase;
 import com.fusaroute.domain.port.in.TotpEnrollmentResult;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
@@ -25,7 +30,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -53,6 +61,9 @@ class TotpControllerTest {
     @MockitoBean
     private ConfirmTotpUseCase confirm;
 
+    @MockitoBean
+    private RegenerateRecoveryCodesUseCase regenerateRecoveryCodes;
+
     @Test
     void sin_token_responde_401() throws Exception {
         mockMvc.perform(get("/api/users/me/totp"))
@@ -79,7 +90,7 @@ class TotpControllerTest {
 
     @Test
     void enroll_funciona_con_token_full_o_con_token_de_enrolamiento() throws Exception {
-        when(enroll.enroll(1L)).thenReturn(new TotpEnrollmentResult(
+        when(enroll.enroll(any(EnrollTotpCommand.class))).thenReturn(new TotpEnrollmentResult(
                 "SECRETO", "otpauth://totp/FusaRoute:ana@x.co?secret=SECRETO&issuer=FusaRoute",
                 "PNGBASE64"));
 
@@ -133,9 +144,57 @@ class TotpControllerTest {
 
     @Test
     void enroll_con_totp_ya_activo_responde_409() throws Exception {
-        when(enroll.enroll(1L)).thenThrow(new TotpAlreadyEnabledException());
+        when(enroll.enroll(any(EnrollTotpCommand.class))).thenThrow(new TotpAlreadyEnabledException());
 
         mockMvc.perform(post("/api/users/me/totp/enroll")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "totp_enroll"))))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    void solo_el_token_full_pide_permiso_de_reset() throws Exception {
+        when(enroll.enroll(any(EnrollTotpCommand.class))).thenReturn(
+                new TotpEnrollmentResult("S", "otpauth://totp/x", "PNG"));
+
+        mockMvc.perform(post("/api/users/me/totp/enroll")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(post("/api/users/me/totp/enroll")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "totp_enroll"))))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<EnrollTotpCommand> commands = ArgumentCaptor.forClass(EnrollTotpCommand.class);
+        verify(enroll, times(2)).enroll(commands.capture());
+        // El token corto no puede borrar un factor ya confirmado; el completo si.
+        assertThat(commands.getAllValues().get(0).allowReset()).isTrue();
+        assertThat(commands.getAllValues().get(1).allowReset()).isFalse();
+    }
+
+    @Test
+    void regenerar_respaldos_devuelve_el_conjunto_nuevo() throws Exception {
+        when(regenerateRecoveryCodes.regenerate(1L))
+                .thenReturn(new RegenerateRecoveryCodesResult(List.of("AAAA1111BB", "CCCC2222DD")));
+
+        mockMvc.perform(post("/api/users/me/totp/recovery-codes")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.recoveryCodes[0]").value("AAAA1111BB"))
+                .andExpect(jsonPath("$.recoveryCodes[1]").value("CCCC2222DD"));
+    }
+
+    @Test
+    void regenerar_respaldos_con_token_de_enrolamiento_responde_403() throws Exception {
+        // No es un camino de recuperacion: exige scope=full, como el resto de la API.
+        mockMvc.perform(post("/api/users/me/totp/recovery-codes")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "totp_enroll"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void regenerar_respaldos_sin_totp_activo_responde_409() throws Exception {
+        when(regenerateRecoveryCodes.regenerate(1L)).thenThrow(new TotpNotEnabledException());
+
+        mockMvc.perform(post("/api/users/me/totp/recovery-codes")
                         .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
                 .andExpect(status().isConflict());
     }
