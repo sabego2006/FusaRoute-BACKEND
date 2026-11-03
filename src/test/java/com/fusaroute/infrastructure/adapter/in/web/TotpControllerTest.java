@@ -110,7 +110,7 @@ class TotpControllerTest {
     @Test
     void confirm_valido_devuelve_token_full_y_respaldos() throws Exception {
         User activated = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, true, "SECRETO");
+                UserRole.USER, true, 0, true, "SECRETO", null);
         List<String> plain = List.of("AAAA1111BB", "CCCC2222DD");
         when(confirm.confirm(any())).thenReturn(new ConfirmTotpResult(
                 activated,

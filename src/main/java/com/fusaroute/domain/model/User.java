@@ -1,5 +1,7 @@
 package com.fusaroute.domain.model;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Objects;
 
 /**
@@ -20,6 +22,17 @@ import java.util.Objects;
  */
 public class User {
 
+    /**
+     * Umbral de bloqueo temporal (SCRUM-155): al llegar a este numero de
+     * intentos fallidos consecutivos, la cuenta se bloquea. El intento que lo
+     * alcanza (el quinto) es el que responde con el aviso de bloqueo, no el
+     * generico.
+     */
+    public static final int MAX_FAILED_ATTEMPTS = 5;
+
+    /** Duracion del bloqueo temporal (SCRUM-155). */
+    public static final Duration LOCK_DURATION = Duration.ofMinutes(15);
+
     private final Long id;
     private final String name;
     private final Email email;
@@ -30,6 +43,7 @@ public class User {
     private final int failedLoginAttempts;
     private final boolean totpEnabled;
     private final String totpSecret;
+    private final Instant lockedUntil;
 
     /**
      * Constructor completo, para rehidratar desde persistencia. Mantiene la
@@ -37,10 +51,12 @@ public class User {
      * SCRUM-179 varios tests ya construyen al usuario asi, y pedir que TODOS se
      * actualicen a mano para dos campos que arrancan en falso/null seria mas
      * ruido que seguridad. Esa sobrecarga delega aqui con TOTP apagado.
+     *
+     * {@code lockedUntil} es nulo cuando la cuenta no esta bloqueada (SCRUM-155).
      */
     public User(Long id, String name, Email email, String passwordHash, String phone,
                 UserRole role, boolean active, int failedLoginAttempts,
-                boolean totpEnabled, String totpSecret) {
+                boolean totpEnabled, String totpSecret, Instant lockedUntil) {
         if (failedLoginAttempts < 0) {
             throw new IllegalArgumentException("failedLoginAttempts no puede ser negativo");
         }
@@ -61,17 +77,18 @@ public class User {
         this.failedLoginAttempts = failedLoginAttempts;
         this.totpEnabled = totpEnabled;
         this.totpSecret = totpSecret;
+        this.lockedUntil = lockedUntil;
     }
 
     /**
-     * Sobrecarga por retrocompatibilidad: usuario sin TOTP. Nuevos sitios deben
-     * usar el constructor completo; esta queda para no reescribir cada test
-     * existente al introducir TOTP.
+     * Sobrecarga por retrocompatibilidad: usuario sin TOTP y sin bloqueo. Nuevos
+     * sitios deben usar el constructor completo; esta queda para no reescribir
+     * cada test existente al introducir TOTP y, luego, el bloqueo temporal.
      */
     public User(Long id, String name, Email email, String passwordHash, String phone,
                 UserRole role, boolean active, int failedLoginAttempts) {
         this(id, name, email, passwordHash, phone, role, active, failedLoginAttempts,
-                false, null);
+                false, null, null);
     }
 
     /**
@@ -84,7 +101,7 @@ public class User {
      */
     public static User register(String name, Email email, String passwordHash) {
         return new User(null, name, email, passwordHash, null, UserRole.USER, true, 0,
-                false, null);
+                false, null, null);
     }
 
     public Long getId() {
@@ -127,6 +144,21 @@ public class User {
         return totpSecret;
     }
 
+    /** Instante hasta el cual la cuenta esta bloqueada, o {@code null} si no lo esta (SCRUM-155). */
+    public Instant getLockedUntil() {
+        return lockedUntil;
+    }
+
+    /**
+     * La cuenta esta bloqueada si {@code lockedUntil} existe y aun no se alcanza
+     * (SCRUM-155). Un {@code lockedUntil} ya pasado no cuenta como bloqueo: el
+     * caso de uso debe limpiarlo con {@link #clearLockAndResetAttempts()} antes
+     * de evaluar credenciales.
+     */
+    public boolean isLocked(Instant now) {
+        return lockedUntil != null && now.isBefore(lockedUntil);
+    }
+
     /**
      * Actualiza los datos editables del perfil (RF-03). Devuelve un nuevo User
      * inmutable — el original no se muta. El nombre y el correo ya vienen
@@ -134,7 +166,7 @@ public class User {
      */
     public User updateProfile(String newName, Email newEmail, String newPhone) {
         return new User(id, newName, newEmail, passwordHash, newPhone, role, active,
-                failedLoginAttempts, totpEnabled, totpSecret);
+                failedLoginAttempts, totpEnabled, totpSecret, lockedUntil);
     }
 
     /**
@@ -143,23 +175,41 @@ public class User {
      */
     public User withPasswordHash(String newPasswordHash) {
         return new User(id, name, email, newPasswordHash, phone, role, active,
-                failedLoginAttempts, totpEnabled, totpSecret);
+                failedLoginAttempts, totpEnabled, totpSecret, lockedUntil);
     }
 
     /**
      * Copia con un intento fallido mas (RF-02, SCRUM-36). El caso de uso la llama
      * solo cuando el correo existe y la contrasena no coincide, o cuando el codigo
-     * TOTP es incorrecto (SCRUM-179).
+     * TOTP es incorrecto (SCRUM-179). Si este intento alcanza
+     * {@link #MAX_FAILED_ATTEMPTS}, la copia resultante queda bloqueada
+     * {@link #LOCK_DURATION} a partir de {@code now} (SCRUM-155): es el intento
+     * que recibe el aviso de bloqueo, no el generico.
      */
-    public User registerFailedLogin() {
+    public User registerFailedLogin(Instant now) {
+        int newAttempts = failedLoginAttempts + 1;
+        Instant newLockedUntil = newAttempts >= MAX_FAILED_ATTEMPTS
+                ? now.plus(LOCK_DURATION)
+                : null;
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts + 1, totpEnabled, totpSecret);
+                newAttempts, totpEnabled, totpSecret, newLockedUntil);
     }
 
-    /** Copia con el contador en cero, tras un inicio de sesion exitoso. */
+    /** Copia con el contador en cero y sin bloqueo, tras un inicio de sesion exitoso. */
     public User resetFailedLogins() {
         return new User(id, name, email, passwordHash, phone, role, active, 0,
-                totpEnabled, totpSecret);
+                totpEnabled, totpSecret, null);
+    }
+
+    /**
+     * Copia sin bloqueo y con el contador en cero. El caso de uso la llama
+     * cuando {@code lockedUntil} ya paso: la ventana de bloqueo expiro y el
+     * intento actual se evalua de cero, como si el contador nunca hubiera
+     * llegado al limite (SCRUM-155).
+     */
+    public User clearLockAndResetAttempts() {
+        return new User(id, name, email, passwordHash, phone, role, active, 0,
+                totpEnabled, totpSecret, null);
     }
 
     /**
@@ -171,7 +221,7 @@ public class User {
             throw new IllegalArgumentException("totpSecret vacio");
         }
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts, false, newSecret);
+                failedLoginAttempts, false, newSecret, lockedUntil);
     }
 
     /** Activa el segundo factor: el usuario demostro que su app genera codigos validos. */
@@ -180,7 +230,7 @@ public class User {
             throw new IllegalStateException("No hay un enrolamiento TOTP en curso");
         }
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts, true, totpSecret);
+                failedLoginAttempts, true, totpSecret, lockedUntil);
     }
 
     /**
@@ -191,6 +241,6 @@ public class User {
      */
     public User resetTotp() {
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts, false, null);
+                failedLoginAttempts, false, null, lockedUntil);
     }
 }

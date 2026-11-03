@@ -1,5 +1,6 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
+import com.fusaroute.domain.exception.AccountLockedException;
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
@@ -72,6 +73,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidCredentialsException.class)
     public ProblemDetail handleInvalidCredentials(InvalidCredentialsException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.UNAUTHORIZED, e.getMessage());
+    }
+
+    /**
+     * Cuenta bloqueada temporalmente tras el quinto intento fallido (SCRUM-155).
+     * 423 Locked, distinto del 401 generico de {@link InvalidCredentialsException}:
+     * el frontend debe mostrar un aviso diferente, no el de "credenciales
+     * incorrectas". {@code error=ACCOUNT_LOCKED} es la pista machine-readable,
+     * igual que en los handlers de TOTP; el {@code detail} no incluye el
+     * instante de desbloqueo a proposito (ver {@link AccountLockedException}).
+     */
+    @ExceptionHandler(AccountLockedException.class)
+    public ProblemDetail handleAccountLocked(AccountLockedException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.LOCKED, e.getMessage());
+        problem.setProperty("error", "ACCOUNT_LOCKED");
+        return problem;
     }
 
     /**

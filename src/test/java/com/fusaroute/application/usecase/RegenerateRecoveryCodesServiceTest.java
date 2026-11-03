@@ -45,7 +45,7 @@ class RegenerateRecoveryCodesServiceTest {
 
     private static User userConTotpActivo() {
         return new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, true, "SECRETO");
+                UserRole.USER, true, 0, true, "SECRETO", null);
     }
 
     @Test
@@ -78,7 +78,7 @@ class RegenerateRecoveryCodesServiceTest {
     @Test
     void usuario_sin_totp_activo_no_recibe_codigos() {
         User sinTotp = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, false, null);
+                UserRole.USER, true, 0, false, null, null);
         when(userRepository.findById(7L)).thenReturn(Optional.of(sinTotp));
 
         assertThatThrownBy(() -> service().regenerate(7L))

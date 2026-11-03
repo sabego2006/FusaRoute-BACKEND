@@ -58,7 +58,7 @@ class ConfirmTotpServiceTest {
 
     private static User userEnrolando() {
         return new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, false, "JBSWY3DPEHPK3PXP");
+                UserRole.USER, true, 0, false, "JBSWY3DPEHPK3PXP", null);
     }
 
     @Test
@@ -107,7 +107,7 @@ class ConfirmTotpServiceTest {
     @Test
     void confirmar_sin_enrolamiento_previo_lanza_invalid_totp() {
         User sinSecreto = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, false, null);
+                UserRole.USER, true, 0, false, null, null);
         when(userRepository.findById(7L)).thenReturn(Optional.of(sinSecreto));
 
         assertThatThrownBy(() -> service.confirm(new ConfirmTotpCommand(7L, "123456")))
@@ -117,7 +117,7 @@ class ConfirmTotpServiceTest {
     @Test
     void confirmar_con_totp_ya_activo_lanza() {
         User yaActivo = new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
-                UserRole.USER, true, 0, true, "JBSWY3DPEHPK3PXP");
+                UserRole.USER, true, 0, true, "JBSWY3DPEHPK3PXP", null);
         when(userRepository.findById(7L)).thenReturn(Optional.of(yaActivo));
 
         assertThatThrownBy(() -> service.confirm(new ConfirmTotpCommand(7L, "123456")))

@@ -2,6 +2,9 @@ package com.fusaroute.domain.model;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
+import java.time.Instant;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -28,13 +31,66 @@ class UserTest {
         User original = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
                 null, UserRole.USER, true, 2);
 
-        User updated = original.registerFailedLogin();
+        User updated = original.registerFailedLogin(Instant.now());
 
         assertThat(updated.getFailedLoginAttempts()).isEqualTo(3);
         assertThat(updated.getId()).isEqualTo(1L);
         assertThat(updated.getEmail()).isEqualTo(original.getEmail());
         // El original no se muto
         assertThat(original.getFailedLoginAttempts()).isEqualTo(2);
+    }
+
+    // --- Bloqueo temporal (SCRUM-155). -------------------------------------------
+
+    @Test
+    void registerFailedLogin_por_debajo_del_umbral_no_bloquea() {
+        User original = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, 2);
+
+        User updated = original.registerFailedLogin(Instant.now());
+
+        assertThat(updated.getFailedLoginAttempts()).isEqualTo(3);
+        assertThat(updated.getLockedUntil()).isNull();
+    }
+
+    @Test
+    void registerFailedLogin_al_alcanzar_el_umbral_bloquea_por_la_duracion_configurada() {
+        User original = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, User.MAX_FAILED_ATTEMPTS - 1);
+        Instant now = Instant.now();
+
+        User updated = original.registerFailedLogin(now);
+
+        assertThat(updated.getFailedLoginAttempts()).isEqualTo(User.MAX_FAILED_ATTEMPTS);
+        assertThat(updated.getLockedUntil()).isEqualTo(now.plus(User.LOCK_DURATION));
+        assertThat(updated.isLocked(now)).isTrue();
+    }
+
+    @Test
+    void isLocked_es_falso_sin_lockedUntil_o_cuando_ya_expiro() {
+        User sinBloqueo = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, 0);
+        Instant now = Instant.now();
+        User bloqueoExpirado = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, User.MAX_FAILED_ATTEMPTS, false, null,
+                now.minus(Duration.ofSeconds(1)));
+
+        assertThat(sinBloqueo.isLocked(now)).isFalse();
+        assertThat(bloqueoExpirado.isLocked(now)).isFalse();
+    }
+
+    @Test
+    void clearLockAndResetAttempts_borra_el_bloqueo_y_reinicia_el_contador() {
+        Instant now = Instant.now();
+        User bloqueado = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, User.MAX_FAILED_ATTEMPTS, false, null,
+                now.plus(User.LOCK_DURATION));
+
+        User limpio = bloqueado.clearLockAndResetAttempts();
+
+        assertThat(limpio.getFailedLoginAttempts()).isZero();
+        assertThat(limpio.getLockedUntil()).isNull();
+        assertThat(limpio.isLocked(now)).isFalse();
     }
 
     @Test
@@ -156,17 +212,17 @@ class UserTest {
         // Protege contra una fila incoherente (totp_enabled=true, totp_secret=null)
         // que la restriccion ck_users_totp_consistency de V7 ya impide a nivel BD.
         assertThatThrownBy(() -> new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
-                null, UserRole.USER, true, 0, true, null))
+                null, UserRole.USER, true, 0, true, null, null))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
     @Test
     void copias_conservan_el_estado_totp() {
         User activated = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
-                null, UserRole.USER, true, 0, true, "JBSWY3DPEHPK3PXP");
+                null, UserRole.USER, true, 0, true, "JBSWY3DPEHPK3PXP", null);
 
-        assertThat(activated.registerFailedLogin().isTotpEnabled()).isTrue();
-        assertThat(activated.registerFailedLogin().getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
+        assertThat(activated.registerFailedLogin(Instant.now()).isTotpEnabled()).isTrue();
+        assertThat(activated.registerFailedLogin(Instant.now()).getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
         assertThat(activated.resetFailedLogins().isTotpEnabled()).isTrue();
         assertThat(activated.updateProfile("Ana M", Email.of("ana@x.co"), null).isTotpEnabled()).isTrue();
         assertThat(activated.withPasswordHash("$2a$12$otro").getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");

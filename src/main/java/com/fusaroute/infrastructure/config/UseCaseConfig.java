@@ -112,9 +112,10 @@ public class UseCaseConfig {
                                      TokenIssuerPort tokenIssuer,
                                      TotpPort totp,
                                      RecoveryCodePort recoveryCodes,
-                                     RecoveryCodeRepositoryPort recoveryCodeRepository) {
+                                     RecoveryCodeRepositoryPort recoveryCodeRepository,
+                                     Clock clock) {
         return new LoginService(userRepository, passwordHasher, tokenIssuer, totp,
-                recoveryCodes, recoveryCodeRepository);
+                recoveryCodes, recoveryCodeRepository, clock);
     }
 
     @Bean
