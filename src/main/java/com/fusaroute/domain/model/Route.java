@@ -8,21 +8,96 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalDouble;
+import java.util.OptionalInt;
+import java.util.regex.Pattern;
 
 /**
  * Ruta de buseta: un recorrido directo de un solo tramo, con sus barrios en orden
- * de recorrido y sus tarifas. Ida y vuelta son dos rutas independientes.
+ * de recorrido y sus tarifas.
+ *
+ * Una ruta = un letrero = un sentido (SCRUM-184). El letrero que la buseta lleva en
+ * el parabrisas identifica un recorrido en un sentido, asi que el recorrido de vuelta,
+ * cuando se modele, es otra ruta con su propio letrero — nunca una columna "sentido"
+ * sobre esta.
  */
-public record Route(Long id, String name, RouteType type, RouteStatus status,
+public record Route(Long id, String name, String signFile, RouteType type, RouteStatus status,
                     List<String> neighborhoods, List<Fare> fares, List<Coordinate> path) {
+
+    /** Mismo formato que obliga ck_routes_sign_file en la base (V14). */
+    private static final Pattern SIGN_FILE = Pattern.compile("^[A-Z0-9_]+$");
 
     public Route {
         Objects.requireNonNull(name, "name");
         Objects.requireNonNull(type, "type");
         Objects.requireNonNull(status, "status");
+        // signFile null es valido: tres rutas del catalogo no tienen letrero fotografiado.
+        if (signFile != null && !SIGN_FILE.matcher(signFile).matches()) {
+            throw new IllegalArgumentException(
+                    "signFile debe ser MAYUSCULAS, digitos y guion bajo: " + signFile);
+        }
         neighborhoods = List.copyOf(neighborhoods);
         fares = List.copyOf(fares);
         path = List.copyOf(path);
+    }
+
+    /**
+     * Indice del primer lugar del recorrido que coincide con {@code term}, pensado para
+     * la punta de ORIGEN de una busqueda.
+     *
+     * <p>La coincidencia se decide en dos pasos, en este orden:
+     *
+     * <ol>
+     *   <li>igualdad del nombre {@linkplain PlaceName#normalize normalizado};</li>
+     *   <li>si ninguno iguala, que el termino este contenido en el nombre normalizado.</li>
+     * </ol>
+     *
+     * <p>El orden importa y no es un detalle: varias rutas pasan por {@code 'Centro'} y
+     * tambien por {@code 'Centro Comercial Manila'}. Sin la preferencia por la igualdad,
+     * buscar "Centro" caeria en el centro comercial si ese aparece antes en la lista, y
+     * el punto de abordaje saldria en otro barrio. Con ella, la contencion solo entra
+     * cuando el usuario escribio algo que no es un lugar completo.
+     *
+     * @return vacio si {@code term} es nulo, vacio o no coincide con ningun lugar
+     */
+    public OptionalInt indexOfPlace(String term) {
+        return indexOfPlace(term, false);
+    }
+
+    /**
+     * Como {@link #indexOfPlace(String)} pero devuelve el ULTIMO lugar que coincide,
+     * pensado para la punta de DESTINO.
+     *
+     * <p>Primero para el origen y ultimo para el destino es lo que hace que una ruta
+     * circular siga siendo candidata: la busqueda exige que el origen vaya antes que el
+     * destino en el recorrido, y un recorrido que vuelve a pasar por el mismo sector
+     * repite nombres parecidos al principio y al final.
+     */
+    public OptionalInt lastIndexOfPlace(String term) {
+        return indexOfPlace(term, true);
+    }
+
+    private OptionalInt indexOfPlace(String term, boolean last) {
+        String needle = PlaceName.normalize(term);
+        if (needle.isEmpty()) {
+            return OptionalInt.empty();
+        }
+        OptionalInt exact = scan(needle, last, true);
+        return exact.isPresent() ? exact : scan(needle, last, false);
+    }
+
+    private OptionalInt scan(String needle, boolean last, boolean exact) {
+        int found = -1;
+        for (int i = 0; i < neighborhoods.size(); i++) {
+            String place = PlaceName.normalize(neighborhoods.get(i));
+            boolean hit = exact ? place.equals(needle) : place.contains(needle);
+            if (hit) {
+                found = i;
+                if (!last) {
+                    break;
+                }
+            }
+        }
+        return found == -1 ? OptionalInt.empty() : OptionalInt.of(found);
     }
 
     public boolean isActive() {
@@ -55,13 +130,17 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
      * un GPS. No es un centroide real del barrio.
      *
      * @return vacio si la ruta no tiene trazado cargado todavia o si {@code name} no
-     *     esta en {@link #neighborhoods()} de esta ruta
+     *     coincide con ningun lugar de {@link #neighborhoods()} de esta ruta
      */
     public Optional<Coordinate> pointAtNeighborhood(String name) {
-        int index = neighborhoods.indexOf(name);
-        if (index == -1 || path.size() < 2) {
+        // Misma regla de coincidencia que usa la busqueda para elegir candidatas: si
+        // ahi 'u hospital exito' calza con 'U. Hospital Éxito', aqui tambien, o la
+        // ruta entraria como candidata y luego se quedaria sin punto de abordaje.
+        OptionalInt match = indexOfPlace(name);
+        if (match.isEmpty() || path.size() < 2) {
             return Optional.empty();
         }
+        int index = match.getAsInt();
         double fraction = neighborhoods.size() == 1 ? 0d : (double) index / (neighborhoods.size() - 1);
         return Optional.of(PathProjection.pointAtFraction(path, fraction));
     }
@@ -140,7 +219,7 @@ public record Route(Long id, String name, RouteType type, RouteStatus status,
         List<Fare> current = latestByPoint.values().stream()
                 .sorted(Comparator.comparing(Fare::amount).thenComparingInt(Fare::orderIndex))
                 .toList();
-        return new Route(id, name, type, status, neighborhoods, current, path);
+        return new Route(id, name, signFile, type, status, neighborhoods, current, path);
     }
 
     /**

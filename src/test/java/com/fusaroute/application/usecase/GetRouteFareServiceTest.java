@@ -33,12 +33,13 @@ class GetRouteFareServiceTest {
     private RouteRepositoryPort routeRepository;
 
     private static Route urbana(RouteStatus status, List<Fare> fares) {
-        return new Route(1L, "Centro - Terminal", RouteType.URBANA, status, List.of("Centro", "Terminal"), fares,
+        return new Route(1L, "Centro - Terminal", "CENTRO_TERMINAL", RouteType.URBANA, status,
+                List.of("Centro", "Terminal"), fares,
                 List.of());
     }
 
     private static Route intermunicipal(RouteStatus status, List<Fare> fares) {
-        return new Route(7L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, status,
+        return new Route(7L, "Fusagasugá - Pasca", null, RouteType.INTERMUNICIPAL, status,
                 List.of("Fusagasugá", "Alaska", "Pasca"), fares, List.of());
     }
 

@@ -6,7 +6,6 @@ import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
-import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import io.swagger.v3.oas.annotations.Operation;
@@ -30,20 +29,17 @@ public class RouteController {
     private final GetCongestionWarningUseCase getCongestionWarningUseCase;
     private final GetRouteFareUseCase getRouteFareUseCase;
     private final SearchRouteUseCase searchRouteUseCase;
-    private final GetRouteSignsUseCase getRouteSignsUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
                            GetRouteDetailUseCase getRouteDetailUseCase,
                            GetCongestionWarningUseCase getCongestionWarningUseCase,
                            GetRouteFareUseCase getRouteFareUseCase,
-                           SearchRouteUseCase searchRouteUseCase,
-                           GetRouteSignsUseCase getRouteSignsUseCase) {
+                           SearchRouteUseCase searchRouteUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
         this.getCongestionWarningUseCase = getCongestionWarningUseCase;
         this.getRouteFareUseCase = getRouteFareUseCase;
         this.searchRouteUseCase = searchRouteUseCase;
-        this.getRouteSignsUseCase = getRouteSignsUseCase;
     }
 
     @Operation(summary = "Listar rutas activas", description = "Retorna la lista de todas las rutas de buseta que se encuentran activas")
@@ -74,7 +70,7 @@ public class RouteController {
         RouteSearchResult result = searchRouteUseCase.findBestRoute(
                 originNeighborhood, coordinateOf(originLat, originLng),
                 destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
-        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
+        return RouteSearchResponse.from(result);
     }
 
     /**
@@ -98,7 +94,7 @@ public class RouteController {
         RouteSearchResult result = searchRouteUseCase.findBestRouteOffline(
                 originNeighborhood, coordinateOf(originLat, originLng),
                 destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
-        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
+        return RouteSearchResponse.from(result);
     }
 
     /**
@@ -127,8 +123,7 @@ public class RouteController {
         // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
         // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
         return RouteDetailResponse.from(route,
-                getCongestionWarningUseCase.forRoute(route.neighborhoods()),
-                getRouteSignsUseCase.forRoute(route.id()));
+                getCongestionWarningUseCase.forRoute(route.neighborhoods()));
     }
 
     @Operation(summary = "Costo del pasaje de una ruta",

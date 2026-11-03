@@ -17,6 +17,7 @@ import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
@@ -246,12 +247,28 @@ public class SearchRouteService implements SearchRouteUseCase {
         return Math.abs(dropOff.get().distanceAlongPathInMeters() - boarding.get().distanceAlongPathInMeters());
     }
 
+    /**
+     * La ruta conecta origen con destino si pasa por los dos y el origen va antes que el
+     * destino en el recorrido.
+     *
+     * La coincidencia de nombres la decide el dominio ({@link Route#indexOfPlace} y
+     * {@link Route#lastIndexOfPlace}), que normaliza mayusculas y tildes y acepta
+     * coincidencia parcial. Antes se comparaba con {@code List.indexOf}, es decir
+     * {@code String.equals}, y eso dejaba incomunicadas rutas que pasan por el mismo
+     * sitio escrito distinto en la semilla ('Terminal de Transporte' en una,
+     * 'Terminal de transportes' en otra).
+     *
+     * El origen busca la PRIMERA coincidencia y el destino la ULTIMA, para que una ruta
+     * que vuelve a pasar por el sector de salida siga cumpliendo origen antes que
+     * destino. La condicion de orden sigue siendo estricta: una ruta que pasa por los
+     * dos lugares pero en el orden contrario no es candidata — ese es el sentido
+     * opuesto, y es otra ruta con su propio letrero.
+     */
     private boolean connects(Route route, String origin, String destination) {
-        List<String> path = route.neighborhoods();
-        int originIdx = path.indexOf(origin);
-        int destIdx = path.indexOf(destination);
+        OptionalInt originIdx = route.indexOfPlace(origin);
+        OptionalInt destIdx = route.lastIndexOfPlace(destination);
 
-        // Debe contener ambos barrios y el origen debe estar antes que el destino
-        return originIdx != -1 && destIdx != -1 && originIdx < destIdx;
+        return originIdx.isPresent() && destIdx.isPresent()
+                && originIdx.getAsInt() < destIdx.getAsInt();
     }
 }

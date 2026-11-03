@@ -1,15 +1,17 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.model.RouteSearchResult;
-import com.fusaroute.domain.model.RouteSign;
 
 import java.time.Duration;
 import java.time.LocalDate;
-import java.util.List;
 
 /**
  * Resultado de GET /api/routes/search y de su variante /search/offline: la ruta
  * sugerida y la ultima milla en cada punta.
+ *
+ * El letrero de la ruta sugerida viaja dentro de {@code route.signFile} (SCRUM-184).
+ * Ya no hay un campo {@code signs} aparte: con un letrero por ruta, el dato cabe en
+ * {@link RouteResponse} y no hace falta sacarlo del objeto de la ruta.
  *
  * @param estimatedMinutes tiempo en buseta; {@code null} en la busqueda offline, que
  *     no consulta a Google y por tanto no tiene con que estimarlo. Tambien queda
@@ -24,22 +26,17 @@ import java.util.List;
  * @param path trazado de la ruta sugerida como LineString de GeoJSON; {@code null} si
  *     la ruta todavia no tiene trazado cargado. Permite pintar el mapa en el resultado
  *     de la busqueda sin pedir el detalle completo, como ya hace {@link RouteDetailResponse}.
- *     Pesa (~50 vertices) pero es el mismo dato que el detalle ya expone; el ahorro
- *     que daba separar listado y detalle no aplica aqui, donde la busqueda devuelve
- *     exactamente una ruta
- * @param signs letreros fisicos de la ruta sugerida (SCRUM-176); lista vacia si
- *     todavia no hay evidencia de campo. Va aqui y no dentro de {@code route} porque
- *     {@link RouteResponse} se queda liviano a proposito para el listado publico.
+ *     Pesa, pero es el mismo dato que el detalle ya expone; el ahorro que daba separar
+ *     listado y detalle no aplica aqui, donde la busqueda devuelve exactamente una ruta
  * @param lastUpdatedAt el {@code validFrom} mas reciente entre las tarifas vigentes de
- *     la ruta sugerida (RF-06); {@code null} si no tiene ninguna. Por la misma razon
- *     que {@code signs}, va aqui y no en {@code route}: el listado publico no lo lleva.
+ *     la ruta sugerida (RF-06); {@code null} si no tiene ninguna. Va aqui y no en
+ *     {@code route} porque el listado publico no lo lleva
  */
 public record RouteSearchResponse(RouteResponse route, Long estimatedMinutes, Long travelDistanceInMeters,
                                   BoardingPointResponse boarding, BoardingPointResponse dropOff,
-                                  GeoJsonLineStringResponse path,
-                                  List<RouteSignResponse> signs, LocalDate lastUpdatedAt) {
+                                  GeoJsonLineStringResponse path, LocalDate lastUpdatedAt) {
 
-    static RouteSearchResponse from(RouteSearchResult result, List<RouteSign> signs) {
+    static RouteSearchResponse from(RouteSearchResult result) {
         return new RouteSearchResponse(
                 RouteResponse.from(result.route()),
                 result.travelTime().map(Duration::toMinutes).orElse(null),
@@ -47,7 +44,6 @@ public record RouteSearchResponse(RouteResponse route, Long estimatedMinutes, Lo
                 result.boarding().map(BoardingPointResponse::from).orElse(null),
                 result.dropOff().map(BoardingPointResponse::from).orElse(null),
                 GeoJsonLineStringResponse.from(result.route().path()),
-                RouteSignResponse.from(signs),
                 result.route().lastFareUpdate().orElse(null));
     }
 }

@@ -8,19 +8,13 @@ import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
-import com.fusaroute.domain.model.RouteSign;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
-import com.fusaroute.domain.model.SignLine;
-import com.fusaroute.domain.model.SignPlate;
-import com.fusaroute.domain.model.SignSense;
-import com.fusaroute.domain.model.SignTemplate;
 import com.fusaroute.domain.model.TrafficSector;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase.RouteFare;
-import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
@@ -79,22 +73,20 @@ class RouteControllerTest {
     @MockitoBean
     private SearchRouteUseCase searchRouteUseCase;
 
-    @MockitoBean
-    private GetRouteSignsUseCase getRouteSignsUseCase;
-
     /**
-     * Por defecto no hay trancones ni letreros: cada test que los necesite los
-     * declara. Sin este stub, el mock de {@code getRouteSignsUseCase} devolveria
-     * null y el controlador reventaria al armar la lista de letreros.
+     * Por defecto no hay trancones: cada test que los necesite los declara. Sin este
+     * stub, el mock devolveria null y el controlador reventaria al armar la lista de
+     * sectores. Los letreros ya no necesitan stub: desde SCRUM-184 el letrero es un
+     * campo de la propia ruta ({@code signFile}), no una consulta aparte.
      */
     @BeforeEach
-    void sinCongestionNiLetrerosSalvoQueElTestDigaOtraCosa() {
+    void sinCongestionSalvoQueElTestDigaOtraCosa() {
         when(getCongestionWarningUseCase.forRoute(any())).thenReturn(new CongestionWarning(List.of()));
-        when(getRouteSignsUseCase.forRoute(any())).thenReturn(List.of());
     }
 
     private static Route urbana() {
-        return new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
+        return new Route(1L, "Camino Real - La Pampa", "HOSPITAL_BATALLON_LA_PAMPA_LLANO_GRANDE",
+                RouteType.URBANA, RouteStatus.ACTIVA,
                 List.of("Centro", "La Pampa"),
                 List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
                 List.of());
@@ -102,14 +94,15 @@ class RouteControllerTest {
 
     /** Misma ruta urbana, pero con su trazado GeoJSON ya cargado. */
     private static Route urbanaConTrazado() {
-        return new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
+        return new Route(1L, "Camino Real - La Pampa", "HOSPITAL_BATALLON_LA_PAMPA_LLANO_GRANDE",
+                RouteType.URBANA, RouteStatus.ACTIVA,
                 List.of("Centro", "La Pampa"),
                 List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
                 List.of(new Coordinate(4.3433, -74.3661), new Coordinate(4.3300, -74.3600)));
     }
 
     private static Route intermunicipal() {
-        return new Route(2L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA,
+        return new Route(2L, "Fusagasugá - Pasca", null, RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA,
                 List.of("Fusagasugá", "Alaska", "Pasca"),
                 List.of(new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
                         new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16))),
@@ -147,13 +140,14 @@ class RouteControllerTest {
     }
 
     @Test
-    void el_listado_no_lleva_letreros_igual_que_no_lleva_trazado() throws Exception {
-        // RouteResponse se queda liviano a proposito (SCRUM-176): el letrero vive en
-        // el detalle y en la busqueda, nunca en las 9 filas del catalogo publico.
+    void el_listado_lleva_el_archivo_del_letrero() throws Exception {
+        // SCRUM-184: el catalogo tambien muestra el letrero, y signFile son 140
+        // caracteres como maximo. No es el trazado, que si se queda fuera del listado.
         when(listActiveRoutesUseCase.listActive()).thenReturn(List.of(urbana()));
 
         mockMvc.perform(get("/api/routes"))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].signFile").value("HOSPITAL_BATALLON_LA_PAMPA_LLANO_GRANDE"))
                 .andExpect(jsonPath("$[0].signs").doesNotExist());
     }
 
@@ -190,7 +184,8 @@ class RouteControllerTest {
 
     @Test
     void el_detalle_de_una_ruta_sin_tarifas_vigentes_responde_lastUpdatedAt_null() throws Exception {
-        Route sinTarifas = new Route(1L, "Camino Real - La Pampa", RouteType.URBANA, RouteStatus.ACTIVA,
+        Route sinTarifas = new Route(1L, "Camino Real - La Pampa", "HOSPITAL_BATALLON_LA_PAMPA_LLANO_GRANDE",
+                RouteType.URBANA, RouteStatus.ACTIVA,
                 List.of("Centro", "La Pampa"), List.of(), List.of());
         when(getRouteDetailUseCase.getById(1L)).thenReturn(sinTarifas);
 
@@ -267,41 +262,30 @@ class RouteControllerTest {
     }
 
     @Test
-    void el_detalle_trae_los_letreros_de_la_ruta_en_orden() throws Exception {
-        // 'Camino Real - La Pampa' es el caso real con mas letreros (SCRUM-176, V11):
-        // uno SUBIENDO y dos BAJANDO, de dos busetas distintas.
+    void el_detalle_trae_el_archivo_del_letrero_y_ya_no_una_lista_de_placas() throws Exception {
+        // SCRUM-184: una ruta = un letrero = un sentido. Donde antes viajaba una lista
+        // de placas con sus lineas y colores (SCRUM-176) ahora viaja un solo nombre de
+        // archivo, y el frontend lo resuelve a public/letreros/<signFile>.svg.
         when(getRouteDetailUseCase.getById(1L)).thenReturn(urbana());
-        RouteSign subiendo = new RouteSign("LC-008", SignSense.SUBIENDO, "20260927_150814.jpg",
-                "20260927_150814.jpg", LocalDate.of(2026, 9, 27),
-                List.of(new SignPlate(SignTemplate.TABLA_FRANJAS, null,
-                        List.of(new SignLine("CAMINO REAL", "#2F8F6A", "#E8F5EE")))));
-        RouteSign bajando = new RouteSign("LC-015", SignSense.BAJANDO, "20260927_151514.jpg",
-                "20260927_151514.jpg", LocalDate.of(2026, 9, 27),
-                List.of(new SignPlate(SignTemplate.TABLA_FRANJAS, null,
-                        List.of(new SignLine("LA PAMPA", "#FFFFFF", "#8A3A2A")))));
-        when(getRouteSignsUseCase.forRoute(1L)).thenReturn(List.of(subiendo, bajando));
 
         mockMvc.perform(get("/api/routes/1"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.signs.length()").value(2))
-                .andExpect(jsonPath("$.signs[0].fieldId").value("LC-008"))
-                .andExpect(jsonPath("$.signs[0].sense").value("SUBIENDO"))
-                .andExpect(jsonPath("$.signs[0].plates[0].template").value("TABLA_FRANJAS"))
-                .andExpect(jsonPath("$.signs[0].plates[0].lines[0].text").value("CAMINO REAL"))
-                .andExpect(jsonPath("$.signs[1].fieldId").value("LC-015"))
-                .andExpect(jsonPath("$.signs[1].sense").value("BAJANDO"));
+                .andExpect(jsonPath("$.signFile").value("HOSPITAL_BATALLON_LA_PAMPA_LLANO_GRANDE"))
+                .andExpect(jsonPath("$.signs").doesNotExist());
     }
 
     @Test
-    void una_ruta_sin_evidencia_de_campo_responde_signs_vacio_y_no_null() throws Exception {
-        // Es el caso de 'Fusagasugá - Pasca', 'Gran Colombia' y 'Villa Leny - SENA
-        // Quebrajacho' (V11): ningun letrero fotografiado las respalda todavia.
+    void una_ruta_sin_letrero_responde_signFile_null() throws Exception {
+        // Tres rutas del catalogo se quedan sin letrero porque no hay foto que las
+        // respalde: 'Fusagasugá - Pasca', 'Villa Leny - SENA Quebrajacho' y
+        // 'Fusagasugá - Chinauta (Inspección El Triunfo)' (V15). El contrato es null y
+        // no una cadena vacia: el frontend no pinta nada, ni un hueco ni un letrero
+        // inventado.
         when(getRouteDetailUseCase.getById(2L)).thenReturn(intermunicipal());
 
         mockMvc.perform(get("/api/routes/2"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.signs").isArray())
-                .andExpect(jsonPath("$.signs.length()").value(0));
+                .andExpect(jsonPath("$.signFile").value(nullValue()));
     }
 
     @Test
@@ -390,7 +374,7 @@ class RouteControllerTest {
     void busqueda_devuelve_los_barrios_completos_y_en_orden_de_recorrido() throws Exception {
         // RF-05: la respuesta lleva TODOS los barrios en orden de recorrido. El recorte a 7
         // es presentacion del frontend; el backend nunca trunca ni reordena la lista.
-        Route conMuchosBarrios = new Route(2L, "Ruta larga", RouteType.URBANA, RouteStatus.ACTIVA,
+        Route conMuchosBarrios = new Route(2L, "Ruta larga", "RUTA_LARGA", RouteType.URBANA, RouteStatus.ACTIVA,
                 List.of("Centro", "Balmoral", "Pekin", "Antonia Santos", "Fusacatan",
                         "Los Comuneros", "Ciudad Jardin", "Cooviprof", "Potosi"),
                 List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
@@ -464,16 +448,12 @@ class RouteControllerTest {
     }
 
     @Test
-    void busqueda_trae_los_letreros_de_la_ruta_sugerida() throws Exception {
-        // SCRUM-176: el letrero viaja en la busqueda, no solo en el detalle, para que
-        // el resultado de busqueda (el criterio de aceptacion del issue) lo muestre.
+    void busqueda_trae_el_letrero_de_la_ruta_sugerida_dentro_de_route() throws Exception {
+        // El letrero viaja en la busqueda, no solo en el detalle, porque el resultado de
+        // busqueda tiene que mostrarlo. Desde SCRUM-184 va dentro de 'route' y no en un
+        // campo 'signs' aparte: con un letrero por ruta, el dato cabe en RouteResponse.
         when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
                 .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
-        RouteSign letrero = new RouteSign("LC-008", SignSense.SUBIENDO, "20260927_150814.jpg",
-                "20260927_150814.jpg", LocalDate.of(2026, 9, 27),
-                List.of(new SignPlate(SignTemplate.TABLA_FRANJAS, null,
-                        List.of(new SignLine("CAMINO REAL", "#2F8F6A", "#E8F5EE")))));
-        when(getRouteSignsUseCase.forRoute(1L)).thenReturn(List.of(letrero));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -483,8 +463,8 @@ class RouteControllerTest {
                         .param("destinationLat", "4.3300")
                         .param("destinationLng", "-74.3600"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.signs.length()").value(1))
-                .andExpect(jsonPath("$.signs[0].fieldId").value("LC-008"));
+                .andExpect(jsonPath("$.route.signFile").value("HOSPITAL_BATALLON_LA_PAMPA_LLANO_GRANDE"))
+                .andExpect(jsonPath("$.signs").doesNotExist());
     }
 
     @Test

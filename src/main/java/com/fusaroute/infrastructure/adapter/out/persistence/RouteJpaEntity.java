@@ -48,6 +48,14 @@ public class RouteJpaEntity {
     @Column(nullable = false, length = 140)
     private String name;
 
+    /**
+     * Archivo del letrero, sin extension (SCRUM-184). NULL en las tres rutas sin letrero
+     * fotografiado. La longitud y la nulabilidad tienen que coincidir exactamente con V14:
+     * los tres perfiles corren con {@code ddl-auto=validate} y el arranque falla si no.
+     */
+    @Column(name = "sign_file", length = 140)
+    private String signFile;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "route_type", nullable = false, length = 20)
     private RouteType type;
@@ -84,6 +92,10 @@ public class RouteJpaEntity {
 
     public Long getId() {
         return id;
+    }
+
+    public String getSignFile() {
+        return signFile;
     }
 
     public String getName() {
