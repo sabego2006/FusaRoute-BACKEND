@@ -32,7 +32,7 @@ class GetRouteDetailServiceTest {
     private RouteRepositoryPort routeRepository;
 
     private static Route route(RouteStatus status) {
-        return new Route(7L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, status,
+        return new Route(7L, "Fusagasugá - Pasca", null, RouteType.INTERMUNICIPAL, status,
                 List.of("Fusagasugá", "Alaska", "Pasca"),
                 List.of(new Fare("Alaska", BigDecimal.valueOf(3300), 3, LocalDate.of(2025, 1, 16)),
                         new Fare("Alaska", BigDecimal.valueOf(3550), 0, LocalDate.of(2026, 2, 5))),

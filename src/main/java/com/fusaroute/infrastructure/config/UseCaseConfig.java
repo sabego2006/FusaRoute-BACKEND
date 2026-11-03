@@ -7,7 +7,6 @@ import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
-import com.fusaroute.application.usecase.GetRouteSignsService;
 import com.fusaroute.application.usecase.GetTotpStatusService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
@@ -22,7 +21,6 @@ import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
-import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
@@ -34,7 +32,6 @@ import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
-import com.fusaroute.domain.port.out.RouteSignRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
@@ -80,11 +77,6 @@ public class UseCaseConfig {
     @Bean
     public GetRouteFareUseCase getRouteFareUseCase(RouteRepositoryPort routeRepository, Clock clock) {
         return new GetRouteFareService(routeRepository, clock);
-    }
-
-    @Bean
-    public GetRouteSignsUseCase getRouteSignsUseCase(RouteSignRepositoryPort routeSignRepository) {
-        return new GetRouteSignsService(routeSignRepository);
     }
 
     @Bean

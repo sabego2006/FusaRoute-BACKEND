@@ -6,8 +6,10 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 class RouteTest {
 
@@ -18,12 +20,12 @@ class RouteTest {
     }
 
     private static Route route(RouteType type, RouteStatus status, List<Fare> fares) {
-        return new Route(1L, "Ruta", type, status, List.of("A", "B"), fares, List.of());
+        return new Route(1L, "Ruta", "RUTA", type, status, List.of("A", "B"), fares, List.of());
     }
 
     /** Ruta cuyo trazado es un tramo recto de ~1.1 km sobre el paralelo 4. */
     private static Route routeConTrazado() {
-        return new Route(1L, "Ruta", RouteType.URBANA, RouteStatus.ACTIVA,
+        return new Route(1L, "Ruta", "RUTA", RouteType.URBANA, RouteStatus.ACTIVA,
                 List.of("A", "B"), List.of(),
                 List.of(new Coordinate(4.000, -74.000), new Coordinate(4.000, -74.010)));
     }
@@ -111,7 +113,7 @@ class RouteTest {
     @Test
     void un_barrio_intermedio_cae_a_su_fraccion_del_recorrido() {
         // Trazado recto de 3 barrios en orden: "B" (indice 1 de 3) cae a la mitad.
-        Route tresBarrios = new Route(1L, "Ruta", RouteType.URBANA, RouteStatus.ACTIVA,
+        Route tresBarrios = new Route(1L, "Ruta", "RUTA", RouteType.URBANA, RouteStatus.ACTIVA,
                 List.of("A", "B", "C"), List.of(),
                 List.of(new Coordinate(4.000, -74.000), new Coordinate(4.000, -74.010)));
 
@@ -281,5 +283,113 @@ class RouteTest {
 
         assertThat(vigente.lastFareUpdate()).isEqualTo(Optional.of(LocalDate.of(2026, 2, 5)));
         assertThat(route.lastFareUpdate()).isEqualTo(Optional.of(LocalDate.of(2026, 9, 28)));
+    }
+// --- signFile (SCRUM-184) -------------------------------------------------
+
+    @Test
+    void el_letrero_puede_ser_nulo_porque_tres_rutas_no_tienen_foto() {
+        Route sinLetrero = new Route(1L, "Fusagasugá - Pasca", null, RouteType.INTERMUNICIPAL,
+                RouteStatus.ACTIVA, List.of("Fusagasugá", "Pasca"), List.of(), List.of());
+
+        assertThat(sinLetrero.signFile()).isNull();
+    }
+
+    @Test
+    void el_letrero_con_formato_invalido_se_rechaza_en_el_constructor() {
+        // Mismo formato que obliga ck_routes_sign_file en V14: si el dominio lo aceptara,
+        // el error aparecería recién al escribir en la base.
+        assertThatThrownBy(() -> new Route(1L, "Ruta", "centro-galeria", RouteType.URBANA,
+                RouteStatus.ACTIVA, List.of("A"), List.of(), List.of()))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("centro-galeria");
+    }
+
+    @Test
+    void el_letrero_en_mayusculas_con_guion_bajo_se_acepta() {
+        Route conLetrero = new Route(1L, "Centro - Galería - Terminal", "CENTRO_GALERIA_TERMINAL",
+                RouteType.URBANA, RouteStatus.ACTIVA, List.of("A", "B"), List.of(), List.of());
+
+        assertThat(conLetrero.signFile()).isEqualTo("CENTRO_GALERIA_TERMINAL");
+    }
+
+    @Test
+    void filtrar_las_tarifas_vigentes_conserva_el_letrero() {
+        // withCurrentFares reconstruye el record: si se olvidara el campo, la ruta
+        // llegaría al detalle sin letrero solo por haber pasado por ahí.
+        Route route = route(RouteType.URBANA, RouteStatus.ACTIVA, List.of(fare(null, 2600, 0, "2026-02-05")));
+
+        assertThat(route.withCurrentFares(TODAY).signFile()).isEqualTo(route.signFile());
+    }
+
+    // --- Coincidencia de lugares (SCRUM-184) ----------------------------------
+
+    private static Route conLugares(String... lugares) {
+        return new Route(1L, "Ruta", "RUTA", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of(lugares), List.of(), List.of());
+    }
+
+    @Test
+    void la_coincidencia_ignora_mayusculas_tildes_y_puntos() {
+        Route route = conLugares("U. Hospital Éxito", "Maíz Amarillo");
+
+        assertThat(route.indexOfPlace("u hospital exito")).isEqualTo(OptionalInt.of(0));
+        assertThat(route.indexOfPlace("MAIZ AMARILLO")).isEqualTo(OptionalInt.of(1));
+    }
+
+    @Test
+    void la_coincidencia_exacta_le_gana_a_la_parcial_aunque_la_parcial_vaya_antes() {
+        // Es el caso que hace útil la regla: varias rutas pasan por un centro comercial
+        // antes que por el Centro. Sin la preferencia, buscar "Centro" daría el índice 0
+        // y el punto de abordaje saldría en otro barrio.
+        Route route = conLugares("Centro Comercial Manila", "Centro", "Terminal");
+
+        assertThat(route.indexOfPlace("Centro")).isEqualTo(OptionalInt.of(1));
+    }
+
+    @Test
+    void sin_coincidencia_exacta_se_acepta_que_el_termino_este_contenido() {
+        Route route = conLugares("Antiguo Colsubsidio", "Terminal");
+
+        assertThat(route.indexOfPlace("colsubsidio")).isEqualTo(OptionalInt.of(0));
+    }
+
+    @Test
+    void el_origen_toma_la_primera_coincidencia_y_el_destino_la_ultima() {
+        // Una ruta que vuelve a pasar por el sector de salida: con "primera para el
+        // origen, última para el destino" sigue cumpliendo origen antes que destino.
+        Route circular = conLugares("Centro", "Galería", "Terminal", "Galería", "Centro");
+
+        assertThat(circular.indexOfPlace("Centro")).isEqualTo(OptionalInt.of(0));
+        assertThat(circular.lastIndexOfPlace("Centro")).isEqualTo(OptionalInt.of(4));
+        assertThat(circular.lastIndexOfPlace("Galería")).isEqualTo(OptionalInt.of(3));
+    }
+
+    @Test
+    void un_termino_que_no_esta_en_la_ruta_no_coincide() {
+        Route route = conLugares("Centro", "Terminal");
+
+        assertThat(route.indexOfPlace("Chinauta")).isEmpty();
+        assertThat(route.lastIndexOfPlace("Chinauta")).isEmpty();
+    }
+
+    @Test
+    void un_termino_nulo_o_vacio_no_coincide_con_nada() {
+        // Si la cadena vacía se tratara como contenida en todo, cualquier lugar
+        // coincidiría y la búsqueda devolvería una ruta al azar.
+        Route route = conLugares("Centro", "Terminal");
+
+        assertThat(route.indexOfPlace(null)).isEmpty();
+        assertThat(route.indexOfPlace("   ")).isEmpty();
+    }
+
+    @Test
+    void el_punto_sobre_el_trazado_usa_la_misma_coincidencia_que_la_busqueda() {
+        // Si aquí se comparara distinto, la ruta entraría como candidata y después se
+        // quedaría sin punto de abordaje.
+        Route route = new Route(1L, "Ruta", "RUTA", RouteType.URBANA, RouteStatus.ACTIVA,
+                List.of("U. Hospital Éxito", "Terminal"), List.of(),
+                List.of(new Coordinate(4.000, -74.000), new Coordinate(4.000, -74.010)));
+
+        assertThat(route.pointAtNeighborhood("u hospital exito")).isPresent();
     }
 }

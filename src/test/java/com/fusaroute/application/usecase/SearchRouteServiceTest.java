@@ -53,17 +53,17 @@ class SearchRouteServiceTest {
     }
 
     private static Route route(long id, String name, RouteStatus status, String... neighborhoods) {
-        return new Route(id, name, RouteType.URBANA, status, List.of(neighborhoods), List.of(), List.of());
+        return new Route(id, name, null, RouteType.URBANA, status, List.of(neighborhoods), List.of(), List.of());
     }
 
     private static Route routeWithPath(long id, String name, List<Coordinate> path, String... neighborhoods) {
-        return new Route(id, name, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
+        return new Route(id, name, null, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
     }
 
     /** Misma forma que {@link #route}, pero con tarifas: para el caso de RF-06 en la busqueda. */
     private static Route routeWithFares(long id, String name, RouteType type, List<Fare> fares,
                                         String... neighborhoods) {
-        return new Route(id, name, type, RouteStatus.ACTIVA, List.of(neighborhoods), fares, List.of());
+        return new Route(id, name, null, type, RouteStatus.ACTIVA, List.of(neighborhoods), fares, List.of());
     }
 
     /** Trazado que pasa por el origen y el destino, asi la ultima milla no lo descarta. */
@@ -493,5 +493,60 @@ class SearchRouteServiceTest {
         assertThat(result.route().fares()).extracting(Fare::referencePoint)
                 .containsExactly("Corregimiento", "Alaska", "Pasca");
         assertThat(result.route().lastFareUpdate()).contains(LocalDate.of(2026, 2, 5));
+    }
+// --- Coincidencia de barrios (SCRUM-184) ----------------------------------
+
+    @Test
+    void la_deriva_de_mayusculas_de_la_semilla_ya_no_deja_una_ruta_fuera() {
+        // Caso real: V12 sembró 'Terminal de Transporte' en Gaitán y 'Terminal de
+        // transportes' en Siboney. Con String.equals, buscar desde una escritura dejaba
+        // fuera la ruta que usaba la otra.
+        Route siboney = route(1L, "Siboney", RouteStatus.ACTIVA, "Terminal de transportes", "Comuneros");
+        when(routeRepository.findAll()).thenReturn(List.of(siboney));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, siboney.path())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(
+                "Terminal de Transporte", Optional.of(ORIGIN), "Comuneros", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(siboney);
+    }
+
+    @Test
+    void las_tildes_del_barrio_ya_no_dejan_una_ruta_fuera() {
+        Route conTildes = route(1L, "Maíz Amarillo", RouteStatus.ACTIVA, "Maíz Amarillo", "Centro");
+        when(routeRepository.findAll()).thenReturn(List.of(conTildes));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, conTildes.path())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(
+                "maiz amarillo", Optional.of(ORIGIN), "centro", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(conTildes);
+    }
+
+    @Test
+    void el_termino_contenido_en_el_nombre_del_lugar_tambien_encuentra_la_ruta() {
+        // Los lugares nuevos del letrero son largos ('Antiguo Colsubsidio'): escribir
+        // solo 'Colsubsidio' tiene que servir.
+        Route larga = route(1L, "Olaya", RouteStatus.ACTIVA, "Antiguo Colsubsidio", "Barrio Olaya");
+        when(routeRepository.findAll()).thenReturn(List.of(larga));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, larga.path())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(
+                "Colsubsidio", Optional.of(ORIGIN), "Olaya", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(larga);
+    }
+
+    @Test
+    void el_sentido_contrario_sigue_quedando_fuera_pese_a_la_coincidencia_flexible() {
+        // La condición origen antes que destino no se relaja: el sentido opuesto es otra
+        // ruta, con su propio letrero. Si esto fallara, la búsqueda devolvería una buseta
+        // que no lleva al usuario a donde va.
+        Route contraria = route(1L, "Contraria", RouteStatus.ACTIVA, "TERMINAL", "centro");
+        when(routeRepository.findAll()).thenReturn(List.of(contraria));
+
+        assertThatThrownBy(() -> service().findBestRoute(
+                "Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
+                .isInstanceOf(NoRouteAvailableException.class);
     }
 }
