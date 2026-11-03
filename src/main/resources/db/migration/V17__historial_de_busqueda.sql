@@ -1,16 +1,34 @@
--- V13 — Historial de las ultimas busquedas por usuario (RF-07, SCRUM-20).
+-- V17 — Historial de las ultimas busquedas por usuario (RF-07, SCRUM-20).
 --
--- Flyway es el dueno del esquema. V1..V12 ya se aplicaron y NO se tocan: editar
+-- Flyway es el dueno del esquema. Las migraciones ya aplicadas NO se tocan: editar
 -- una migracion ya aplicada cambia su checksum y rompe el arranque.
 --
 -- Esta migracion llegaba tarde: el commit 6124d84 introdujo
 -- SearchHistoryJpaEntity y su repositorio sin el .sql correspondiente, asi que
 -- el arranque en DEV fallaba con
 -- "Schema-validation: missing table [search_history]" (ddl-auto=validate).
--- Va como V13 porque V12 ya la ocupa V12__rutas_gaitan_san_antonio_siboney.sql,
--- que entro en main por el PR #64 mientras esta rama estaba abierta. Dos
--- migraciones con el mismo numero rompen el arranque con un error de version
--- duplicada, asi que la que llega despues renumera.
+--
+-- HISTORIA DEL NUMERO, que importa para entender el estado de DEV:
+--
+--   1. Nacio como V12 y con ese numero se aplico en el proyecto Supabase de DEV
+--      (fusaroute_dev) el 2026-10-29. DEV todavia tiene esa fila:
+--      version 12, script 'V12__historial_de_busqueda.sql'.
+--   2. Paso a V13 porque V12 la ocupo en main V12__rutas_gaitan_san_antonio_siboney.sql
+--      (PR #64, mergeado mientras esta rama estaba abierta).
+--   3. Pasa a V17 (SCRUM-184) porque V13 la habria pisado el trabajo de letreros y
+--      trazados, que tomo V14, V15 y V16. Esta rama sigue sin mergear, asi que
+--      renumerar su archivo no rompe ningun checksum en el repo.
+--
+-- Consecuencia que hay que resolver APARTE de este PR: DEV quedo con la version 12
+-- ocupada por un script que ya no existe con ese nombre, asi que el V12 de main
+-- (las rutas Gaitan / San Antonio / Siboney) no puede aplicarse ahi y el arranque
+-- contra DEV falla por desajuste de descripcion y checksum en la version 12. No se
+-- arregla desde aqui: hay que reparar el historial de DEV o reconstruirlo, y es una
+-- decision de equipo porque la base es compartida.
+--
+-- Leccion, dicha para que no se repita: no aplicar en una base compartida la
+-- migracion de una rama sin mergear. El numero todavia puede cambiar, y la base se
+-- queda con una version que el repo ya no reconoce.
 --
 -- V10 nunca existio en el repo: la plantilla
 -- docs/datos/plantilla-V10-sectores-congestion.sql se aplico finalmente como V9.
