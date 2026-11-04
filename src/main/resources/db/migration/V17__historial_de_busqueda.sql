@@ -19,12 +19,13 @@
 --      trazados, que tomo V14, V15 y V16. Esta rama sigue sin mergear, asi que
 --      renumerar su archivo no rompe ningun checksum en el repo.
 --
--- Consecuencia que hay que resolver APARTE de este PR: DEV quedo con la version 12
--- ocupada por un script que ya no existe con ese nombre, asi que el V12 de main
--- (las rutas Gaitan / San Antonio / Siboney) no puede aplicarse ahi y el arranque
--- contra DEV falla por desajuste de descripcion y checksum en la version 12. No se
--- arregla desde aqui: hay que reparar el historial de DEV o reconstruirlo, y es una
--- decision de equipo porque la base es compartida.
+-- Eso dejo a DEV con la version 12 ocupada por un script que el repo ya no reconoce
+-- con ese nombre, asi que el V12 de main (las rutas Gaitan / San Antonio / Siboney)
+-- no podia aplicarse ahi y el arranque contra DEV fallaba por desajuste de
+-- descripcion y checksum en la version 12. YA ESTA REPARADO: se borro esa fila del
+-- historial de Flyway y se elimino la tabla search_history, que estaba vacia y sin
+-- referencias. La vuelve a crear esta migracion cuando se mergee el PR, y el V12 de
+-- main se aplica normalmente.
 --
 -- Leccion, dicha para que no se repita: no aplicar en una base compartida la
 -- migracion de una rama sin mergear. El numero todavia puede cambiar, y la base se
