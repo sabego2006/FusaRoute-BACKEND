@@ -1,6 +1,7 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
+import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.model.BoardingPoint;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
@@ -8,12 +9,15 @@ import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
 import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
+import java.util.OptionalInt;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 
@@ -22,6 +26,8 @@ import io.micrometer.core.instrument.Timer;
  * Orquesta el filtrado de rutas candidatas y la selección de la mejor basada en tiempo.
  */
 public class SearchRouteService implements SearchRouteUseCase {
+
+    private static final Logger log = LoggerFactory.getLogger(SearchRouteService.class);
 
     private static final String LATENCY_METRIC = "fusaroute.search.route.latency";
 
@@ -73,6 +79,8 @@ public class SearchRouteService implements SearchRouteUseCase {
             Optional<BoardingPoint> bestBoarding = Optional.empty();
             Optional<BoardingPoint> bestDropOff = Optional.empty();
             Duration bestDoorToDoorRank = null;
+            boolean anyAttempted = false;
+            boolean anySucceeded = false;
             for (Route candidate : candidates) {
                 // SCRUM-130: el cliente ya no esta obligado a mandar coordenadas. Si no
                 // las mando, se deriva un punto aproximado del nombre del barrio sobre
@@ -93,9 +101,24 @@ public class SearchRouteService implements SearchRouteUseCase {
                 // Google: esta candidata queda sin tiempo real conocido, igual que hoy
                 // una ruta sin trazado queda sin ultima milla. No se descarta por esto —
                 // solo pierde siempre frente a cualquier candidata que si tenga tiempo.
-                Duration busTime = (from != null && to != null)
-                        ? travelTimePort.getTravelTime(from, to, candidate.path())
-                        : null;
+                //
+                // Que el puerto falle (p. ej. Distance Matrix caida o quota agotada) no
+                // tumba la busqueda: esta candidata queda sin tiempo real, igual que una
+                // sin trazado, y entra al ranking con UNKNOWN_TIME_RANK. Si al final del
+                // bucle NINGUNA pudo cronometrarse pero alguna lo intento, la busqueda
+                // online cae en modo offline: la primera del repositorio ganaria por el
+                // UNKNOWN_TIME_RANK compartido y es casi seguro peor que la de menor
+                // recorrido.
+                Duration busTime = null;
+                if (from != null && to != null) {
+                    anyAttempted = true;
+                    try {
+                        busTime = travelTimePort.getTravelTime(from, to, candidate.path());
+                        anySucceeded = true;
+                    } catch (TravelTimeUnavailableException e) {
+                        log.warn("Candidata '{}' sin tiempo real: {}", candidate.name(), e.getMessage());
+                    }
+                }
                 Duration doorToDoorRank = busTime == null
                         ? UNKNOWN_TIME_RANK
                         : walkingTime(boarding).plus(busTime).plus(walkingTime(dropOff));
@@ -107,6 +130,15 @@ public class SearchRouteService implements SearchRouteUseCase {
                     bestDropOff = dropOff;
                     bestDoorToDoorRank = doorToDoorRank;
                 }
+            }
+            // Degradacion: si todo lo que se intento cronometrar fallo, la busqueda online
+            // delega en la offline. No se inventa un tiempo (seria peor que no darlo), y
+            // elegir por menor recorrido es mejor que caer en la primera del repositorio
+            // por el UNKNOWN_TIME_RANK compartido. El timer de offline se registra ademas
+            // del de online: queda visible en metricas que esta ejecucion degrado.
+            if (anyAttempted && !anySucceeded) {
+                log.warn("Ninguna candidata pudo cronometrarse: delegando en modo offline");
+                return findBestRouteOffline(originNeighborhood, originCoord, destNeighborhood, destCoord);
             }
             // estimatedTime es el tramo en buseta, no el puerta a puerta: la caminata ya
             // viaja aparte en cada BoardingPoint, y el front la suma con esos datos.
@@ -215,12 +247,28 @@ public class SearchRouteService implements SearchRouteUseCase {
         return Math.abs(dropOff.get().distanceAlongPathInMeters() - boarding.get().distanceAlongPathInMeters());
     }
 
+    /**
+     * La ruta conecta origen con destino si pasa por los dos y el origen va antes que el
+     * destino en el recorrido.
+     *
+     * La coincidencia de nombres la decide el dominio ({@link Route#indexOfPlace} y
+     * {@link Route#lastIndexOfPlace}), que normaliza mayusculas y tildes y acepta
+     * coincidencia parcial. Antes se comparaba con {@code List.indexOf}, es decir
+     * {@code String.equals}, y eso dejaba incomunicadas rutas que pasan por el mismo
+     * sitio escrito distinto en la semilla ('Terminal de Transporte' en una,
+     * 'Terminal de transportes' en otra).
+     *
+     * El origen busca la PRIMERA coincidencia y el destino la ULTIMA, para que una ruta
+     * que vuelve a pasar por el sector de salida siga cumpliendo origen antes que
+     * destino. La condicion de orden sigue siendo estricta: una ruta que pasa por los
+     * dos lugares pero en el orden contrario no es candidata — ese es el sentido
+     * opuesto, y es otra ruta con su propio letrero.
+     */
     private boolean connects(Route route, String origin, String destination) {
-        List<String> path = route.neighborhoods();
-        int originIdx = path.indexOf(origin);
-        int destIdx = path.indexOf(destination);
+        OptionalInt originIdx = route.indexOfPlace(origin);
+        OptionalInt destIdx = route.lastIndexOfPlace(destination);
 
-        // Debe contener ambos barrios y el origen debe estar antes que el destino
-        return originIdx != -1 && destIdx != -1 && originIdx < destIdx;
+        return originIdx.isPresent() && destIdx.isPresent()
+                && originIdx.getAsInt() < destIdx.getAsInt();
     }
 }

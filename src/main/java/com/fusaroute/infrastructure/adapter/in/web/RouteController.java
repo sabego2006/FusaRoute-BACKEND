@@ -6,7 +6,6 @@ import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
-import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.RecordSearchUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
@@ -34,22 +33,19 @@ public class RouteController {
     private final GetRouteFareUseCase getRouteFareUseCase;
     private final SearchRouteUseCase searchRouteUseCase;
     private final RecordSearchUseCase recordSearchUseCase;
-    private final GetRouteSignsUseCase getRouteSignsUseCase;
 
     public RouteController(ListActiveRoutesUseCase listActiveRoutesUseCase,
                            GetRouteDetailUseCase getRouteDetailUseCase,
                            GetCongestionWarningUseCase getCongestionWarningUseCase,
                            GetRouteFareUseCase getRouteFareUseCase,
                            SearchRouteUseCase searchRouteUseCase,
-                           RecordSearchUseCase recordSearchUseCase,
-                           GetRouteSignsUseCase getRouteSignsUseCase) {
+                           RecordSearchUseCase recordSearchUseCase) {
         this.listActiveRoutesUseCase = listActiveRoutesUseCase;
         this.getRouteDetailUseCase = getRouteDetailUseCase;
         this.getCongestionWarningUseCase = getCongestionWarningUseCase;
         this.getRouteFareUseCase = getRouteFareUseCase;
         this.searchRouteUseCase = searchRouteUseCase;
         this.recordSearchUseCase = recordSearchUseCase;
-        this.getRouteSignsUseCase = getRouteSignsUseCase;
     }
 
     /**
@@ -96,7 +92,7 @@ public class RouteController {
                 originNeighborhood, coordinateOf(originLat, originLng),
                 destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
         recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
-        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
+        return RouteSearchResponse.from(result);
     }
 
     /**
@@ -124,7 +120,7 @@ public class RouteController {
         // El historial no distingue online de offline: para el usuario fue la misma
         // busqueda, y lo que repite despues es el par origen-destino.
         recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
-        return RouteSearchResponse.from(result, getRouteSignsUseCase.forRoute(result.route().id()));
+        return RouteSearchResponse.from(result);
     }
 
     /**
@@ -153,8 +149,7 @@ public class RouteController {
         // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
         // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
         return RouteDetailResponse.from(route,
-                getCongestionWarningUseCase.forRoute(route.neighborhoods()),
-                getRouteSignsUseCase.forRoute(route.id()));
+                getCongestionWarningUseCase.forRoute(route.neighborhoods()));
     }
 
     @Operation(summary = "Costo del pasaje de una ruta",

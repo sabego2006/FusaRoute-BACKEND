@@ -1,6 +1,7 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.NoRouteAvailableException;
+import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Fare;
 import com.fusaroute.domain.model.Route;
@@ -52,17 +53,17 @@ class SearchRouteServiceTest {
     }
 
     private static Route route(long id, String name, RouteStatus status, String... neighborhoods) {
-        return new Route(id, name, RouteType.URBANA, status, List.of(neighborhoods), List.of(), List.of());
+        return new Route(id, name, null, RouteType.URBANA, status, List.of(neighborhoods), List.of(), List.of());
     }
 
     private static Route routeWithPath(long id, String name, List<Coordinate> path, String... neighborhoods) {
-        return new Route(id, name, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
+        return new Route(id, name, null, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
     }
 
     /** Misma forma que {@link #route}, pero con tarifas: para el caso de RF-06 en la busqueda. */
     private static Route routeWithFares(long id, String name, RouteType type, List<Fare> fares,
                                         String... neighborhoods) {
-        return new Route(id, name, type, RouteStatus.ACTIVA, List.of(neighborhoods), fares, List.of());
+        return new Route(id, name, null, type, RouteStatus.ACTIVA, List.of(neighborhoods), fares, List.of());
     }
 
     /** Trazado que pasa por el origen y el destino, asi la ultima milla no lo descarta. */
@@ -409,6 +410,48 @@ class SearchRouteServiceTest {
         assertThat(result.travelDistance()).isEmpty();
     }
 
+    // --- Degradación cuando Google no responde ---
+
+    @Test
+    void si_una_candidata_falla_la_otra_que_responde_gana() {
+        // Produccion: a veces Google rechaza una llamada (quota, bloqueo pasajero) y
+        // responde la otra. La busqueda no se cae: la candidata que si tuvo tiempo gana.
+        Route caida = routeWithPath(1L, "Caida", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
+        Route viva = routeWithPath(2L, "Viva", trazadoCorridoAlNorte(80), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(caida, viva));
+        when(travelTimePort.getTravelTime(any(), any(), any())).thenAnswer(inv -> {
+            List<Coordinate> path = inv.getArgument(2);
+            if (path.equals(caida.path())) {
+                throw new TravelTimeUnavailableException("Distance Matrix fallo", null);
+            }
+            return Duration.ofMinutes(12);
+        });
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(viva);
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(12));
+    }
+
+    @Test
+    void si_google_falla_para_todas_las_candidatas_delega_en_offline_sin_tirar_la_busqueda() {
+        // Caso de PROD de 2026-10-29: REQUEST_DENIED en toda la busqueda. En vez de
+        // propagar un 503, se devuelve el resultado del modo offline: sin tiempo, con
+        // distancia, y la ganadora elegida por menor recorrido.
+        Route corta = routeWithPath(1L, "Corta", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
+        Route larga = routeWithPath(2L, "Larga",
+                List.of(ORIGIN, new Coordinate(4.3500, -74.3800), DESTINATION), "Centro", "Terminal");
+        when(routeRepository.findAll()).thenReturn(List.of(larga, corta));
+        when(travelTimePort.getTravelTime(any(), any(), any()))
+                .thenThrow(new TravelTimeUnavailableException("Distance Matrix respondio status=REQUEST_DENIED", null));
+
+        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(corta);
+        assertThat(result.travelTime()).isEmpty();
+        assertThat(result.travelDistance()).isPresent();
+    }
+
     @Test
     void la_busqueda_online_aplica_solo_las_tarifas_vigentes_a_la_ruta_sugerida() {
         // Caso de la ruta Pasca que V3 documenta: dos series de vigencia con order_index
@@ -450,5 +493,60 @@ class SearchRouteServiceTest {
         assertThat(result.route().fares()).extracting(Fare::referencePoint)
                 .containsExactly("Corregimiento", "Alaska", "Pasca");
         assertThat(result.route().lastFareUpdate()).contains(LocalDate.of(2026, 2, 5));
+    }
+// --- Coincidencia de barrios (SCRUM-184) ----------------------------------
+
+    @Test
+    void la_deriva_de_mayusculas_de_la_semilla_ya_no_deja_una_ruta_fuera() {
+        // Caso real: V12 sembró 'Terminal de Transporte' en Gaitán y 'Terminal de
+        // transportes' en Siboney. Con String.equals, buscar desde una escritura dejaba
+        // fuera la ruta que usaba la otra.
+        Route siboney = route(1L, "Siboney", RouteStatus.ACTIVA, "Terminal de transportes", "Comuneros");
+        when(routeRepository.findAll()).thenReturn(List.of(siboney));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, siboney.path())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(
+                "Terminal de Transporte", Optional.of(ORIGIN), "Comuneros", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(siboney);
+    }
+
+    @Test
+    void las_tildes_del_barrio_ya_no_dejan_una_ruta_fuera() {
+        Route conTildes = route(1L, "Maíz Amarillo", RouteStatus.ACTIVA, "Maíz Amarillo", "Centro");
+        when(routeRepository.findAll()).thenReturn(List.of(conTildes));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, conTildes.path())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(
+                "maiz amarillo", Optional.of(ORIGIN), "centro", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(conTildes);
+    }
+
+    @Test
+    void el_termino_contenido_en_el_nombre_del_lugar_tambien_encuentra_la_ruta() {
+        // Los lugares nuevos del letrero son largos ('Antiguo Colsubsidio'): escribir
+        // solo 'Colsubsidio' tiene que servir.
+        Route larga = route(1L, "Olaya", RouteStatus.ACTIVA, "Antiguo Colsubsidio", "Barrio Olaya");
+        when(routeRepository.findAll()).thenReturn(List.of(larga));
+        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, larga.path())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(
+                "Colsubsidio", Optional.of(ORIGIN), "Olaya", Optional.of(DESTINATION));
+
+        assertThat(result.route()).isEqualTo(larga);
+    }
+
+    @Test
+    void el_sentido_contrario_sigue_quedando_fuera_pese_a_la_coincidencia_flexible() {
+        // La condición origen antes que destino no se relaja: el sentido opuesto es otra
+        // ruta, con su propio letrero. Si esto fallara, la búsqueda devolvería una buseta
+        // que no lleva al usuario a donde va.
+        Route contraria = route(1L, "Contraria", RouteStatus.ACTIVA, "TERMINAL", "centro");
+        when(routeRepository.findAll()).thenReturn(List.of(contraria));
+
+        assertThatThrownBy(() -> service().findBestRoute(
+                "Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
+                .isInstanceOf(NoRouteAvailableException.class);
     }
 }

@@ -7,10 +7,10 @@ import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
-import com.fusaroute.application.usecase.GetRouteSignsService;
 import com.fusaroute.application.usecase.GetTotpStatusService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
+import com.fusaroute.application.usecase.RegenerateRecoveryCodesService;
 import com.fusaroute.application.usecase.RegisterUserService;
 import com.fusaroute.application.usecase.SearchHistoryService;
 import com.fusaroute.application.usecase.SearchRouteService;
@@ -22,10 +22,10 @@ import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
-import com.fusaroute.domain.port.in.GetRouteSignsUseCase;
 import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
+import com.fusaroute.domain.port.in.RegenerateRecoveryCodesUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
@@ -33,7 +33,6 @@ import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
-import com.fusaroute.domain.port.out.RouteSignRepositoryPort;
 import com.fusaroute.domain.port.out.SearchHistoryRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
@@ -83,11 +82,6 @@ public class UseCaseConfig {
     }
 
     @Bean
-    public GetRouteSignsUseCase getRouteSignsUseCase(RouteSignRepositoryPort routeSignRepository) {
-        return new GetRouteSignsService(routeSignRepository);
-    }
-
-    @Bean
     public GetCongestionWarningUseCase getCongestionWarningUseCase(
             TrafficSectorRepositoryPort trafficSectorRepository, Clock clock) {
         return new GetCongestionWarningService(trafficSectorRepository, clock);
@@ -124,9 +118,10 @@ public class UseCaseConfig {
                                      TokenIssuerPort tokenIssuer,
                                      TotpPort totp,
                                      RecoveryCodePort recoveryCodes,
-                                     RecoveryCodeRepositoryPort recoveryCodeRepository) {
+                                     RecoveryCodeRepositoryPort recoveryCodeRepository,
+                                     Clock clock) {
         return new LoginService(userRepository, passwordHasher, tokenIssuer, totp,
-                recoveryCodes, recoveryCodeRepository);
+                recoveryCodes, recoveryCodeRepository, clock);
     }
 
     @Bean
@@ -165,5 +160,13 @@ public class UseCaseConfig {
     @Bean
     public GetTotpStatusUseCase getTotpStatusUseCase(UserRepositoryPort userRepository) {
         return new GetTotpStatusService(userRepository);
+    }
+
+    @Bean
+    public RegenerateRecoveryCodesUseCase regenerateRecoveryCodesUseCase(
+            UserRepositoryPort userRepository,
+            RecoveryCodePort recoveryCodes,
+            RecoveryCodeRepositoryPort recoveryCodeRepository) {
+        return new RegenerateRecoveryCodesService(userRepository, recoveryCodes, recoveryCodeRepository);
     }
 }

@@ -34,6 +34,7 @@ final class RoutePersistenceMapper {
         return new Route(
                 entity.getId(),
                 entity.getName(),
+                entity.getSignFile(),
                 entity.getType(),
                 entity.getStatus(),
                 neighborhoods,

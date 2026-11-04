@@ -1,5 +1,6 @@
 package com.fusaroute.infrastructure.adapter.in.web;
 
+import com.fusaroute.domain.exception.AccountLockedException;
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
@@ -12,6 +13,7 @@ import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
 import com.fusaroute.domain.exception.TotpAlreadyEnabledException;
 import com.fusaroute.domain.exception.TotpEnrollmentRequiredException;
+import com.fusaroute.domain.exception.TotpNotEnabledException;
 import com.fusaroute.domain.exception.TotpRequiredException;
 import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.exception.UserNotFoundException;
@@ -74,6 +76,21 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     }
 
     /**
+     * Cuenta bloqueada temporalmente tras el quinto intento fallido (SCRUM-155).
+     * 423 Locked, distinto del 401 generico de {@link InvalidCredentialsException}:
+     * el frontend debe mostrar un aviso diferente, no el de "credenciales
+     * incorrectas". {@code error=ACCOUNT_LOCKED} es la pista machine-readable,
+     * igual que en los handlers de TOTP; el {@code detail} no incluye el
+     * instante de desbloqueo a proposito (ver {@link AccountLockedException}).
+     */
+    @ExceptionHandler(AccountLockedException.class)
+    public ProblemDetail handleAccountLocked(AccountLockedException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.LOCKED, e.getMessage());
+        problem.setProperty("error", "ACCOUNT_LOCKED");
+        return problem;
+    }
+
+    /**
      * Login con contrasena correcta pero segundo factor requerido (SCRUM-179).
      * 401 con una PISTA machine-readable: el frontend lee {@code error} para
      * saber que debe pedir el codigo del segundo factor, sin tener que inferirlo
@@ -112,6 +129,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** TOTP ya estaba activo al pedir enrolamiento (SCRUM-179). */
     @ExceptionHandler(TotpAlreadyEnabledException.class)
     public ProblemDetail handleTotpAlreadyEnabled(TotpAlreadyEnabledException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
+    }
+
+    /** Se pidio algo que exige el segundo factor activo y no lo esta (SCRUM-179). */
+    @ExceptionHandler(TotpNotEnabledException.class)
+    public ProblemDetail handleTotpNotEnabled(TotpNotEnabledException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 

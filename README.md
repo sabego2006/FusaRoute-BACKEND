@@ -158,6 +158,13 @@ sequenceDiagram
 | `GET` | `/api/users/me` | Sí | 200 / 401 | Perfil del usuario autenticado |
 | `PUT` | `/api/users/me` | Sí | 200 / 400 / 401 / 409 | Actualizar perfil |
 | `PUT` | `/api/users/me/password` | Sí | 204 / 400 / 401 | Cambiar contraseña |
+| `GET` | `/api/users/me/totp` | Sí | 200 / 401 | Estado del segundo factor (SCRUM-179) |
+| `POST` | `/api/users/me/totp/enroll` | Sí\* | 200 / 401 / 409 | Inicia el enrolamiento: secreto, `otpauth://` y QR |
+| `POST` | `/api/users/me/totp/confirm` | Sí\* | 200 / 401 / 409 | Activa el factor, devuelve JWT completo y códigos de respaldo |
+| `POST` | `/api/users/me/totp/recovery-codes` | Sí | 200 / 401 / 409 | Regenera los 10 códigos de respaldo |
+
+\* Estos dos aceptan el JWT completo o el **token de enrolamiento** de vida corta
+(claim `scope=totp_enroll`). Todo lo demás exige `scope=full`.
 | `GET` | `/actuator/health` | No | 200 | Estado del servicio y sus dependencias (RNF-01/02) |
 | `GET` | `/actuator/prometheus` | Sí | 200 / 401 | Métricas en formato Prometheus (RNF-01) |
 | `GET` | `/api/_internal/maps-probe` | Sí | 200 / 401 / 503 | Probe de diagnóstico de RNF-01 (solo si está habilitado, ver abajo) |
@@ -241,11 +248,21 @@ envía en cada petición autenticada:
 Authorization: Bearer eyJhbGciOi...
 ```
 
+El cuerpo acepta además un `totpCode` opcional, que se exige cuando el usuario ya tiene el
+segundo factor activo (ver abajo). El mismo campo admite un código TOTP de 6 dígitos o un
+código de respaldo.
+
 **Errores** (cuerpo `ProblemDetail`, RFC 9457):
 
 - **`401`** credenciales incorrectas: `detail` = "Correo o contrasena incorrectos". Es el
   **mismo mensaje** para correo inexistente, contraseña incorrecta, cuenta inactiva y
   formato de correo inválido, para no revelar qué correos tienen cuenta.
+- **`401`** con `error: "TOTP_ENROLLMENT_REQUIRED"`: la contraseña es correcta pero el
+  usuario aún no enroló su app autenticadora. El cuerpo trae `enrollmentToken` y
+  `expiresAt`; el frontend arranca con él el enrolamiento forzado.
+- **`401`** con `error: "TOTP_REQUIRED"`: falta el `totpCode`. El frontend muestra el paso 2.
+- **`401`** con `error: "INVALID_TOTP"`: el código no es válido ni como TOTP ni como
+  respaldo. Cuenta como intento fallido (SCRUM-36).
 
 Cualquier otro endpoint (salvo `/health`, el registro, el login y el catálogo público de
 rutas) responde **`401`** sin token, o con un token inválido o vencido.
@@ -255,6 +272,53 @@ Sprint 3), y no hay logout ni revocación: un token es válido hasta que vence.
 
 **Configuración:** requiere la variable `JWT_SECRET` (Base64, mínimo 32 bytes decodificados);
 sin ella, o si es débil, la aplicación no arranca. Genérala con `openssl rand -base64 32`.
+
+### Segundo factor TOTP (SCRUM-179) — obligatorio
+
+No hay forma de entrar a la API sin segundo factor. Vale cualquier app autenticadora
+estándar (Microsoft Authenticator, Google Authenticator): SHA1, 6 dígitos, periodo de 30 s,
+con tolerancia de una ventana (±30 s) para la deriva de reloj.
+
+**Usuarios existentes y nuevos pasan por el mismo camino.** La migración `V8` deja
+`totp_enabled = FALSE` para todas las filas previas, así que en su siguiente login caen en
+la rama de enrolamiento forzado igual que un registro nuevo.
+
+Flujo completo:
+
+1. `POST /api/auth/login` con correo y contraseña → **`401 TOTP_ENROLLMENT_REQUIRED`** con
+   `enrollmentToken` (10 minutos, `scope=totp_enroll`, solo abre los dos endpoints de
+   enrolamiento; un token robado ahí no lee el perfil ni nada más).
+2. `POST /api/users/me/totp/enroll` con ese token → `secret` (para escribirlo a mano),
+   `otpauthUri` (deep link en móvil) y `qrPngBase64` (el QR ya dibujado, para pintarlo en un
+   `<img>` sin librerías de QR en el frontend).
+3. `POST /api/users/me/totp/confirm` con el primer código → **activa el factor y deja
+   logueado**: devuelve el JWT completo de 7 días y los **10 códigos de respaldo en claro**,
+   que se muestran una sola vez.
+4. En los logins siguientes, `login` sin código responde `401 TOTP_REQUIRED` y con código
+   válido responde `200`.
+
+**Códigos de respaldo.** Diez, de un solo uso, guardados con BCrypt. Son la única salida si
+el usuario pierde el teléfono, porque la recuperación de contraseña por correo está fuera de
+alcance. Se pueden reemplazar en cualquier momento con
+`POST /api/users/me/totp/recovery-codes` (exige `scope=full`): el conjunto anterior deja de
+servir. **Límite conocido:** quien pierda el teléfono *y* los diez códigos queda fuera — no
+hay reset administrativo.
+
+**Cambio de teléfono.** `POST /enroll` con el **JWT completo** apaga el factor anterior y
+arranca uno nuevo; con el token de enrolamiento responde `409`, para que un token corto aún
+vigente no pueda borrar un factor recién confirmado.
+
+**En reposo** el secreto se guarda cifrado con AES-256-GCM (`AesGcmSecretCipher`), nunca en
+claro; el dominio lo maneja descifrado en memoria y el cifrado es responsabilidad del
+adaptador de persistencia.
+
+**Configuración:**
+
+- `TOTP_ENCRYPTION_KEY` — Base64 de al menos 32 bytes (`openssl rand -base64 32`). **Sin
+  valor por defecto: si falta, la aplicación no arranca.** Usa una distinta por ambiente;
+  cambiarla deja ilegibles los secretos ya guardados.
+- `TOTP_ISSUER` — el nombre que el usuario ve en su app autenticadora. Por defecto
+  `FusaRoute`.
 
 ### `GET /api/routes` y `GET /api/routes/{id}` — Catálogo público de rutas (RF-15, SCRUM-19)
 

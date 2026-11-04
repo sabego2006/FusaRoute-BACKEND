@@ -107,6 +107,27 @@ class GoogleMapsClientTest {
     }
 
     @Test
+    void el_mensaje_de_la_excepcion_incluye_el_error_message_de_google_y_filtra_la_api_key() {
+        // Caso de PROD de 2026-10-29: REQUEST_DENIED con error_message explicando que
+        // la clave no es valida. Sin este dato en el mensaje, Santiago tenia que ir al
+        // log de Google a adivinar; incluirlo ahorra la ronda. Si Google por accidente
+        // devolviera la clave en error_message (hoy no lo hace, pero esto lo garantiza),
+        // sanitize() la enmascara antes de que viaje por el log y la ProblemDetail.
+        String denyBodyConClave = """
+                {"status":"REQUEST_DENIED","error_message":"API key fake-api-key is not valid.","rows":[]}
+                """;
+        Harness h = harness();
+        h.server().expect(requestTo(org.hamcrest.Matchers.containsString("/distancematrix/json")))
+                .andRespond(withSuccess(denyBodyConClave, MediaType.APPLICATION_JSON));
+
+        assertThatThrownBy(() -> h.client().getTravelTime(ORIGIN, DESTINATION, List.of()))
+                .isInstanceOf(TravelTimeUnavailableException.class)
+                .hasMessageContaining("REQUEST_DENIED")
+                .hasMessageContaining("is not valid")
+                .hasMessageNotContaining("fake-api-key");
+    }
+
+    @Test
     void un_fallo_no_contamina_el_cache() {
         Harness h = harness();
         h.server().expect(requestTo(org.hamcrest.Matchers.containsString("/distancematrix/json")))

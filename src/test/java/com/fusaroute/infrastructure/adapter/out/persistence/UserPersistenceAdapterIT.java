@@ -18,6 +18,9 @@ import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
@@ -105,6 +108,34 @@ class UserPersistenceAdapterIT {
                     assertThat(u.isActive()).isTrue();
                 });
         assertThat(adapter.findByEmail(Email.of("nadie@x.co"))).isEmpty();
+    }
+
+    @Test
+    void locked_until_viaja_completo_de_ida_y_vuelta_tras_un_bloqueo() {
+        User saved = adapter.save(User.register("Elsa", Email.of("elsa@x.co"), "$2a$12$hash"));
+        // Truncado a milisegundos: TIMESTAMPTZ en Postgres no garantiza mas
+        // precision que la columna soporta de ida y vuelta por JDBC.
+        Instant lockedUntil = Instant.now().plus(User.LOCK_DURATION).truncatedTo(ChronoUnit.MILLIS);
+        User locked = new User(saved.getId(), saved.getName(), saved.getEmail(), saved.getPasswordHash(),
+                saved.getPhone(), saved.getRole(), saved.isActive(), User.MAX_FAILED_ATTEMPTS,
+                saved.isTotpEnabled(), saved.getTotpSecret(), lockedUntil);
+
+        adapter.save(locked);
+
+        assertThat(adapter.findByEmail(Email.of("elsa@x.co")))
+                .hasValueSatisfying(u -> {
+                    assertThat(u.getFailedLoginAttempts()).isEqualTo(User.MAX_FAILED_ATTEMPTS);
+                    assertThat(u.getLockedUntil()).isEqualTo(lockedUntil);
+                    assertThat(u.isLocked(lockedUntil.minusSeconds(1))).isTrue();
+                });
+    }
+
+    @Test
+    void un_usuario_sin_bloqueo_relee_locked_until_en_null() {
+        adapter.save(User.register("Fabio", Email.of("fabio@x.co"), "$2a$12$hash"));
+
+        assertThat(adapter.findByEmail(Email.of("fabio@x.co")))
+                .hasValueSatisfying(u -> assertThat(u.getLockedUntil()).isNull());
     }
 
     @Test

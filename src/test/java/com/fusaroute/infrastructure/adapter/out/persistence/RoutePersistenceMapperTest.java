@@ -21,12 +21,23 @@ class RoutePersistenceMapperTest {
     private static RouteJpaEntity entity(Map<Integer, String> neighborhoods, List<FareJpaEntity> fares) {
         RouteJpaEntity entity = new RouteJpaEntity();
         ReflectionTestUtils.setField(entity, "id", 1L);
-        ReflectionTestUtils.setField(entity, "name", "Llano Largo - La Clarita (\"100\")");
+        ReflectionTestUtils.setField(entity, "name", "Centro - Cra. 1 Santander - Pantano de Vargas - La Clarita");
+        ReflectionTestUtils.setField(entity, "signFile", "CENTRO_CRA_1_SANTANDER_PANTANO_DE_VARGAS_LA_CLARITA");
         ReflectionTestUtils.setField(entity, "type", RouteType.URBANA);
         ReflectionTestUtils.setField(entity, "status", RouteStatus.ACTIVA);
         ReflectionTestUtils.setField(entity, "neighborhoods", neighborhoods);
         ReflectionTestUtils.setField(entity, "fares", fares);
         return entity;
+    }
+
+    @Test
+    void una_ruta_sin_letrero_llega_al_dominio_con_signFile_nulo() {
+        // Tres rutas del catalogo no tienen letrero (V14/V15): la columna es nullable y
+        // el mapeo tiene que dejar pasar el null, no convertirlo en cadena vacia.
+        RouteJpaEntity sinLetrero = entity(Map.of(0, "Centro"), List.of());
+        ReflectionTestUtils.setField(sinLetrero, "signFile", null);
+
+        assertThat(RoutePersistenceMapper.toDomain(sinLetrero).signFile()).isNull();
     }
 
     @Test
@@ -53,6 +64,7 @@ class RoutePersistenceMapperTest {
         Route route = RoutePersistenceMapper.toDomain(entity(Map.of(0, "Centro"), List.of(fare)));
 
         assertThat(route.id()).isEqualTo(1L);
+        assertThat(route.signFile()).isEqualTo("CENTRO_CRA_1_SANTANDER_PANTANO_DE_VARGAS_LA_CLARITA");
         assertThat(route.type()).isEqualTo(RouteType.URBANA);
         assertThat(route.isActive()).isTrue();
         assertThat(route.fares()).hasSize(1);

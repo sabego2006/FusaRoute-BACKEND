@@ -32,7 +32,8 @@ final class UserPersistenceMapper {
                 user.isActive(),
                 user.getFailedLoginAttempts(),
                 user.isTotpEnabled(),
-                totpSecretCipher);
+                totpSecretCipher,
+                user.getLockedUntil());
     }
 
     /**
@@ -50,6 +51,7 @@ final class UserPersistenceMapper {
                 entity.isActive(),
                 entity.getFailedLoginAttempts(),
                 entity.isTotpEnabled(),
-                totpSecretPlain);
+                totpSecretPlain,
+                entity.getLockedUntil());
     }
 }
