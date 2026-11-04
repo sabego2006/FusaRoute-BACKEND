@@ -10,7 +10,9 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.jwt.JwtDecoder;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationConverter;
+import org.springframework.security.oauth2.server.resource.web.authentication.BearerTokenAuthenticationFilter;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -66,8 +68,16 @@ public class SecurityConfig {
     }
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http) throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, JwtDecoder jwtDecoder) throws Exception {
         return http
+                // Autenticacion OPCIONAL en la busqueda publica (RF-07, SCRUM-20): corre
+                // antes del filtro estandar para que, cuando llega un token valido, el
+                // controlador reciba el Jwt y pueda anotar la busqueda en el historial.
+                // Sin esto PublicEndpointBearerTokenResolver devuelve null en esas rutas
+                // y el historial no se escribe nunca. Ver OptionalJwtAuthenticationFilter.
+                .addFilterBefore(
+                        new OptionalJwtAuthenticationFilter(jwtDecoder, jwtAuthenticationConverter()),
+                        BearerTokenAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
