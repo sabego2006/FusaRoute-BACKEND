@@ -171,7 +171,7 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.errors[0].field").value("password"));
     }
 
-    // --- GET /api/users/me/search-history (RF-07, SCRUM-20) ---
+    // --- GET /api/users/me/history (RF-07, SCRUM-20) ---
 
     @Test
     void devuelve_el_historial_del_usuario_autenticado() throws Exception {
@@ -179,7 +179,7 @@ class UserControllerTest {
                 new SearchRecord(9L, 1L, "Siboney", "Centro", Instant.parse("2026-10-29T14:30:00Z")),
                 new SearchRecord(8L, 1L, "Gaitan", "Terminal", Instant.parse("2026-10-29T13:00:00Z"))));
 
-        mockMvc.perform(get("/api/users/me/search-history")
+        mockMvc.perform(get("/api/users/me/history")
                         .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
@@ -194,7 +194,7 @@ class UserControllerTest {
         when(getSearchHistory.historyOf(1L)).thenReturn(List.of(
                 new SearchRecord(9L, 1L, "Siboney", "Centro", Instant.parse("2026-10-29T14:30:00Z"))));
 
-        mockMvc.perform(get("/api/users/me/search-history")
+        mockMvc.perform(get("/api/users/me/history")
                         .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$[0].userId").doesNotExist());
@@ -204,7 +204,7 @@ class UserControllerTest {
     void el_historial_vacio_es_una_lista_vacia_no_un_404() throws Exception {
         when(getSearchHistory.historyOf(1L)).thenReturn(List.of());
 
-        mockMvc.perform(get("/api/users/me/search-history")
+        mockMvc.perform(get("/api/users/me/history")
                         .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(0));
@@ -212,7 +212,7 @@ class UserControllerTest {
 
     @Test
     void el_historial_exige_sesion() throws Exception {
-        mockMvc.perform(get("/api/users/me/search-history"))
+        mockMvc.perform(get("/api/users/me/history"))
                 .andExpect(status().isUnauthorized());
     }
 }

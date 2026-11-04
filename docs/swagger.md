@@ -107,7 +107,7 @@ escribe a mano.
 - **auth** — `POST /api/auth/register`, `POST /api/auth/login`
 - **users** — `GET /api/users/me`, `PUT /api/users/me/password`,
   `GET /api/users/me/totp`, `POST /api/users/me/totp/enroll`,
-  `POST /api/users/me/totp/confirm`, `GET /api/users/me/search-history`
+  `POST /api/users/me/totp/confirm`, `GET /api/users/me/history`
 - **routes** — `GET /api/routes`, `GET /api/routes/{id}`,
   `GET /api/routes/{id}/fare`, `GET /api/routes/search`,
   `GET /api/routes/search/offline`

@@ -26,7 +26,7 @@ import java.util.List;
  *   <li>GET  /api/users/me                 → datos del perfil</li>
  *   <li>PUT  /api/users/me                 → actualizar nombre, correo y telefono</li>
  *   <li>PUT  /api/users/me/password        → cambiar contrasena (exige la actual)</li>
- *   <li>GET  /api/users/me/search-history  → ultimas busquedas (RF-07, SCRUM-20)</li>
+ *   <li>GET  /api/users/me/history         → ultimas busquedas (RF-07, SCRUM-20)</li>
  * </ul>
  * El id del usuario sale del claim {@code sub} del JWT.
  */
@@ -53,7 +53,7 @@ public class UserController {
             description = "Últimas búsquedas del usuario, de la más reciente a la más antigua (RF-07)")
     @ApiResponse(responseCode = "200", description = "Historial recuperado exitosamente")
     @ApiResponse(responseCode = "401", description = "No autenticado")
-    @GetMapping("/search-history")
+    @GetMapping("/history")
     public List<SearchHistoryResponse> searchHistory(@AuthenticationPrincipal Jwt jwt) {
         Long userId = Long.parseLong(jwt.getSubject());
         return getSearchHistory.historyOf(userId).stream().map(SearchHistoryResponse::from).toList();
