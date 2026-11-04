@@ -3,14 +3,22 @@ package com.fusaroute.infrastructure.adapter.in.web;
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
+import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
 import com.fusaroute.domain.exception.InvalidProfileException;
+import com.fusaroute.domain.model.CongestionWarning;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.SearchRecord;
+import com.fusaroute.domain.model.FavoriteDestination;
 import com.fusaroute.domain.model.User;
+import com.fusaroute.domain.model.TrafficSector;
 import com.fusaroute.domain.model.UserRole;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
+import com.fusaroute.domain.port.in.ClearFavoriteDestinationUseCase;
+import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
+import com.fusaroute.domain.port.in.GetFavoriteDestinationUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetSearchHistoryUseCase;
+import com.fusaroute.domain.port.in.SetFavoriteDestinationUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
 import com.fusaroute.infrastructure.config.SecurityConfig;
@@ -24,13 +32,18 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import java.time.Instant;
+import java.time.LocalTime;
 import java.util.List;
+import java.util.Optional;
+import java.util.Set;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -58,6 +71,18 @@ class UserControllerTest {
 
     @MockitoBean
     private GetSearchHistoryUseCase getSearchHistory;
+
+    @MockitoBean
+    private GetFavoriteDestinationUseCase getFavoriteDestination;
+
+    @MockitoBean
+    private SetFavoriteDestinationUseCase setFavoriteDestination;
+
+    @MockitoBean
+    private ClearFavoriteDestinationUseCase clearFavoriteDestination;
+
+    @MockitoBean
+    private GetCongestionWarningUseCase getCongestionWarning;
 
     private final User user = new User(1L, "Ana", Email.of("ana@x.co"),
             "$2a$12$hash", "3101234567", UserRole.USER, true, 0);
@@ -214,5 +239,146 @@ class UserControllerTest {
     void el_historial_exige_sesion() throws Exception {
         mockMvc.perform(get("/api/users/me/history"))
                 .andExpect(status().isUnauthorized());
+    }
+
+    // --- Destino favorito (RF-10, SCRUM-21) ---
+
+    private static final Instant MARCADO = Instant.parse("2026-11-04T09:15:00Z");
+
+    private static TrafficSector sectorCentro() {
+        return new TrafficSector(1L, "Centro - Carrera 1", Set.of("Centro"),
+                LocalTime.of(17, 0), LocalTime.of(19, 0));
+    }
+
+    @Test
+    void favorito_sin_token_responde_401() throws Exception {
+        mockMvc.perform(get("/api/users/me/favorite-destination"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void marcar_favorito_sin_token_responde_401() throws Exception {
+        mockMvc.perform(put("/api/users/me/favorite-destination")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"destination\":\"Centro\"}"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void quitar_favorito_sin_token_responde_401() throws Exception {
+        mockMvc.perform(delete("/api/users/me/favorite-destination"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void sin_favorito_marcado_responde_204_y_no_un_404() throws Exception {
+        // No tener favorito es el estado normal de una cuenta nueva, no un recurso
+        // que falte: un 404 obligaria al frontend a tratarlo como error.
+        when(getFavoriteDestination.of(1L)).thenReturn(Optional.empty());
+
+        mockMvc.perform(get("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isNoContent());
+    }
+
+    @Test
+    void get_favorito_devuelve_el_destino_y_el_aviso_de_tranco() throws Exception {
+        when(getFavoriteDestination.of(1L))
+                .thenReturn(Optional.of(new FavoriteDestination(1L, "Centro", MARCADO)));
+        when(getCongestionWarning.forRoute(List.of("Centro")))
+                .thenReturn(new CongestionWarning(List.of(sectorCentro())));
+
+        mockMvc.perform(get("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.destination").value("Centro"))
+                .andExpect(jsonPath("$.congestionSectors.length()").value(1))
+                .andExpect(jsonPath("$.congestionSectors[0].name").value("Centro - Carrera 1"))
+                // El favorito es "mi favorito": el id del dueno no le aporta nada al cliente.
+                .andExpect(jsonPath("$.userId").doesNotExist());
+    }
+
+    @Test
+    void el_aviso_del_favorito_se_calcula_sobre_su_barrio_no_sobre_una_ruta() throws Exception {
+        // Antes de buscar no hay origen, asi que no hay recorrido: lo unico evaluable
+        // es el barrio del favorito.
+        when(getFavoriteDestination.of(1L))
+                .thenReturn(Optional.of(new FavoriteDestination(1L, "La Pampa", MARCADO)));
+        when(getCongestionWarning.forRoute(List.of("La Pampa")))
+                .thenReturn(new CongestionWarning(List.of()));
+
+        mockMvc.perform(get("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.congestionSectors.length()").value(0));
+    }
+
+    @Test
+    void marcar_favorito_devuelve_200_con_el_aviso_ya_calculado() throws Exception {
+        when(setFavoriteDestination.set(1L, "Centro"))
+                .thenReturn(new FavoriteDestination(1L, "Centro", MARCADO));
+        when(getCongestionWarning.forRoute(List.of("Centro")))
+                .thenReturn(new CongestionWarning(List.of(sectorCentro())));
+
+        mockMvc.perform(put("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"destination\":\"Centro\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.destination").value("Centro"))
+                .andExpect(jsonPath("$.congestionSectors[0].startsAt").value("17:00:00"));
+    }
+
+    @Test
+    void el_favorito_se_marca_siempre_sobre_el_usuario_del_token() throws Exception {
+        // El id no se acepta del cliente en ningun punto: sale del claim sub. Aunque
+        // el cuerpo trajera otro usuario, el favorito es el de quien manda el token.
+        when(setFavoriteDestination.set(7L, "Centro"))
+                .thenReturn(new FavoriteDestination(7L, "Centro", MARCADO));
+        when(getCongestionWarning.forRoute(any())).thenReturn(new CongestionWarning(List.of()));
+
+        mockMvc.perform(put("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("7").claim("scope", "full")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"destination\":\"Centro\",\"userId\":1}"))
+                .andExpect(status().isOk());
+
+        verify(setFavoriteDestination).set(7L, "Centro");
+    }
+
+    @Test
+    void destino_vacio_responde_400_y_no_500() throws Exception {
+        when(setFavoriteDestination.set(any(), any()))
+                .thenThrow(new InvalidFavoriteDestinationException("El destino favorito no puede ir vacio"));
+
+        mockMvc.perform(put("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"destination\":\"   \"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El destino favorito no puede ir vacio"));
+    }
+
+    @Test
+    void cuerpo_sin_el_campo_destino_responde_400() throws Exception {
+        when(setFavoriteDestination.set(any(), any()))
+                .thenThrow(new InvalidFavoriteDestinationException("El destino favorito no puede ir vacio"));
+
+        mockMvc.perform(put("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full")))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{}"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void quitar_favorito_responde_204() throws Exception {
+        doNothing().when(clearFavoriteDestination).clear(1L);
+
+        mockMvc.perform(delete("/api/users/me/favorite-destination")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isNoContent());
+
+        verify(clearFavoriteDestination).clear(1L);
     }
 }
