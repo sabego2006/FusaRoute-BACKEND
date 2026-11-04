@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.config;
 import com.fusaroute.application.usecase.ChangePasswordService;
 import com.fusaroute.application.usecase.ConfirmTotpService;
 import com.fusaroute.application.usecase.EnrollTotpService;
+import com.fusaroute.application.usecase.FavoriteDestinationService;
 import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
@@ -28,6 +29,7 @@ import com.fusaroute.domain.port.in.RegenerateRecoveryCodesUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
+import com.fusaroute.domain.port.out.FavoriteDestinationRepositoryPort;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
@@ -90,6 +92,18 @@ public class UseCaseConfig {
                                                   TravelTimePort travelTimePort,
                                                   MeterRegistry meterRegistry, Clock clock) {
         return new SearchRouteService(routeRepository, travelTimePort, meterRegistry, clock);
+    }
+
+    /**
+     * Unico bean del destino favorito (RF-10, SCRUM-21). Devuelve el tipo concreto y
+     * no una interfaz porque {@code FavoriteDestinationService} implementa tres casos
+     * de uso: declararlo como una sola interfaz dejaria las otras dos sin bean, y
+     * declararlo tres veces crearia tres instancias de la misma cosa.
+     */
+    @Bean
+    public FavoriteDestinationService favoriteDestinationService(
+            FavoriteDestinationRepositoryPort favoriteDestinationRepository, Clock clock) {
+        return new FavoriteDestinationService(favoriteDestinationRepository, clock);
     }
 
     @Bean
