@@ -12,6 +12,7 @@ import com.fusaroute.application.usecase.ListActiveRoutesService;
 import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegenerateRecoveryCodesService;
 import com.fusaroute.application.usecase.RegisterUserService;
+import com.fusaroute.application.usecase.SearchHistoryService;
 import com.fusaroute.application.usecase.SearchRouteService;
 import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
@@ -32,6 +33,7 @@ import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
+import com.fusaroute.domain.port.out.SearchHistoryRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
@@ -90,6 +92,18 @@ public class UseCaseConfig {
                                                   TravelTimePort travelTimePort,
                                                   MeterRegistry meterRegistry, Clock clock) {
         return new SearchRouteService(routeRepository, travelTimePort, meterRegistry, clock);
+    }
+
+    /**
+     * Unico bean del historial (RF-07, SCRUM-20). Devuelve el tipo concreto y no una
+     * interfaz —a diferencia del resto de este archivo— porque {@code SearchHistoryService}
+     * implementa dos casos de uso: declararlo como una sola interfaz dejaria la otra
+     * sin bean, y declararlo dos veces crearia dos instancias de la misma cosa.
+     */
+    @Bean
+    public SearchHistoryService searchHistoryService(SearchHistoryRepositoryPort searchHistoryRepository,
+                                                     Clock clock) {
+        return new SearchHistoryService(searchHistoryRepository, clock);
     }
 
     @Bean
