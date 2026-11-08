@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
@@ -46,6 +47,7 @@ import static org.springframework.security.test.web.servlet.request.SecurityMock
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -107,6 +109,22 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.phone").value("3101234567"))
                 .andExpect(jsonPath("$.role").value("USER"))
                 .andExpect(jsonPath("$.passwordHash").doesNotExist());
+    }
+
+    /**
+     * SCRUM-127 cacheo el catalogo publico con Cache-Control y ETag. El perfil lleva datos
+     * de sesion: tiene que seguir con el no-store de Spring Security y sin ETag, o una
+     * cache compartida podria servirselo a otra persona.
+     */
+    @Test
+    void el_perfil_sigue_con_no_store_y_sin_etag() throws Exception {
+        when(getProfile.getProfile(1L)).thenReturn(user);
+
+        mockMvc.perform(get("/api/users/me")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(header().string("Cache-Control", containsString("no-store")))
+                .andExpect(header().doesNotExist("ETag"));
     }
 
     // --- PUT /api/users/me ---

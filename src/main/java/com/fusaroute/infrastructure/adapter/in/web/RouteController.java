@@ -11,6 +11,8 @@ import com.fusaroute.domain.port.in.RecordSearchUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -19,6 +21,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.Optional;
 
@@ -26,6 +29,27 @@ import java.util.Optional;
 @RestController
 @RequestMapping("/api/routes")
 public class RouteController {
+
+    /**
+     * Cache HTTP del catalogo publico (RNF-01, SCRUM-127). Spring Security manda por
+     * defecto {@code no-store} en TODA respuesta, y eso es lo correcto para datos de
+     * sesion, pero obligaba a repagar el viaje completo al servidor en cada navegacion
+     * por un dato que cambia de mes en mes. Spring Security no pisa un Cache-Control que
+     * el controlador ya puso, asi que basta fijarlo aqui, solo en estos dos GET.
+     *
+     * <p>Listado: 10 min. Una ruta suspendida (SCRUM-25) puede seguir apareciendo hasta
+     * 10 min, mas 5 de {@code stale-while-revalidate}; es el precio aceptado.
+     *
+     * <p>Detalle: 60 s, sin stale-while-revalidate. Trae {@code congestionSectors}, que
+     * depende de la hora (el aviso se enciende 30 min antes del trancon), asi que servir
+     * un detalle de hace 10 min mostraria un aviso vencido.
+     *
+     * <p>{@code public}: el catalogo no lleva datos de sesion, y el frontend puede
+     * mandar el JWT en la peticion sin que eso vuelva privada la respuesta.
+     */
+    private static final CacheControl LIST_CACHE = CacheControl.maxAge(Duration.ofMinutes(10))
+            .staleWhileRevalidate(Duration.ofMinutes(5)).cachePublic();
+    private static final CacheControl DETAIL_CACHE = CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic();
 
     private final ListActiveRoutesUseCase listActiveRoutesUseCase;
     private final GetRouteDetailUseCase getRouteDetailUseCase;
@@ -65,8 +89,9 @@ public class RouteController {
     @Operation(summary = "Listar rutas activas", description = "Retorna la lista de todas las rutas de buseta que se encuentran activas")
     @ApiResponse(responseCode = "200", description = "Lista de rutas recuperada exitosamente")
     @GetMapping
-    public List<RouteResponse> list() {
-        return listActiveRoutesUseCase.listActive().stream().map(RouteResponse::from).toList();
+    public ResponseEntity<List<RouteResponse>> list() {
+        return ResponseEntity.ok().cacheControl(LIST_CACHE)
+                .body(listActiveRoutesUseCase.listActive().stream().map(RouteResponse::from).toList());
     }
 
     /**
@@ -143,13 +168,13 @@ public class RouteController {
     @ApiResponse(responseCode = "200", description = "Detalle de la ruta recuperado exitosamente")
     @ApiResponse(responseCode = "404", description = "La ruta especificada no existe")
     @GetMapping("/{id}")
-    public RouteDetailResponse detail(@PathVariable Long id) {
+    public ResponseEntity<RouteDetailResponse> detail(@PathVariable Long id) {
         Route route = getRouteDetailUseCase.getById(id);
         // El aviso se evalua sobre TODOS los barrios de la ruta: en el detalle se ve el
         // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
         // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
-        return RouteDetailResponse.from(route,
-                getCongestionWarningUseCase.forRoute(route.neighborhoods()));
+        return ResponseEntity.ok().cacheControl(DETAIL_CACHE).body(RouteDetailResponse.from(route,
+                getCongestionWarningUseCase.forRoute(route.neighborhoods())));
     }
 
     @Operation(summary = "Costo del pasaje de una ruta",
