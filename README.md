@@ -171,6 +171,8 @@ sequenceDiagram
 | `PUT` | `/api/comments/{id}` | Sí | 200 / 400 / 401 / 404 / 409 | Editar mi comentario, solo si sigue pendiente (RF-08) |
 | `DELETE` | `/api/comments/{id}` | Sí | 204 / 401 / 404 / 409 | Borrar mi comentario, solo si sigue pendiente (RF-08) |
 | `GET` | `/api/comments/me/unread-count` | Sí | 200 / 401 | Respuestas nuevas desde el ingreso anterior (RF-14, SCRUM-101) |
+| `GET` | `/api/admin/comments` | **ADMIN** | 200 / 400 / 401 / 403 | Todos los comentarios, pendientes primero, filtrable (RF-14, SCRUM-23) |
+| `PUT` | `/api/admin/comments/{id}/reply` | **ADMIN** | 200 / 400 / 401 / 403 / 404 | Responder o corregir la respuesta (RF-14) |
 
 \* Estos dos aceptan el JWT completo o el **token de enrolamiento** de vida corta
 (claim `scope=totp_enroll`). Todo lo demás exige `scope=full`.
@@ -510,6 +512,53 @@ inadvertida para el usuario.
 
 Para crear un administrador en DEV (hace falta para RF-14 y RF-11), ver
 [`docs/datos/crear-administrador-en-dev.md`](docs/datos/crear-administrador-en-dev.md).
+
+### Panel de comentarios del administrador (RF-14, SCRUM-23)
+
+Todo `/api/admin/**` exige **rol ADMIN**, verificado en `SecurityConfig` (SCRUM-104) y no
+en los controladores. Un solo patrón cubre el prefijo entero, así que un endpoint de
+administrador nuevo queda protegido sin que nadie se acuerde de anotarlo.
+
+Exige **las dos cosas a la vez**: `scope=full` **y** `ROLE_ADMIN`. Con "cualquiera de las
+dos" bastaría el rol, y entonces un **token de enrolamiento** (`scope=totp_enroll`) de una
+cuenta ADMIN abriría el panel completo, cuando su alcance debería terminar en los dos
+endpoints de TOTP. Hay un test por cada uno de esos casos.
+
+> **Al subir a alguien a ADMIN hay que reloguear.** El rol viaja dentro del JWT, y el token
+> que ya está emitido sigue diciendo `USER` hasta que venza — y duran una semana (RNF-04).
+> Ver [`docs/datos/crear-administrador-en-dev.md`](docs/datos/crear-administrador-en-dev.md).
+
+**`GET /api/admin/comments`** — `200 OK`. Sin parámetros salen **todos** los comentarios con
+los **pendientes primero** y, dentro de cada grupo, del más reciente al más antiguo. Con
+`?status=PENDING` o `?status=ANSWERED` salen solo los de ese estado; un valor que no existe
+es `400`, no `500`. Cada elemento trae `authorName`: responder sin saber a quién no tiene
+sentido, y el criterio de RF-08 ya dice que el comentario no es anónimo.
+
+El orden "pendientes primero" lo decide la consulta con un `CASE` explícito. `ORDER BY status
+DESC` daría hoy el mismo resultado — `'PENDING'` va después de `'ANSWERED'` en el alfabeto —
+y además entraría por el índice `ix_feedback_status_created` sin ordenar nada. Se descartó
+igual: el día que el enum tenga un tercer estado, el orden de la pantalla cambiaría solo.
+El `CASE` cuesta un *sort* sobre una tabla que aquí tendrá cientos de filas, no millones.
+
+**`PUT /api/admin/comments/{id}/reply`** — `200 OK`. Cuerpo: `{ "reply": "..." }`, hasta 500
+caracteres. Pasa el comentario a `ANSWERED`, fija `answered_at` y con eso **lo bloquea** para
+edición y borrado por parte del autor.
+
+Es `PUT` y no `POST` porque **responder de nuevo reescribe la misma respuesta**: "una
+respuesta por comentario, no un hilo". Responder un comentario que ya tenía respuesta es
+`200`, **no** `409` — corregir es justo lo que el criterio permite. El `409` es solo para el
+*autor* que intenta editar su comentario ya respondido.
+
+La respuesta **no** se valida contra el banco de palabras ni contra el límite de 100
+caracteres del comentario: esas reglas son para lo que escribe el público. Tampoco se
+atribuye a una persona — hay un solo rol de administrador y el usuario ve "la respuesta",
+no "la respuesta de tal". Si hiciera falta saber quién respondió, es una columna nueva con
+su migración.
+
+**Para el panel de métricas de RF-13:** la métrica 4 ("comentarios pendientes") se lee con
+`CountPendingFeedbackUseCase`, no consultando la tabla. Así el "pendiente" del panel es por
+construcción el mismo estado que bloquea la edición de un comentario, que es lo que pide el
+criterio de aceptación.
 
 ## Métricas y p95 (RNF-01, SCRUM-127)
 

@@ -2,6 +2,7 @@ package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.FeedbackStatus;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
 
 import java.time.Instant;
 import java.util.List;
@@ -35,4 +36,31 @@ public interface SpringDataFeedbackRepository extends JpaRepository<FeedbackJpaE
      * a leer la restriccion de la base para entender que cuenta.
      */
     long countByUserIdAndStatusAndAnsweredAtAfter(Long userId, FeedbackStatus status, Instant since);
+
+    /**
+     * Todos los comentarios con los PENDIENTES PRIMERO (RF-14, SCRUM-98).
+     *
+     * El orden va con un CASE explicito y no con {@code ORDER BY status DESC}. Lo
+     * segundo funcionaria hoy por una casualidad del alfabeto —'PENDING' va despues
+     * de 'ANSWERED', asi que DESC los pone primero— y aprovecharia el indice
+     * {@code ix_feedback_status_created} sin ordenar nada. Se descarta igual: el dia
+     * que el enum tenga un tercer estado, el orden de la pantalla cambiaria solo y
+     * sin que nadie toque esta consulta. El CASE dice lo que quiere decir, y cuesta
+     * un sort sobre una tabla que en este proyecto tendra cientos de filas, no
+     * millones.
+     */
+    @Query("""
+            SELECT f FROM FeedbackJpaEntity f
+             ORDER BY CASE WHEN f.status = com.fusaroute.domain.model.FeedbackStatus.PENDING
+                           THEN 0 ELSE 1 END,
+                      f.createdAt DESC
+            """)
+    List<FeedbackJpaEntity> findAllPendingFirst();
+
+    /**
+     * Solo un estado, del mas reciente al mas antiguo. Esta si entra por el indice
+     * {@code ix_feedback_status_created} tal como esta: filtra por la primera columna
+     * y lee la segunda en su mismo orden.
+     */
+    List<FeedbackJpaEntity> findByStatusOrderByCreatedAtDesc(FeedbackStatus status);
 }
