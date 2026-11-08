@@ -2,11 +2,17 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.exception.AccountLockedException;
 import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
+import com.fusaroute.domain.exception.FeedbackAlreadyAnsweredException;
+import com.fusaroute.domain.exception.FeedbackContainsUrlException;
+import com.fusaroute.domain.exception.FeedbackForbiddenWordException;
+import com.fusaroute.domain.exception.FeedbackLengthException;
+import com.fusaroute.domain.exception.FeedbackNotFoundException;
 import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidCoordinateException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
+import com.fusaroute.domain.exception.InvalidFeedbackReplyException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.exception.InvalidTotpException;
@@ -73,6 +79,47 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(InvalidFavoriteDestinationException.class)
     public ProblemDetail handleInvalidFavoriteDestination(InvalidFavoriteDestinationException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    /**
+     * Las tres reglas del texto del comentario (RF-08, SCRUM-91) comparten handler
+     * porque comparten destino: 400 con el mensaje tal cual, que es lo que el
+     * frontend pinta bajo el campo. Siguen siendo tres excepciones distintas en el
+     * dominio —ahi es donde la distincion importa, al probar cada regla por separado—
+     * y agruparlas aqui no la pierde: si manana una necesita otro codigo o un
+     * {@code error} machine-readable, se saca de esta lista.
+     *
+     * Van sin lista de {@code errors} por campo, igual que el destino favorito: el
+     * cuerpo tiene un solo campo y no hay nada que repartir.
+     */
+    @ExceptionHandler({
+            FeedbackLengthException.class,
+            FeedbackContainsUrlException.class,
+            FeedbackForbiddenWordException.class,
+            InvalidFeedbackReplyException.class})
+    public ProblemDetail handleInvalidFeedback(RuntimeException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    /**
+     * El comentario no existe, o existe y es de otro usuario (SCRUM-94 y SCRUM-95).
+     * Los dos casos responden 404; el por que esta en el javadoc de
+     * {@link FeedbackNotFoundException}.
+     */
+    @ExceptionHandler(FeedbackNotFoundException.class)
+    public ProblemDetail handleFeedbackNotFound(FeedbackNotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    /**
+     * Se quiso editar o borrar un comentario ya respondido (SCRUM-94 y SCRUM-95).
+     * 409 y no 403: el permiso esta bien, lo que choca es el estado del recurso. El
+     * frontend debe recargar el comentario para mostrar la respuesta que aparecio,
+     * no mandar al usuario a iniciar sesion.
+     */
+    @ExceptionHandler(FeedbackAlreadyAnsweredException.class)
+    public ProblemDetail handleFeedbackAlreadyAnswered(FeedbackAlreadyAnsweredException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)

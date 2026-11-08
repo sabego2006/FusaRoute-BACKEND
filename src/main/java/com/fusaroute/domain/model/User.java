@@ -44,19 +44,30 @@ public class User {
     private final boolean totpEnabled;
     private final String totpSecret;
     private final Instant lockedUntil;
+    private final Instant lastLoginAt;
+    private final Instant previousLoginAt;
 
     /**
-     * Constructor completo, para rehidratar desde persistencia. Mantiene la
-     * sobrecarga de 8 parametros abajo por retrocompatibilidad: al momento de
-     * SCRUM-179 varios tests ya construyen al usuario asi, y pedir que TODOS se
-     * actualicen a mano para dos campos que arrancan en falso/null seria mas
-     * ruido que seguridad. Esa sobrecarga delega aqui con TOTP apagado.
+     * Constructor completo, para rehidratar desde persistencia. Mantiene las
+     * sobrecargas de abajo por retrocompatibilidad: al momento de SCRUM-179 varios
+     * tests ya construian al usuario con 8 parametros, y pedir que TODOS se
+     * actualicen a mano cada vez que se agrega un campo que arranca en falso/null
+     * seria mas ruido que seguridad. Esas sobrecargas delegan aqui.
      *
      * {@code lockedUntil} es nulo cuando la cuenta no esta bloqueada (SCRUM-155).
+     *
+     * {@code lastLoginAt} y {@code previousLoginAt} son los dos ultimos ingresos
+     * exitosos, y son DOS campos a proposito (SCRUM-101). Con uno solo no se puede
+     * responder "que me respondieron desde la ultima vez que entre": el login lo
+     * acaba de mover a "ahora", asi que la comparacion daria cero justo cuando el
+     * frontend pregunta. {@code lastLoginAt} es el dato de auditoria (cuando entro)
+     * y {@code previousLoginAt} es contra el que cuenta las respuestas nuevas.
+     * Ambos son nulos mientras el usuario no haya iniciado sesion nunca.
      */
     public User(Long id, String name, Email email, String passwordHash, String phone,
                 UserRole role, boolean active, int failedLoginAttempts,
-                boolean totpEnabled, String totpSecret, Instant lockedUntil) {
+                boolean totpEnabled, String totpSecret, Instant lockedUntil,
+                Instant lastLoginAt, Instant previousLoginAt) {
         if (failedLoginAttempts < 0) {
             throw new IllegalArgumentException("failedLoginAttempts no puede ser negativo");
         }
@@ -78,6 +89,20 @@ public class User {
         this.totpEnabled = totpEnabled;
         this.totpSecret = totpSecret;
         this.lockedUntil = lockedUntil;
+        this.lastLoginAt = lastLoginAt;
+        this.previousLoginAt = previousLoginAt;
+    }
+
+    /**
+     * Sobrecarga por retrocompatibilidad: usuario sin registro de ingresos. Queda
+     * para no reescribir los tests que ya construian al usuario con 11 parametros
+     * antes de SCRUM-101.
+     */
+    public User(Long id, String name, Email email, String passwordHash, String phone,
+                UserRole role, boolean active, int failedLoginAttempts,
+                boolean totpEnabled, String totpSecret, Instant lockedUntil) {
+        this(id, name, email, passwordHash, phone, role, active, failedLoginAttempts,
+                totpEnabled, totpSecret, lockedUntil, null, null);
     }
 
     /**
@@ -166,7 +191,7 @@ public class User {
      */
     public User updateProfile(String newName, Email newEmail, String newPhone) {
         return new User(id, newName, newEmail, passwordHash, newPhone, role, active,
-                failedLoginAttempts, totpEnabled, totpSecret, lockedUntil);
+                failedLoginAttempts, totpEnabled, totpSecret, lockedUntil, lastLoginAt, previousLoginAt);
     }
 
     /**
@@ -175,7 +200,7 @@ public class User {
      */
     public User withPasswordHash(String newPasswordHash) {
         return new User(id, name, email, newPasswordHash, phone, role, active,
-                failedLoginAttempts, totpEnabled, totpSecret, lockedUntil);
+                failedLoginAttempts, totpEnabled, totpSecret, lockedUntil, lastLoginAt, previousLoginAt);
     }
 
     /**
@@ -192,13 +217,13 @@ public class User {
                 ? now.plus(LOCK_DURATION)
                 : null;
         return new User(id, name, email, passwordHash, phone, role, active,
-                newAttempts, totpEnabled, totpSecret, newLockedUntil);
+                newAttempts, totpEnabled, totpSecret, newLockedUntil, lastLoginAt, previousLoginAt);
     }
 
     /** Copia con el contador en cero y sin bloqueo, tras un inicio de sesion exitoso. */
     public User resetFailedLogins() {
         return new User(id, name, email, passwordHash, phone, role, active, 0,
-                totpEnabled, totpSecret, null);
+                totpEnabled, totpSecret, null, lastLoginAt, previousLoginAt);
     }
 
     /**
@@ -209,7 +234,7 @@ public class User {
      */
     public User clearLockAndResetAttempts() {
         return new User(id, name, email, passwordHash, phone, role, active, 0,
-                totpEnabled, totpSecret, null);
+                totpEnabled, totpSecret, null, lastLoginAt, previousLoginAt);
     }
 
     /**
@@ -221,7 +246,7 @@ public class User {
             throw new IllegalArgumentException("totpSecret vacio");
         }
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts, false, newSecret, lockedUntil);
+                failedLoginAttempts, false, newSecret, lockedUntil, lastLoginAt, previousLoginAt);
     }
 
     /** Activa el segundo factor: el usuario demostro que su app genera codigos validos. */
@@ -230,7 +255,7 @@ public class User {
             throw new IllegalStateException("No hay un enrolamiento TOTP en curso");
         }
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts, true, totpSecret, lockedUntil);
+                failedLoginAttempts, true, totpSecret, lockedUntil, lastLoginAt, previousLoginAt);
     }
 
     /**
@@ -239,8 +264,39 @@ public class User {
      * un token full llama {@code /enroll} de nuevo y pasa por aqui antes de
      * guardar el secreto nuevo.
      */
+    /**
+     * Copia que registra un ingreso exitoso (SCRUM-101): el ultimo ingreso pasa a
+     * ser el anterior y {@code now} queda como el ultimo. Ademas limpia el contador
+     * de fallidos y el bloqueo, porque entrar bien es justo lo que los reinicia.
+     *
+     * Corre el valor en vez de sobreescribirlo porque el contador de respuestas
+     * nuevas de RF-14 se cuenta "desde la ultima vez que entre", y en el momento en
+     * que el frontend pregunta, "la ultima vez" ya es este mismo ingreso. Sin el
+     * valor corrido el contador seria cero siempre.
+     *
+     * En el PRIMER ingreso el anterior queda nulo, y eso significa "no hay un
+     * antes": el contador devuelve 0 en vez de contar todo el historial del usuario.
+     */
+    public User registerSuccessfulLogin(Instant now) {
+        return new User(id, name, email, passwordHash, phone, role, active, 0,
+                totpEnabled, totpSecret, null, now, lastLoginAt);
+    }
+
+    /** Ultimo ingreso exitoso, o {@code null} si nunca ha iniciado sesion (SCRUM-101). */
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    /**
+     * Ingreso exitoso ANTERIOR al ultimo, o {@code null} si solo ha entrado una vez
+     * (SCRUM-101). Es el instante contra el que se cuentan las respuestas nuevas.
+     */
+    public Instant getPreviousLoginAt() {
+        return previousLoginAt;
+    }
+
     public User resetTotp() {
         return new User(id, name, email, passwordHash, phone, role, active,
-                failedLoginAttempts, false, null, lockedUntil);
+                failedLoginAttempts, false, null, lockedUntil, lastLoginAt, previousLoginAt);
     }
 }

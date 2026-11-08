@@ -4,6 +4,7 @@ import com.fusaroute.application.usecase.ChangePasswordService;
 import com.fusaroute.application.usecase.ConfirmTotpService;
 import com.fusaroute.application.usecase.EnrollTotpService;
 import com.fusaroute.application.usecase.FavoriteDestinationService;
+import com.fusaroute.application.usecase.FeedbackService;
 import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
@@ -31,6 +32,8 @@ import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.domain.port.out.FavoriteDestinationRepositoryPort;
+import com.fusaroute.domain.port.out.FeedbackRepositoryPort;
+import com.fusaroute.domain.port.out.ForbiddenWordsPort;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
@@ -120,6 +123,25 @@ public class UseCaseConfig {
         return new FavoriteDestinationService(favoriteDestinationRepository, clock);
     }
 
+    /**
+     * Unico bean de la caja de comentarios (RF-08, SCRUM-22). Devuelve el tipo
+     * concreto y no una interfaz por la misma razon que el historial y el favorito:
+     * {@code FeedbackService} implementa seis casos de uso, y declararlo como una
+     * sola interfaz dejaria las otras cinco sin bean.
+     *
+     * Entre esos seis esta {@code CountPendingFeedbackUseCase}, que es la metrica 4
+     * del panel de RF-13 (SCRUM-26): el panel llama al caso de uso, no al
+     * repositorio, para que su "pendiente" sea por construccion el mismo estado que
+     * bloquea la edicion de un comentario.
+     */
+    @Bean
+    public FeedbackService feedbackService(FeedbackRepositoryPort feedbackRepository,
+                                           UserRepositoryPort userRepository,
+                                           ForbiddenWordsPort forbiddenWords,
+                                           Clock clock) {
+        return new FeedbackService(feedbackRepository, userRepository, forbiddenWords, clock);
+    }
+
     @Bean
     public RegisterUserUseCase registerUserUseCase(UserRepositoryPort userRepository,
                                                    PasswordHasherPort passwordHasher) {
@@ -166,9 +188,10 @@ public class UseCaseConfig {
                                                  TotpPort totp,
                                                  RecoveryCodePort recoveryCodes,
                                                  RecoveryCodeRepositoryPort recoveryCodeRepository,
-                                                 TokenIssuerPort tokenIssuer) {
+                                                 TokenIssuerPort tokenIssuer,
+                                                 Clock clock) {
         return new ConfirmTotpService(userRepository, totp, recoveryCodes,
-                recoveryCodeRepository, tokenIssuer);
+                recoveryCodeRepository, tokenIssuer, clock);
     }
 
     @Bean

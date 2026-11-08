@@ -70,13 +70,26 @@ public class UserJpaEntity {
     @Column(name = "locked_until")
     private Instant lockedUntil;
 
+    /** Ultimo ingreso exitoso, o NULL si nunca inicio sesion (V19, SCRUM-101). */
+    @Column(name = "last_login_at")
+    private Instant lastLoginAt;
+
+    /**
+     * Ingreso exitoso ANTERIOR al ultimo (V19, SCRUM-101). Es contra esta columna que
+     * se cuentan las respuestas nuevas, no contra {@code last_login_at}: el login ya
+     * movio esa a "ahora" cuando el frontend pregunta. Ver el comentario de la V19.
+     */
+    @Column(name = "previous_login_at")
+    private Instant previousLoginAt;
+
     protected UserJpaEntity() {
         // Requerido por JPA.
     }
 
     public UserJpaEntity(Long id, String name, String email, String passwordHash,
                          String phone, UserRole role, boolean active, int failedLoginAttempts,
-                         boolean totpEnabled, String totpSecret, Instant lockedUntil) {
+                         boolean totpEnabled, String totpSecret, Instant lockedUntil,
+                         Instant lastLoginAt, Instant previousLoginAt) {
         this.id = id;
         this.name = name;
         this.email = email;
@@ -88,6 +101,8 @@ public class UserJpaEntity {
         this.totpEnabled = totpEnabled;
         this.totpSecret = totpSecret;
         this.lockedUntil = lockedUntil;
+        this.lastLoginAt = lastLoginAt;
+        this.previousLoginAt = previousLoginAt;
     }
 
     public Long getId() {
@@ -132,5 +147,13 @@ public class UserJpaEntity {
 
     public Instant getLockedUntil() {
         return lockedUntil;
+    }
+
+    public Instant getLastLoginAt() {
+        return lastLoginAt;
+    }
+
+    public Instant getPreviousLoginAt() {
+        return previousLoginAt;
     }
 }

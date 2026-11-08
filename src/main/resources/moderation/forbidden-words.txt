@@ -1,0 +1,85 @@
+# Banco de palabras prohibidas de la caja de comentarios (RF-08, SCRUM-91).
+#
+# Este archivo es DATO, no codigo: se revisa en el PR y se cambia sin recompilar la
+# clase que valida. Lo lee ForbiddenWordsFileAdapter una sola vez al arrancar.
+#
+# Formato: una palabra por linea. Las lineas vacias y las que empiezan por # se
+# ignoran. No hace falta escribir variantes de mayusculas ni de tildes: el dominio
+# compara normalizado (minusculas, sin tildes), asi que una sola entrada cubre
+# "IDIOTA", "idiota" y la version con tilde.
+#
+# Se comparan PALABRAS COMPLETAS, no subcadenas. Esa decision esta explicada en
+# Feedback.containsForbiddenWord y tiene una consecuencia al editar este archivo:
+# agregar "tonto" no bloquea "tontos". Si el plural importa, va en su propia linea.
+#
+# CRITERIO DE ESTA LISTA, que es lo que hay que respetar al agregarle entradas:
+# solo insultos y groserias sin otro uso posible. Quedaron FUERA a proposito varias
+# palabras que un filtro ingenuo incluiria:
+#
+#   - "negro", "blanco": los letreros de las rutas se describen por color, y
+#     "el letrero de fondo negro" es un comentario perfectamente normal en esta app.
+#   - "cono": al normalizar se le quita la tilde a la groseria, y entonces choca con
+#     el cono de la via, que en una app de transporte se menciona de verdad.
+#   - "ladron", "rata", "robo": "hay ladrones en esa ruta" es justo el tipo de aviso
+#     util que la caja de comentarios existe para recibir. Bloquearlo seria perder la
+#     queja mas valiosa por cuidar la forma.
+#   - "animal", "bestia", "burro": insultos solo por contexto, y nombres de cosas el
+#     resto del tiempo.
+#
+# El banco es un disuasivo, no un filtro perfecto: detras hay un administrador
+# leyendo los comentarios (RF-14). Se mantiene corta a proposito, porque una lista
+# larga de variantes creativas es imposible de completar y da falsa seguridad.
+
+# --- Insultos directos a una persona ---
+idiota
+idiotas
+imbecil
+imbeciles
+estupido
+estupida
+estupidos
+estupidas
+tarado
+tarada
+tarados
+pendejo
+pendeja
+pendejos
+pendejas
+cabron
+cabrona
+
+# --- Groserias de uso comun en Colombia ---
+gonorrea
+hijueputa
+hijueputas
+malparido
+malparida
+malparidos
+guevon
+gueon
+huevon
+huevona
+marica
+maricas
+maricon
+maricones
+puta
+putas
+puto
+putos
+perra
+zorra
+pirobo
+piroba
+careverga
+verga
+vergas
+mierda
+mierdas
+culo
+culiao
+chimba
+joder
+jodete
+carajo
