@@ -1,7 +1,13 @@
 package com.fusaroute.infrastructure.adapter.out.moderation;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.DefaultResourceLoader;
+import org.springframework.core.io.Resource;
+import org.springframework.core.io.ResourceLoader;
+
+import java.io.IOException;
+import java.io.InputStream;
 
 import java.util.Set;
 
@@ -68,6 +74,39 @@ class ForbiddenWordsFileAdapterTest {
     void si_el_archivo_no_existe_el_banco_queda_vacio_y_no_rompe_el_arranque() {
         Set<String> words = new ForbiddenWordsFileAdapter(
                 resourceLoader, "classpath:moderation/no-existe.txt").words();
+
+        assertThat(words).isEmpty();
+    }
+
+    /**
+     * El archivo existe pero no se puede leer (permisos, archivo corrupto en el jar).
+     * Es la otra mitad de la decision de arriba y la que no se ve a simple vista: el
+     * adaptador tiene que degradarse igual, no propagar la excepcion y tumbar el
+     * arranque de toda la aplicacion por un archivo de moderacion.
+     */
+    @Test
+    void si_el_archivo_existe_pero_no_se_puede_leer_el_banco_queda_vacio() {
+        // ResourceLoader no es interfaz funcional (declara dos metodos), asi que se
+        // extiende el loader real en vez de pasarle una lambda.
+        ResourceLoader ilegible = new DefaultResourceLoader() {
+            @Override
+            public Resource getResource(String location) {
+                return new ByteArrayResource(new byte[0]) {
+                    @Override
+                    public boolean exists() {
+                        return true;
+                    }
+
+                    @Override
+                    public InputStream getInputStream() throws IOException {
+                        throw new IOException("archivo ilegible");
+                    }
+                };
+            }
+        };
+
+        Set<String> words = new ForbiddenWordsFileAdapter(
+                ilegible, ForbiddenWordsFileAdapter.DEFAULT_LOCATION).words();
 
         assertThat(words).isEmpty();
     }
