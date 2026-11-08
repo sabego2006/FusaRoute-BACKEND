@@ -184,10 +184,14 @@ public class LoginService implements LoginUseCase {
             throw new InvalidTotpException();
         }
 
-        if (user.getFailedLoginAttempts() > 0) {
-            user = user.resetFailedLogins();
-            userRepository.save(user);
-        }
+        // SCRUM-101: el ingreso exitoso se GUARDA SIEMPRE, aunque no hubiera
+        // intentos fallidos que reiniciar. Antes solo se guardaba para limpiar el
+        // contador; ahora la fila tambien lleva el instante de este ingreso y el del
+        // anterior, que es lo que el contador de respuestas nuevas de RF-14 compara.
+        // Sin este guardado incondicional, un usuario que nunca falla la contrasena
+        // no tendria registro de ingresos y su contador quedaria siempre en cero.
+        user = user.registerSuccessfulLogin(now);
+        userRepository.save(user);
         IssuedToken token = tokenIssuer.issue(user, TOKEN_VALIDITY);
         return new LoginResult(user, token);
     }

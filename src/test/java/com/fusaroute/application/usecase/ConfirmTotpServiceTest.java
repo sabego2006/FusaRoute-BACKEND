@@ -15,15 +15,17 @@ import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 import java.util.Optional;
 
@@ -37,6 +39,8 @@ import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 class ConfirmTotpServiceTest {
+
+    private static final Instant CONFIRMADO_EN = Instant.parse("2026-11-07T10:00:00Z");
 
     @Mock
     private UserRepositoryPort userRepository;
@@ -53,8 +57,47 @@ class ConfirmTotpServiceTest {
     @Mock
     private TokenIssuerPort tokenIssuer;
 
-    @InjectMocks
+    /**
+     * Instante fijo: confirmar el TOTP tambien registra el ingreso (SCRUM-101), y el
+     * reloj real haria el assert de ese instante imposible de escribir.
+     */
+    private final Clock clock = Clock.fixed(CONFIRMADO_EN, ZoneOffset.UTC);
+
     private ConfirmTotpService service;
+
+    @BeforeEach
+    void setUp() {
+        service = new ConfirmTotpService(userRepository, totp, recoveryCodes,
+                recoveryCodeRepository, tokenIssuer, clock);
+    }
+
+    /**
+     * Confirmar deja al usuario con sesion abierta, asi que cuenta como ingreso y debe
+     * quedar registrado (SCRUM-101). Si no se registrara, las respuestas que reciba
+     * durante esa primera sesion de 7 dias no apareceran en el contador de RF-14
+     * cuando vuelva a entrar, porque no habria un ingreso anterior con el que
+     * compararlas. Es un defecto silencioso, y por eso tiene test propio.
+     */
+    @org.junit.jupiter.api.Test
+    void confirmar_registra_el_ingreso_porque_deja_sesion_abierta() {
+        when(userRepository.findById(7L)).thenReturn(Optional.of(userEnrolando()));
+        when(totp.verifyCode("JBSWY3DPEHPK3PXP", "123456")).thenReturn(true);
+        when(userRepository.save(any())).thenAnswer(inv -> inv.getArgument(0));
+        when(recoveryCodes.generatePlainCodes(10)).thenReturn(List.of(
+                "AAAA1111BB", "CCCC2222DD", "EEEE3333FF", "GGGG4444HH", "IIII5555JJ",
+                "KKKK6666LL", "MMMM7777NN", "PPPP8888QQ", "RRRR9999SS", "TTTTAAAAUU"));
+        when(recoveryCodes.hash(any())).thenAnswer(inv -> "H:" + inv.getArgument(0));
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7))))
+                .thenReturn(new IssuedToken("full.jwt", CONFIRMADO_EN.plusSeconds(60)));
+
+        service.confirm(new ConfirmTotpCommand(7L, "123456"));
+
+        ArgumentCaptor<User> guardado = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(guardado.capture());
+        assertThat(guardado.getValue().getLastLoginAt()).isEqualTo(CONFIRMADO_EN);
+        // Primer ingreso: no hay anterior con el que comparar.
+        assertThat(guardado.getValue().getPreviousLoginAt()).isNull();
+    }
 
     private static User userEnrolando() {
         return new User(7L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,

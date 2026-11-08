@@ -38,6 +38,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -114,11 +115,14 @@ class LoginServiceTest {
         when(userRepository.findByEmail(new Email("ana@x.co"))).thenReturn(Optional.of(user));
         when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
         when(totp.verifyCode(TOTP_SECRET, "123456")).thenReturn(true);
-        when(tokenIssuer.issue(user, Duration.ofDays(7))).thenReturn(token);
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
 
         LoginResult result = service.login(new LoginCommand("  Ana@X.CO ", "Abcdef12", "123456"));
 
-        assertThat(result.user()).isSameAs(user);
+        // Desde SCRUM-101 el usuario que sale NO es la misma instancia que entro: es la
+        // copia con el ingreso ya registrado. Se compara por id, no por referencia.
+        assertThat(result.user().getId()).isEqualTo(user.getId());
+        assertThat(result.user().getLastLoginAt()).isEqualTo(FIXED_NOW);
         assertThat(result.token()).isSameAs(token);
     }
 
@@ -248,18 +252,48 @@ class LoginServiceTest {
         assertThat(result.user().getFailedLoginAttempts()).isZero();
     }
 
+    /**
+     * Hasta SCRUM-101 este test se llamaba {@code ..._no_guarda} y afirmaba lo
+     * contrario: un login sin intentos fallidos previos no escribia en la base. El
+     * cambio es deliberado, no una regresion. Ahora TODO ingreso exitoso se guarda,
+     * porque la fila lleva el instante de este ingreso y el del anterior, y es contra
+     * ese anterior que se cuentan las respuestas nuevas de RF-14.
+     */
     @Test
-    void login_exitoso_sin_intentos_previos_no_guarda() {
+    void login_exitoso_guarda_el_ingreso_aunque_no_hubiera_intentos_fallidos() {
         User user = userWithTotp(true, 0);
         IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-10-04T00:00:00Z"));
         when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
         when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
         when(totp.verifyCode(TOTP_SECRET, "123456")).thenReturn(true);
-        when(tokenIssuer.issue(user, Duration.ofDays(7))).thenReturn(token);
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
 
         service.login(new LoginCommand("ana@x.co", "Abcdef12", "123456"));
 
-        verify(userRepository, never()).save(any());
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        assertThat(saved.getValue().getLastLoginAt()).isEqualTo(FIXED_NOW);
+    }
+
+    @Test
+    void login_exitoso_corre_el_ingreso_anterior_para_que_el_contador_tenga_contra_que_comparar() {
+        Instant ingresoViejo = Instant.parse("2026-10-20T08:00:00Z");
+        User user = new User(7L, "Ana", Email.of("ana@x.co"), HASH, null, UserRole.USER, true,
+                0, true, TOTP_SECRET, null, ingresoViejo, null);
+        IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-11-05T00:00:00Z"));
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+        when(totp.verifyCode(TOTP_SECRET, "123456")).thenReturn(true);
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
+
+        service.login(new LoginCommand("ana@x.co", "Abcdef12", "123456"));
+
+        ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
+        verify(userRepository).save(saved.capture());
+        // Lo que era el ultimo ingreso pasa a ser el anterior; si se sobreescribiera
+        // en vez de correrse, el contador de respuestas nuevas daria cero siempre.
+        assertThat(saved.getValue().getPreviousLoginAt()).isEqualTo(ingresoViejo);
+        assertThat(saved.getValue().getLastLoginAt()).isEqualTo(FIXED_NOW);
     }
 
     // --- Bloqueo temporal (SCRUM-155). -------------------------------------------
@@ -337,10 +371,16 @@ class LoginServiceTest {
 
         LoginResult result = service.login(new LoginCommand("ana@x.co", "Abcdef12", "123456"));
 
+        // Dos guardados, no uno: el primero limpia el bloqueo expirado antes de
+        // evaluar la contrasena —tiene que ocurrir incluso si la contrasena falla— y
+        // el segundo registra el ingreso exitoso (SCRUM-101). Se mira el ultimo.
         ArgumentCaptor<User> saved = ArgumentCaptor.forClass(User.class);
-        verify(userRepository).save(saved.capture());
-        assertThat(saved.getValue().getFailedLoginAttempts()).isZero();
-        assertThat(saved.getValue().getLockedUntil()).isNull();
+        verify(userRepository, times(2)).save(saved.capture());
+        assertThat(saved.getAllValues()).allSatisfy(guardado -> {
+            assertThat(guardado.getFailedLoginAttempts()).isZero();
+            assertThat(guardado.getLockedUntil()).isNull();
+        });
+        assertThat(saved.getValue().getLastLoginAt()).isEqualTo(FIXED_NOW);
         assertThat(result.token()).isSameAs(token);
     }
 
@@ -411,7 +451,7 @@ class LoginServiceTest {
         when(totp.verifyCode(TOTP_SECRET, "ABCD2345FG")).thenReturn(false);
         when(recoveryCodeRepository.findActiveByUser(7L)).thenReturn(List.of(active));
         when(recoveryCodes.matches("ABCD2345FG", CODE_HASH)).thenReturn(true);
-        when(tokenIssuer.issue(user, Duration.ofDays(7))).thenReturn(token);
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
 
         LoginResult result = service.login(new LoginCommand("ana@x.co", "Abcdef12", "ABCD2345FG"));
 

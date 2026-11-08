@@ -227,4 +227,73 @@ class UserTest {
         assertThat(activated.updateProfile("Ana M", Email.of("ana@x.co"), null).isTotpEnabled()).isTrue();
         assertThat(activated.withPasswordHash("$2a$12$otro").getTotpSecret()).isEqualTo("JBSWY3DPEHPK3PXP");
     }
+
+    // --- Registro de ingresos (SCRUM-101) ---------------------------------------
+
+    /**
+     * El ingreso CORRE el valor: lo que era el ultimo pasa a ser el anterior. Es la
+     * pieza de la que depende el contador de respuestas nuevas de RF-14; si en vez de
+     * correrse se sobreescribiera, el contador compararia contra un instante que
+     * acaba de ocurrir y daria cero siempre.
+     */
+    @Test
+    void registrar_un_ingreso_corre_el_ultimo_al_anterior() {
+        Instant primero = Instant.parse("2026-11-01T08:00:00Z");
+        Instant segundo = Instant.parse("2026-11-07T08:00:00Z");
+        User conUnIngreso = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash",
+                null, UserRole.USER, true, 0, false, null, null, primero, null);
+
+        User conDos = conUnIngreso.registerSuccessfulLogin(segundo);
+
+        assertThat(conDos.getLastLoginAt()).isEqualTo(segundo);
+        assertThat(conDos.getPreviousLoginAt()).isEqualTo(primero);
+    }
+
+    @Test
+    void el_primer_ingreso_deja_el_anterior_en_nulo() {
+        User nueva = User.register("Ana", Email.of("ana@x.co"), "$2a$12$hash");
+
+        User despues = nueva.registerSuccessfulLogin(Instant.parse("2026-11-07T08:00:00Z"));
+
+        assertThat(despues.getLastLoginAt()).isEqualTo(Instant.parse("2026-11-07T08:00:00Z"));
+        // Nulo significa "no hay un antes": el contador devuelve 0 en vez de contar
+        // todo el historial de la cuenta.
+        assertThat(despues.getPreviousLoginAt()).isNull();
+    }
+
+    @Test
+    void registrar_un_ingreso_limpia_el_contador_de_fallidos_y_el_bloqueo() {
+        User conFallos = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
+                UserRole.USER, true, 3, false, null,
+                Instant.parse("2026-11-07T09:00:00Z"), null, null);
+
+        User despues = conFallos.registerSuccessfulLogin(Instant.parse("2026-11-07T10:00:00Z"));
+
+        assertThat(despues.getFailedLoginAttempts()).isZero();
+        assertThat(despues.getLockedUntil()).isNull();
+    }
+
+    /**
+     * Cualquier copia del usuario tiene que arrastrar el registro de ingresos. Sin
+     * esto, cambiar la contrasena o enrolar el segundo factor borraria el instante
+     * del ultimo ingreso y el contador de respuestas nuevas se reiniciaria sin que
+     * nadie lo pidiera.
+     */
+    @Test
+    void las_copias_del_usuario_conservan_el_registro_de_ingresos() {
+        Instant ultimo = Instant.parse("2026-11-07T08:00:00Z");
+        Instant anterior = Instant.parse("2026-11-01T08:00:00Z");
+        User original = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
+                UserRole.USER, true, 0, true, "JBSWY3DPEHPK3PXP", null, ultimo, anterior);
+
+        assertThat(original.withPasswordHash("$2a$12$nuevo").getLastLoginAt()).isEqualTo(ultimo);
+        assertThat(original.updateProfile("Ana Maria", Email.of("otra@x.co"), null)
+                .getPreviousLoginAt()).isEqualTo(anterior);
+        assertThat(original.resetTotp().getLastLoginAt()).isEqualTo(ultimo);
+        assertThat(original.registerFailedLogin(ultimo).getPreviousLoginAt()).isEqualTo(anterior);
+        assertThat(original.resetFailedLogins().getLastLoginAt()).isEqualTo(ultimo);
+        assertThat(original.startTotpEnrollment("OTROSECRETO").getLastLoginAt()).isEqualTo(ultimo);
+        assertThat(original.confirmTotp().getPreviousLoginAt()).isEqualTo(anterior);
+        assertThat(original.clearLockAndResetAttempts().getLastLoginAt()).isEqualTo(ultimo);
+    }
 }

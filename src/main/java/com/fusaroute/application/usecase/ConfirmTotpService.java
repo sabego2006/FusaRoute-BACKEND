@@ -15,6 +15,7 @@ import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 
+import java.time.Clock;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
@@ -26,6 +27,13 @@ import java.util.List;
  *
  * Confirmar = quedar logueado: no obligamos a un segundo relogin. El token
  * completo que devuelve es la "llave de 7 dias" definida en SCRUM-13/179.
+ *
+ * Por eso mismo este metodo registra el ingreso igual que {@link LoginService}
+ * (SCRUM-101): si confirmar deja al usuario con sesion abierta, entonces es un
+ * ingreso, y no anotarlo dejaria su primer ingreso sin registrar. La consecuencia
+ * seria silenciosa y mala: las respuestas que reciba durante esa primera sesion de
+ * 7 dias no apareceran en el contador de RF-14 cuando vuelva a entrar, porque no
+ * habria un ingreso anterior contra el que compararlas.
  */
 public class ConfirmTotpService implements ConfirmTotpUseCase {
 
@@ -40,17 +48,20 @@ public class ConfirmTotpService implements ConfirmTotpUseCase {
     private final RecoveryCodePort recoveryCodes;
     private final RecoveryCodeRepositoryPort recoveryCodeRepository;
     private final TokenIssuerPort tokenIssuer;
+    private final Clock clock;
 
     public ConfirmTotpService(UserRepositoryPort userRepository,
                               TotpPort totp,
                               RecoveryCodePort recoveryCodes,
                               RecoveryCodeRepositoryPort recoveryCodeRepository,
-                              TokenIssuerPort tokenIssuer) {
+                              TokenIssuerPort tokenIssuer,
+                              Clock clock) {
         this.userRepository = userRepository;
         this.totp = totp;
         this.recoveryCodes = recoveryCodes;
         this.recoveryCodeRepository = recoveryCodeRepository;
         this.tokenIssuer = tokenIssuer;
+        this.clock = clock;
     }
 
     @Override
@@ -67,7 +78,8 @@ public class ConfirmTotpService implements ConfirmTotpUseCase {
             throw new InvalidTotpException();
         }
 
-        User activated = userRepository.save(user.confirmTotp());
+        User activated = userRepository.save(
+                user.confirmTotp().registerSuccessfulLogin(clock.instant()));
 
         List<String> plainCodes = recoveryCodes.generatePlainCodes(RECOVERY_CODE_COUNT);
         List<RecoveryCode> toPersist = new ArrayList<>(plainCodes.size());

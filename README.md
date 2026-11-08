@@ -162,6 +162,15 @@ sequenceDiagram
 | `POST` | `/api/users/me/totp/enroll` | Sí\* | 200 / 401 / 409 | Inicia el enrolamiento: secreto, `otpauth://` y QR |
 | `POST` | `/api/users/me/totp/confirm` | Sí\* | 200 / 401 / 409 | Activa el factor, devuelve JWT completo y códigos de respaldo |
 | `POST` | `/api/users/me/totp/recovery-codes` | Sí | 200 / 401 / 409 | Regenera los 10 códigos de respaldo |
+| `GET` | `/api/users/me/history` | Sí | 200 / 401 | Últimas 6 búsquedas del usuario (RF-07, SCRUM-20) |
+| `GET` | `/api/users/me/favorite-destination` | Sí | 200 / 204 / 401 | Destino favorito, con su aviso de congestión (RF-10, SCRUM-21) |
+| `PUT` | `/api/users/me/favorite-destination` | Sí | 200 / 400 / 401 | Marcar favorito, reemplazando el anterior (RF-10) |
+| `DELETE` | `/api/users/me/favorite-destination` | Sí | 204 / 401 | Quitar el favorito (RF-10) |
+| `POST` | `/api/comments` | Sí | 201 / 400 / 401 | Dejar un comentario (RF-08, SCRUM-22) |
+| `GET` | `/api/comments/me` | Sí | 200 / 401 | Mis comentarios con estado y respuesta (RF-08) |
+| `PUT` | `/api/comments/{id}` | Sí | 200 / 400 / 401 / 404 / 409 | Editar mi comentario, solo si sigue pendiente (RF-08) |
+| `DELETE` | `/api/comments/{id}` | Sí | 204 / 401 / 404 / 409 | Borrar mi comentario, solo si sigue pendiente (RF-08) |
+| `GET` | `/api/comments/me/unread-count` | Sí | 200 / 401 | Respuestas nuevas desde el ingreso anterior (RF-14, SCRUM-101) |
 
 \* Estos dos aceptan el JWT completo o el **token de enrolamiento** de vida corta
 (claim `scope=totp_enroll`). Todo lo demás exige `scope=full`.
@@ -413,6 +422,94 @@ vigentes y la fecha de la última actualización. Las reglas de vigencia y de or
 **La pantalla de detalle no llama a este endpoint**: consume `GET /api/routes/{id}`, que ya
 trae `fares` y `lastUpdatedAt`, para quedarse en una sola petición (LCP < 2.5 s). Este existe
 como superficie de API de RF-06 y para clientes que solo quieran la tarifa.
+
+### Caja de comentarios (RF-08, SCRUM-22)
+
+Todos los endpoints exigen sesión. El id del autor **sale del claim `sub` del JWT**, nunca
+del cuerpo ni de la URL: si viniera de ahí, cualquiera podría leer o borrar los comentarios
+de otro cambiando un número.
+
+La ruta es `/api/comments` aunque el modelo de dominio se llame `Feedback`. No es un
+descuido: el nombre del modelo lo fija el `CLAUDE.md` de este repo, y la URL es lenguaje de
+usuario — el usuario deja "comentarios".
+
+**`POST /api/comments`** — `201 Created`. Cuerpo: `{ "text": "..." }`. Las tres reglas del
+texto viven en el dominio (`Feedback`) y el controlador no repite ninguna:
+
+| Regla | Qué rechaza | Código |
+|---|---|---|
+| Longitud | menos de 10 o más de 100 caracteres, medidos **ya recortado** | `400` |
+| Sin enlaces | `http://`, `https://`, `www.` y el par `dominio.tld` suelto | `400` |
+| Banco de palabras | una palabra del banco, comparada en minúsculas y sin tildes | `400` |
+
+El **nombre del autor no se recibe**: lo resuelve el backend leyendo el perfil. Es la única
+forma de que "cada comentario muestra el nombre de usuario de quien lo escribió" no se pueda
+falsificar desde el cliente. La respuesta lo devuelve en `authorName`, y **no** devuelve
+`userId`: el id interno de la cuenta no le sirve a ninguna pantalla.
+
+Dos decisiones del patrón de enlaces que conviene conocer antes de "mejorarlo", ambas con
+test que las fija:
+
+- la lista de dominios de primer nivel es **cerrada**, no un `letras.letras` genérico, porque
+  a quien escribe se le va el espacio después del punto ("buen servicio.Gracias") y un patrón
+  genérico rechazaría ese comentario perfectamente válido;
+- `.es` y `.me` quedaron **fuera** de esa lista aunque sean dominios reales: los comentarios se
+  escriben en español, donde "Es" y "Me" empiezan frases todo el tiempo.
+
+El banco de palabras vive en `src/main/resources/moderation/forbidden-words.txt`, se lee una
+sola vez al arrancar y se revisa en el PR. Su encabezado explica el criterio de la lista y
+qué palabras quedaron fuera a propósito — "negro" aparece al describir el letrero de una
+ruta y "ladrón" es el aviso más útil que la caja puede recibir. Si el archivo falta, el
+filtro de palabras queda desactivado con un `WARN` en el log y el arranque **no** se rompe:
+un comentario grosero lo resuelve un administrador leyendo, un backend caído se lleva también
+el catálogo público.
+
+**`GET /api/comments/me`** — `200 OK`, del más reciente al más antiguo, con `status`
+(`PENDING`/`ANSWERED`), `reply` y `answeredAt`. Sin comentarios devuelve **lista vacía**, no
+`404`. Cada elemento trae `editable`, calculado en el backend: el frontend no deduce la regla.
+Ojo con lo que `editable` **no** es — esconder un botón no es seguridad, y el backend vuelve
+a verificar la regla en cada `PUT` y `DELETE`.
+
+**`PUT` y `DELETE /api/comments/{id}`** — solo del autor y **solo mientras esté pendiente**:
+
+- **`404`** no existe **o es de otro usuario**. Los dos casos responden igual a propósito: un
+  `403` para el comentario ajeno confirmaría que ese id existe, y con eso cualquiera puede
+  recorrer ids y contar cuántos comentarios tiene el sistema.
+- **`409`** ya fue respondido. `409` y no `403` porque el permiso está bien — es su
+  comentario — y lo que choca es el estado del recurso. El frontend usa esa diferencia para
+  recargar el comentario y mostrar la respuesta que acaba de aparecer, en vez de mandar al
+  usuario a iniciar sesión.
+
+Ese bloqueo no es cosmético: protege la métrica 4 del panel de RF-13. Si el autor pudiera
+reescribir un comentario ya respondido, el conteo de pendientes dejaría de corresponder con
+lo que el administrador revisó.
+
+### Respuestas nuevas, sin notificaciones push (RF-14, SCRUM-101)
+
+**`GET /api/comments/me/unread-count`** — `200 OK` con `{ "count": N }`. Las notificaciones
+push están **fuera de alcance** este semestre, así que no hay aviso proactivo: el frontend
+pregunta al cargar la sesión y pinta un contador en el ícono de comentarios.
+
+**Cuenta contra el ingreso ANTERIOR, no contra el último**, y por eso `users` tiene dos
+columnas (`last_login_at` y `previous_login_at`, V19) en vez de una. Con una sola la respuesta
+sería siempre "nada": el login acaba de mover esa columna a `now()`, y el frontend consulta
+justo después de iniciar sesión. El login **corre** el valor — lo que era el último pasa a
+ser el anterior — y el contador compara contra el anterior.
+
+Dos consecuencias que no son obvias:
+
+- en el **primer** ingreso de una cuenta no hay un "antes", y el contador devuelve `0` en vez
+  de contar todo su historial;
+- **confirmar el segundo factor también registra un ingreso**, porque confirmar deja sesión
+  abierta. Sin eso, las respuestas recibidas durante esa primera sesión de 7 días no
+  aparecerían en el contador al volver a entrar.
+
+Corregir una respuesta **mueve** `answered_at`, así que una respuesta editada vuelve a contar
+como nueva. Es deliberado: si se conservara el instante original, la corrección pasaría
+inadvertida para el usuario.
+
+Para crear un administrador en DEV (hace falta para RF-14 y RF-11), ver
+[`docs/datos/crear-administrador-en-dev.md`](docs/datos/crear-administrador-en-dev.md).
 
 ## Métricas y p95 (RNF-01, SCRUM-127)
 
