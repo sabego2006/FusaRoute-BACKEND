@@ -1,7 +1,6 @@
 package com.fusaroute.domain.port.out;
 
 import com.fusaroute.domain.model.Feedback;
-import com.fusaroute.domain.model.FeedbackStatus;
 
 import java.time.Instant;
 import java.util.List;
@@ -27,19 +26,6 @@ public interface FeedbackRepositoryPort {
 
     /** Comentarios del usuario, del mas reciente al mas antiguo. */
     List<Feedback> findByUser(Long userId);
-
-    /**
-     * Todos los comentarios, con los PENDIENTES PRIMERO y dentro de cada grupo del
-     * mas reciente al mas antiguo (RF-14, SCRUM-98).
-     *
-     * El orden lo decide la consulta y no quien llama: es el que pide el criterio de
-     * aceptacion, y ordenar en memoria obligaria a traer la tabla completa para
-     * reordenarla.
-     */
-    List<Feedback> findAllPendingFirst();
-
-    /** Solo los comentarios del estado pedido, del mas reciente al mas antiguo. */
-    List<Feedback> findAllByStatus(FeedbackStatus status);
 
     void delete(Long feedbackId);
 

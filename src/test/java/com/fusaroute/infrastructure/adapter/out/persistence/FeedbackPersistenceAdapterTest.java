@@ -25,9 +25,8 @@ import static org.mockito.Mockito.when;
  *
  * Verifica la traduccion entre el modelo de dominio y el de persistencia en los dos
  * sentidos, que es lo unico propio del adaptador, y a que consulta delega cada metodo
- * del puerto. Que la tabla exista, que los CHECK esten puestos y que el orden
- * "pendientes primero" salga de verdad asi se prueba contra un Postgres real en
- * {@link FeedbackPersistenceAdapterIT}.
+ * del puerto. Que la tabla exista y que los CHECK esten puestos de verdad se prueba
+ * contra un Postgres real en {@link FeedbackPersistenceAdapterIT}.
  *
  * Existe aparte del IT por la misma razon que el del destino favorito: el IT se salta
  * donde no hay Docker, y la traduccion de campos es justo lo que no debe quedar sin
@@ -184,28 +183,5 @@ class FeedbackPersistenceAdapterTest {
         assertThat(adapter().countAnsweredSince(7L, corte)).isEqualTo(2L);
 
         verify(repository).countByUserIdAndStatusAndAnsweredAtAfter(7L, FeedbackStatus.ANSWERED, corte);
-    }
-
-    @Test
-    void el_listado_del_administrador_sin_filtro_usa_la_consulta_de_pendientes_primero() {
-        when(repository.findAllPendingFirst()).thenReturn(List.of(filaPendiente(), filaRespondida()));
-
-        assertThat(adapter().findAllPendingFirst())
-                .extracting(Feedback::getId)
-                .containsExactly(5L, 6L);
-
-        verify(repository).findAllPendingFirst();
-    }
-
-    @Test
-    void el_listado_del_administrador_filtrado_usa_la_consulta_por_estado() {
-        when(repository.findByStatusOrderByCreatedAtDesc(FeedbackStatus.ANSWERED))
-                .thenReturn(List.of(filaRespondida()));
-
-        assertThat(adapter().findAllByStatus(FeedbackStatus.ANSWERED))
-                .extracting(Feedback::getId)
-                .containsExactly(6L);
-
-        verify(repository).findByStatusOrderByCreatedAtDesc(FeedbackStatus.ANSWERED);
     }
 }

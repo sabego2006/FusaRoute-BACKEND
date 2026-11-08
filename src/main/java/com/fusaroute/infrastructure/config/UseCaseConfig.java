@@ -1,6 +1,5 @@
 package com.fusaroute.infrastructure.config;
 
-import com.fusaroute.application.usecase.AdminFeedbackService;
 import com.fusaroute.application.usecase.ChangePasswordService;
 import com.fusaroute.application.usecase.ConfirmTotpService;
 import com.fusaroute.application.usecase.EnrollTotpService;
@@ -141,17 +140,6 @@ public class UseCaseConfig {
                                            ForbiddenWordsPort forbiddenWords,
                                            Clock clock) {
         return new FeedbackService(feedbackRepository, userRepository, forbiddenWords, clock);
-    }
-
-    /**
-     * Comentarios desde el lado del administrador (RF-14, SCRUM-23). Bean aparte del
-     * de la caja de comentarios porque es una clase aparte, y lo es porque su
-     * autorizacion es distinta: ver el javadoc de {@code AdminFeedbackService}.
-     */
-    @Bean
-    public AdminFeedbackService adminFeedbackService(FeedbackRepositoryPort feedbackRepository,
-                                                      Clock clock) {
-        return new AdminFeedbackService(feedbackRepository, clock);
     }
 
     @Bean

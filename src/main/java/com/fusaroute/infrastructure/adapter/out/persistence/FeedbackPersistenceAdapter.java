@@ -48,22 +48,6 @@ public class FeedbackPersistenceAdapter implements FeedbackRepositoryPort {
     }
 
     @Override
-    @Transactional(readOnly = true)
-    public List<Feedback> findAllPendingFirst() {
-        return repository.findAllPendingFirst().stream()
-                .map(FeedbackPersistenceAdapter::toDomain)
-                .toList();
-    }
-
-    @Override
-    @Transactional(readOnly = true)
-    public List<Feedback> findAllByStatus(FeedbackStatus status) {
-        return repository.findByStatusOrderByCreatedAtDesc(status).stream()
-                .map(FeedbackPersistenceAdapter::toDomain)
-                .toList();
-    }
-
-    @Override
     @Transactional
     public void delete(Long feedbackId) {
         // El caso de uso ya comprobo que el comentario existe, es del usuario y sigue
