@@ -6,6 +6,7 @@ import com.fusaroute.domain.exception.FieldViolation;
 import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidCoordinateException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
+import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.exception.InvalidTotpException;
@@ -62,6 +63,16 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
         problem.setProperty("errors", e.getViolations());
         return problem;
+    }
+
+    /**
+     * Destino favorito invalido (RF-10). Va sin lista de {@code errors} porque el
+     * cuerpo tiene un solo campo: no hay nada que repartir por campo y el mensaje
+     * basta para pintarlo bajo el control.
+     */
+    @ExceptionHandler(InvalidFavoriteDestinationException.class)
+    public ProblemDetail handleInvalidFavoriteDestination(InvalidFavoriteDestinationException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
     @ExceptionHandler(EmailAlreadyRegisteredException.class)
