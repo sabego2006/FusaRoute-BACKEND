@@ -41,6 +41,16 @@ public class TrafficSectorJpaEntity {
     @Column(name = "end_time", nullable = false)
     private LocalTime endTime;
 
+    /** Circulo del sector (V22); los tres a la vez o ninguno. */
+    @Column(name = "center_lat")
+    private Double centerLat;
+
+    @Column(name = "center_lng")
+    private Double centerLng;
+
+    @Column(name = "radius_m")
+    private Integer radiusM;
+
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "traffic_sector_neighborhoods", joinColumns = @JoinColumn(name = "sector_id"))
     @Column(name = "neighborhood_name", nullable = false, length = 120)
@@ -65,6 +75,18 @@ public class TrafficSectorJpaEntity {
 
     public LocalTime getEndTime() {
         return endTime;
+    }
+
+    public Double getCenterLat() {
+        return centerLat;
+    }
+
+    public Double getCenterLng() {
+        return centerLng;
+    }
+
+    public Integer getRadiusM() {
+        return radiusM;
     }
 
     public Set<String> getNeighborhoods() {

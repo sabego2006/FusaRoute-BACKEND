@@ -25,7 +25,7 @@ public class MapsConfig {
     private static final int READ_TIMEOUT_MS = 5_000;
 
     @Bean
-    public RestClient googleMapsRestClient(@Value("${google.maps.base-url}") String baseUrl) {
+    public RestClient googleMapsRestClient(@Value("${google.routes.base-url:https://routes.googleapis.com}") String baseUrl) {
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(CONNECT_TIMEOUT_MS);
         factory.setReadTimeout(READ_TIMEOUT_MS);

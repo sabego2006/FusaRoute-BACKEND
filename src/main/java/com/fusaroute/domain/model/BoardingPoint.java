@@ -42,6 +42,34 @@ public record BoardingPoint(Coordinate point, double distanceInMeters, double di
         return Duration.ofSeconds(Math.round(distanceInMeters / WALKING_SPEED_METERS_PER_SECOND));
     }
 
+    /**
+     * Caminata ampliada (P1): si ninguna ruta cumple {@link #MAX_WALKING_DISTANCE_METERS} se ofrece la
+     * mejor con caminata hasta aqui, marcada {@code longWalk}. Se mide, igual que el umbral normal,
+     * sobre la distancia en linea recta al trazado.
+     */
+    public static final double LONG_WALK_DISTANCE_METERS = 1_500;
+
+    /**
+     * Las calles no van en linea recta: la caminata real que se le muestra al usuario es la distancia
+     * recta por este factor (decision de Santiago, 2026-11-08), siempre rotulada "aprox.".
+     */
+    public static final double WALKING_DETOUR_FACTOR = 1.3;
+
+    /** Caminata aproximada que se le muestra al usuario: linea recta por {@link #WALKING_DETOUR_FACTOR}. */
+    public double walkingDistanceInMeters() {
+        return distanceInMeters * WALKING_DETOUR_FACTOR;
+    }
+
+    /** Minutos a pie (5 km/h) sobre {@link #walkingDistanceInMeters()}, redondeados hacia arriba. */
+    public long walkingMinutesCeil() {
+        return (long) Math.ceil(walkingDistanceInMeters() / (WALKING_SPEED_METERS_PER_SECOND * 60));
+    }
+
+    /** Tiempo a pie sobre {@link #walkingDistanceInMeters()}; es el que entra al ranking puerta a puerta. */
+    public Duration approxWalkingTime() {
+        return Duration.ofSeconds(Math.round(walkingDistanceInMeters() / WALKING_SPEED_METERS_PER_SECOND));
+    }
+
     /** Si es false, la ruta se descarta como candidata. */
     public boolean isWithinWalkingDistance() {
         return distanceInMeters <= MAX_WALKING_DISTANCE_METERS;

@@ -89,6 +89,36 @@ class GetCongestionWarningServiceTest {
         assertThat(warning.earliestStart()).isEqualTo(LocalTime.of(6, 0));
     }
 
+    private static TrafficSector indioConCirculo() {
+        // Los barrios no cuentan cuando hay circulo: manda la geometria.
+        return new TrafficSector(4L, "Indio (tarde)", Set.of("Indio"), LocalTime.of(17, 0), LocalTime.of(19, 0),
+                4.3317, -74.3775, 450);
+    }
+
+    @Test
+    void un_sector_con_circulo_avisa_si_el_trazado_pasa_por_el_circulo_aunque_el_nombre_no_coincida() {
+        when(trafficSectorRepository.findAll()).thenReturn(List.of(indioConCirculo()));
+        List<com.fusaroute.domain.model.Coordinate> pasaPorElIndio = List.of(
+                new com.fusaroute.domain.model.Coordinate(4.3317, -74.3850),
+                new com.fusaroute.domain.model.Coordinate(4.3317, -74.3700));
+
+        CongestionWarning warning = serviceA(17, 30).forRoute(List.of("Otro barrio"), pasaPorElIndio);
+
+        assertThat(warning.sectors()).extracting(TrafficSector::name).containsExactly("Indio (tarde)");
+    }
+
+    @Test
+    void un_sector_con_circulo_no_avisa_si_el_trazado_no_lo_toca_aunque_el_barrio_coincida() {
+        when(trafficSectorRepository.findAll()).thenReturn(List.of(indioConCirculo()));
+        List<com.fusaroute.domain.model.Coordinate> lejos = List.of(
+                new com.fusaroute.domain.model.Coordinate(4.3600, -74.3500),
+                new com.fusaroute.domain.model.Coordinate(4.3650, -74.3500));
+
+        assertThat(serviceA(17, 30).forRoute(List.of("Indio"), lejos).isEmpty()).isTrue();
+        // Y sin trazado, un sector con circulo tampoco se puede evaluar.
+        assertThat(serviceA(17, 30).forRoute(List.of("Indio")).isEmpty()).isTrue();
+    }
+
     @Test
     void sin_sectores_registrados_no_hay_aviso() {
         // Es el estado de hoy: la tabla esta vacia porque no hay observacion de campo.

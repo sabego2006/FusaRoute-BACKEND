@@ -27,6 +27,29 @@ GET {{baseUrl}}/api/routes/8/fare
 ### Costo del pasaje de ruta inexistente → 404
 GET {{baseUrl}}/api/routes/99999/fare
 
+### ──────────────── 1b. LUGARES Y BÚSQUEDA POR GEOMETRÍA ────────────────
+
+### Lugares canónicos para el selector (id, slug, name, lat, lng, aliases, routeCount)
+GET {{baseUrl}}/api/places
+
+### Buscar por lugar: originPlaceId / destinationPlaceId salen de /api/places
+GET {{baseUrl}}/api/routes/search?originPlaceId=1&destinationPlaceId=2
+
+### Buscar por GPS o punto del mapa (lat+lng); el destino puede ser un lugar
+GET {{baseUrl}}/api/routes/search?originLat=4.3433&originLng=-74.3661&destinationPlaceId=2
+
+### Buscar por nombre (legado): resuelve por nombre o alias al lugar canónico
+GET {{baseUrl}}/api/routes/search?originNeighborhood=Indio&destinationNeighborhood=Terminal
+
+### Misma búsqueda sin Google: etaSource siempre ESTIMATED
+GET {{baseUrl}}/api/routes/search/offline?originPlaceId=1&destinationPlaceId=2
+
+### Punta sin resolver → 400 con point=origin|destination
+GET {{baseUrl}}/api/routes/search?originPlaceId=999999&destinationPlaceId=2
+
+### Sin ruta ni a 1.500 m → 404 con nearestRoutes
+GET {{baseUrl}}/api/routes/search?originLat=4.20&originLng=-74.45&destinationPlaceId=2
+
 ### ──────────────── 2. REGISTRO ────────────────
 
 ### Registro válido

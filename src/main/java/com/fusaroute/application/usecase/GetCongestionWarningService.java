@@ -1,6 +1,7 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.model.CongestionWarning;
+import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.TrafficSector;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
@@ -29,14 +30,21 @@ public class GetCongestionWarningService implements GetCongestionWarningUseCase 
 
     @Override
     public CongestionWarning forRoute(List<String> traversedNeighborhoods) {
-        if (traversedNeighborhoods.isEmpty()) {
-            return new CongestionWarning(List.of());
-        }
+        return forRoute(traversedNeighborhoods, List.of());
+    }
 
+    /**
+     * Un sector con circulo (V22) aplica si el trazado recorrido pasa por el; uno sin circulo, por
+     * nombre de barrio, como antes. Son criterios excluyentes por sector: el circulo manda.
+     */
+    @Override
+    public CongestionWarning forRoute(List<String> traversedNeighborhoods, List<Coordinate> traversedPath) {
         LocalTime now = LocalTime.now(clock);
         List<TrafficSector> affecting = trafficSectorRepository.findAll().stream()
                 .filter(sector -> sector.isWarningActiveAt(now))
-                .filter(sector -> sector.covers(traversedNeighborhoods))
+                .filter(sector -> sector.hasCircle()
+                        ? sector.isCrossedBy(traversedPath)
+                        : !traversedNeighborhoods.isEmpty() && sector.covers(traversedNeighborhoods))
                 .toList();
 
         return new CongestionWarning(affecting);

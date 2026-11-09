@@ -560,12 +560,42 @@ su migración.
 construcción el mismo estado que bloquea la edición de un comentario, que es lo que pide el
 criterio de aceptación.
 
+## Búsqueda por geometría (P1, SCRUM-8)
+
+`GET /api/places` (público, ETag + `Cache-Control` 10 min) lista los lugares canónicos con coordenada:
+`[{ id, slug, name, lat, lng, aliases, routeCount }]` ordenado por nombre. Salen de la migración V21
+(generada desde la tabla de lugares de P0); `route_neighborhoods` no se toca y sigue alimentando
+"Por dónde pasa".
+
+`GET /api/routes/search` y `GET /api/routes/search/offline`: cada punta acepta **una** forma, con esta
+prioridad: `originPlaceId` · `originLat`+`originLng` · `originNeighborhood` (legado: nombre o alias,
+sin tildes ni mayúsculas). Igual con `destination…`. Una punta que no se resuelve es **400** y dice cuál
+(`point: origin|destination`).
+
+- Un punto se proyecta sobre el trazado de cada ruta activa; la ruta es candidata si el **abordaje queda
+  antes que la bajada** (una ruta = un sentido, sin transbordos).
+- Umbral de caminata **800 m en línea recta** al trazado; si ninguna ruta cumple, la mejor hasta
+  **1.500 m** con `longWalk: true`; si tampoco, **404** con `nearestRoutes`. Lo que se muestra
+  (`boarding/dropOff.distanceInMeters`) es esa distancia **×1,3** (caminata aproximada) y
+  `walkingMinutes` a 5 km/h, redondeado hacia arriba.
+- Se rankea por tiempo propio puerta a puerta (recorrido ÷ 15 km/h urbana o 30 km/h intermunicipal, o la
+  mediana de las últimas 50 mediciones de Google de esa ruta con al menos 5). **Google solo cronometra la
+  ganadora**, con una llamada como máximo (caché 5 min). Sin llave o con error: `etaSource: ESTIMATED`
+  y la búsqueda no falla. `/search/offline` nunca llama a Google.
+- Congestión del Indio: círculo de 450 m (V22) sobre el **tramo en buseta**; `congestionSectors` va en
+  la respuesta y el detalle de ruta (`/{id}`) lo evalúa sobre el trazado completo.
+- Las rutas sin trazado (hoy ids 5 y 6, y la de Pasca hasta P2) solo salen por el camino legado de
+  nombres, sin abordaje ni tiempo, y nunca le ganan a una con trazado.
+- La cobertura se mide con `SearchCoverageIT` y queda en `docs/calidad/cobertura-busqueda.md`.
+
+Variables: `GOOGLE_MAPS_API_KEY` (opcional; vacía = siempre estimado) y `GOOGLE_ROUTES_BASE_URL`
+(solo para apuntar a un stub). `GOOGLE_MAPS_BASE_URL` ya no se usa.
+
 ## Métricas y p95 (RNF-01, SCRUM-127)
 
 El RNF-01 exige **p95 < 8 s** extremo a extremo en `/api/routes/search` y un caché de
-**5 min por par origen-destino** sobre las llamadas a Google Maps. El endpoint de búsqueda
-no existe todavía (depende de RF-04); lo que este sprint deja listo es el instrumento y el
-adaptador, para no cablear todo de golpe cuando RF-04 aterrice.
+**5 min por par origen-destino** sobre las llamadas a Google Maps. La búsqueda ya existe (ver
+"Búsqueda por geometría" arriba) y usa la Routes API de Google solo para cronometrar la ruta ganadora.
 
 **Acceder a las métricas** (requieren JWT, igual que cualquier endpoint protegido):
 
@@ -577,20 +607,20 @@ curl -H "Authorization: Bearer $TOKEN" http://localhost:8080/actuator/metrics/ht
 - `http.server.requests` trae el histograma y los percentiles (0.5, 0.95, 0.99) de **todos**
   los endpoints — ahí se leerá el p95 de `/api/routes/search` cuando exista.
 - `fusaroute.maps.travel_time` (tags `status=ok|error`): latencia de la llamada **real** (sin
-  caché) a la Distance Matrix API de Google.
+  caché) a la Routes API de Google (`computeRoutes`).
 - `fusaroute.maps.cache` (tags `result=hit|miss`): cuántas consultas de tiempo de viaje se
   resolvieron con el caché de 5 min vs. con una llamada nueva a Google.
 
 **Caché**: bean `googleMapsTravelTime` (Caffeine, `spring.cache.caffeine.spec` en
 `application.properties`), TTL 5 min, clave = par origen-destino (sin incluir el trazado: la
-Distance Matrix API cotiza por par, no por ruta — seguir un trazado específico exigiría la
-Roads API, fuera de alcance). Un fallo de Google nunca se cachea.
+clave es el par; los waypoints del trazado van en la petición pero no en la clave). Un fallo
+de Google nunca se cachea.
 
 **Probe interno** (`GET /api/_internal/maps-probe?originLat=&originLon=&destLat=&destLon=`):
 valida el cache y las métricas de arriba sin esperar a que `/api/routes/search` exista.
 Apagado por defecto salvo en `dev` (`fusaroute.internal.maps-probe-enabled`). Responde
 `X-Cache: HIT|MISS` cuando la llamada a Google tiene éxito, o `503` con el `status` real de
-Google en `detail` (p. ej. `REQUEST_DENIED` si la API key no tiene Distance Matrix habilitada
+Google en `detail` (p. ej. `403` si la API key no tiene la Routes API habilitada
 en Google Cloud Console — es la situación actual en DEV y queda pendiente de que alguien con
 acceso al proyecto de Maps lo habilite).
 

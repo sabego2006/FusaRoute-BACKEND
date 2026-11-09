@@ -23,6 +23,9 @@ import java.util.regex.Pattern;
 public record Route(Long id, String name, String signFile, RouteType type, RouteStatus status,
                     List<String> neighborhoods, List<Fare> fares, List<Coordinate> path) {
 
+    /** Tramo minimo en buseta para que una combinacion abordaje-bajada cuente como viaje. */
+    private static final double MIN_RIDE_METERS = 50;
+
     /** Mismo formato que obliga ck_routes_sign_file en la base (V14). */
     private static final Pattern SIGN_FILE = Pattern.compile("^[A-Z0-9_]+$");
 
@@ -102,6 +105,65 @@ public record Route(Long id, String name, String signFile, RouteType type, Route
 
     public boolean isActive() {
         return status == RouteStatus.ACTIVA;
+    }
+
+    /** Si la ruta tiene trazado utilizable (al menos dos puntos). Sin el solo se puede buscar por nombre. */
+    public boolean hasPath() {
+        return path.size() >= 2;
+    }
+
+    /**
+     * Busqueda por geometria (P1): la mejor forma de usar esta ruta para ir de {@code origin} a
+     * {@code destination}. Un punto se proyecta sobre el trazado; la ruta sirve si existe una pasada por
+     * el origen que quede ANTES que una pasada por el destino y ambas a menos de
+     * {@code maxStraightMeters} (linea recta al trazado). Entre las combinaciones validas gana la de
+     * menor caminata total.
+     *
+     * <p>Se consideran todas las pasadas y no solo la mas cercana: ver {@link PathProjection#passesWithin}.
+     * Una ruta es un solo sentido, asi que nunca se ofrece el recorrido al reves.
+     *
+     * @return vacio si la ruta no tiene trazado o ninguna combinacion cumple
+     */
+    public Optional<RouteMatch> matchBetween(Coordinate origin, Coordinate destination, double maxStraightMeters) {
+        List<BoardingPoint> boardings = PathProjection.passesWithin(path, origin, maxStraightMeters);
+        if (boardings.isEmpty()) {
+            return Optional.empty();
+        }
+        List<BoardingPoint> dropOffs = PathProjection.passesWithin(path, destination, maxStraightMeters);
+        BoardingPoint bestBoarding = null;
+        BoardingPoint bestDropOff = null;
+        double bestWalk = Double.MAX_VALUE;
+        for (BoardingPoint boarding : boardings) {
+            for (BoardingPoint dropOff : dropOffs) {
+                // Abordaje antes que bajada, y con un tramo que justifique subirse: dos puntos casi
+                // iguales (o dos segmentos que proyectan sobre el mismo vertice) no son un viaje.
+                if (dropOff.distanceAlongPathInMeters() - boarding.distanceAlongPathInMeters() < MIN_RIDE_METERS) {
+                    continue;
+                }
+                double walk = boarding.distanceInMeters() + dropOff.distanceInMeters();
+                if (walk < bestWalk) {
+                    bestWalk = walk;
+                    bestBoarding = boarding;
+                    bestDropOff = dropOff;
+                }
+            }
+        }
+        return bestBoarding == null
+                ? Optional.empty()
+                : Optional.of(new RouteMatch(this, bestBoarding, bestDropOff));
+    }
+
+    /**
+     * Distancia en linea recta del punto al trazado, o vacio sin trazado. Alimenta el 404 con la ruta
+     * mas cercana a cada punta.
+     */
+    public OptionalDouble distanceToPathInMeters(Coordinate from) {
+        return boardingPointFor(from).map(b -> OptionalDouble.of(b.distanceInMeters())).orElse(OptionalDouble.empty());
+    }
+
+    /** Tramo del trazado entre dos distancias acumuladas (ver {@link PathProjection#subPath}). */
+    public List<Coordinate> pathBetween(double fromAlongInMeters, double toAlongInMeters) {
+        return PathProjection.subPath(path, fromAlongInMeters, toAlongInMeters);
     }
 
     /**

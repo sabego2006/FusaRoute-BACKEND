@@ -217,7 +217,29 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** Ninguna ruta candidata conecta el origen con el destino solicitados (RF-04). */
     @ExceptionHandler(NoRouteAvailableException.class)
     public ProblemDetail handleNoRouteAvailable(NoRouteAvailableException e) {
-        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+        // P1: la ruta con trazado mas cercana a cada punta, para decirle al usuario cuanto le falta.
+        java.util.Map<String, Object> nearest = new java.util.LinkedHashMap<>();
+        if (e.nearestToOrigin() != null) {
+            nearest.put("origin", java.util.Map.of("routeName", e.nearestToOrigin().routeName(),
+                    "distanceInMeters", e.nearestToOrigin().distanceInMeters()));
+        }
+        if (e.nearestToDestination() != null) {
+            nearest.put("destination", java.util.Map.of("routeName", e.nearestToDestination().routeName(),
+                    "distanceInMeters", e.nearestToDestination().distanceInMeters()));
+        }
+        if (!nearest.isEmpty()) {
+            problem.setProperty("nearestRoutes", nearest);
+        }
+        return problem;
+    }
+
+    /** Una punta de la busqueda no se pudo resolver (P1): 400, y dice cual de las dos. */
+    @ExceptionHandler(com.fusaroute.domain.exception.InvalidSearchPointException.class)
+    public ProblemDetail handleInvalidSearchPoint(com.fusaroute.domain.exception.InvalidSearchPointException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        problem.setProperty("point", e.side());
+        return problem;
     }
 
     /** Google Maps no respondio (RNF-01): 503, no 500, porque el fallo es del proveedor externo. */

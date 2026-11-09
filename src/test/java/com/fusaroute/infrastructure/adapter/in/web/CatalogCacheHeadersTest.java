@@ -85,7 +85,7 @@ class CatalogCacheHeadersTest {
     void catalogoConUnaRuta() {
         when(listActiveRoutesUseCase.listActive()).thenReturn(List.of(urbana()));
         when(getRouteDetailUseCase.getById(1L)).thenReturn(urbana());
-        when(getCongestionWarningUseCase.forRoute(any())).thenReturn(new CongestionWarning(List.of()));
+        when(getCongestionWarningUseCase.forRoute(any(), any())).thenReturn(new CongestionWarning(List.of()));
     }
 
     @Test
@@ -165,7 +165,7 @@ class CatalogCacheHeadersTest {
                         LocalDate.of(2026, 2, 5)));
         // La busqueda responde 404 (sin ruta candidata): basta para ver los headers, y de paso
         // comprueba que un error tampoco queda cacheado.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRoute(any(), any()))
                 .thenThrow(new NoRouteAvailableException("Centro", "La Pampa"));
 
         mockMvc.perform(get("/api/routes/1/fare"))

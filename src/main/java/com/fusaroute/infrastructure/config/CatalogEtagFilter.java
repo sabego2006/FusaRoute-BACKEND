@@ -29,7 +29,7 @@ import java.util.regex.Pattern;
 public class CatalogEtagFilter extends ShallowEtagHeaderFilter {
 
     /** El listado, o el detalle de una ruta por id numerico. No casa con /search ni con /{id}/fare. */
-    private static final Pattern CATALOG_PATH = Pattern.compile("^/api/routes(/\\d+)?/?$");
+    private static final Pattern CATALOG_PATH = Pattern.compile("^/api/(routes(/\\d+)?|places)/?$");
 
     @Override
     protected boolean shouldNotFilter(HttpServletRequest request) {

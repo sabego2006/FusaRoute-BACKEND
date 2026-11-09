@@ -93,7 +93,7 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login").permitAll()
                         // "/api/routes/*" cubre un solo segmento, asi que /search/offline
                         // (SCRUM-51) hay que enumerarlo aparte o quedaria exigiendo token.
-                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*", "/api/routes/*/fare",
+                        .requestMatchers(HttpMethod.GET, "/api/routes", "/api/routes/*", "/api/routes/*/fare", "/api/places",
                                 "/api/routes/search/offline",
                                 "/swagger-ui/**", "/v3/api-docs/**", "/swagger-ui.html")
                                 .permitAll()

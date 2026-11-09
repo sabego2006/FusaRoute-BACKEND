@@ -46,7 +46,7 @@ class GoogleMapsCacheWiringTest {
                 // MapsConfig es quien aporta el @EnableCaching sin el que no hay CacheManager.
                 .withUserConfiguration(MapsConfig.class)
                 .withPropertyValues(
-                        "google.maps.base-url=https://maps.googleapis.com/maps/api",
+                        "google.routes.base-url=https://routes.googleapis.com",
                         "spring.cache.type=" + properties.getProperty("spring.cache.type"),
                         "spring.cache.cache-names=" + properties.getProperty("spring.cache.cache-names"),
                         "spring.cache.caffeine.spec=" + properties.getProperty("spring.cache.caffeine.spec"))
