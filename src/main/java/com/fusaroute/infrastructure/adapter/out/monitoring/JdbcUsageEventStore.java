@@ -34,29 +34,25 @@ class JdbcUsageEventStore implements UsageEventQueryPort {
      * de mas de 120 caracteres haria fallar el lote entero y perderia los demas.
      */
     void insertBatch(List<UsageEvent> events) {
-        jdbc.batchUpdate(
-                "INSERT INTO " + tables.searchEvents()
-                        + " (ts, event_type, origin_label, destination_label, route_id, outcome,"
-                        + " eta_source, latency_ms, congestion) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                events, events.size(), (ps, e) -> {
-                    ps.setTimestamp(1, Timestamp.from(e.occurredAt()));
-                    ps.setString(2, e.type().name());
-                    ps.setString(3, label(e.originLabel()));
-                    ps.setString(4, label(e.destinationLabel()));
-                    if (e.routeId() == null) {
-                        ps.setNull(5, Types.BIGINT);
-                    } else {
-                        ps.setLong(5, e.routeId());
-                    }
-                    ps.setString(6, e.outcome().name());
-                    ps.setString(7, e.etaSource() == null ? null : e.etaSource().name());
-                    if (e.latencyMs() == null) {
-                        ps.setNull(8, Types.INTEGER);
-                    } else {
-                        ps.setInt(8, e.latencyMs());
-                    }
-                    ps.setBoolean(9, e.congestion());
-                });
+        jdbc.batchUpdate(tables.insertEvent(), events, events.size(), (ps, e) -> {
+            ps.setTimestamp(1, Timestamp.from(e.occurredAt()));
+            ps.setString(2, e.type().name());
+            ps.setString(3, label(e.originLabel()));
+            ps.setString(4, label(e.destinationLabel()));
+            if (e.routeId() == null) {
+                ps.setNull(5, Types.BIGINT);
+            } else {
+                ps.setLong(5, e.routeId());
+            }
+            ps.setString(6, e.outcome().name());
+            ps.setString(7, e.etaSource() == null ? null : e.etaSource().name());
+            if (e.latencyMs() == null) {
+                ps.setNull(8, Types.INTEGER);
+            } else {
+                ps.setInt(8, e.latencyMs());
+            }
+            ps.setBoolean(9, e.congestion());
+        });
     }
 
     private static String label(String value) {
@@ -66,18 +62,13 @@ class JdbcUsageEventStore implements UsageEventQueryPort {
 
     @Override
     public List<UsageEvent> findRecent(Instant since, int limit) {
-        StringBuilder sql = new StringBuilder(
-                "SELECT id, ts, event_type, origin_label, destination_label, route_id, outcome,"
-                        + " eta_source, latency_ms, congestion FROM " + tables.searchEvents());
         List<Object> args = new ArrayList<>();
         if (since != null) {
-            sql.append(" WHERE ts >= ?");
             args.add(Timestamp.from(since));
         }
-        sql.append(" ORDER BY ts DESC, id DESC LIMIT ?");
         args.add(limit);
 
-        return jdbc.query(sql.toString(), (rs, i) -> {
+        return jdbc.query(tables.selectEvents(since != null), (rs, i) -> {
             long routeId = rs.getLong("route_id");
             Long route = rs.wasNull() ? null : routeId;
             int latency = rs.getInt("latency_ms");
@@ -99,6 +90,6 @@ class JdbcUsageEventStore implements UsageEventQueryPort {
 
     /** Borra lo anterior a {@code cutoff}; devuelve cuantas filas. */
     int deleteOlderThan(Instant cutoff) {
-        return jdbc.update("DELETE FROM " + tables.searchEvents() + " WHERE ts < ?", Timestamp.from(cutoff));
+        return jdbc.update(tables.deleteEventsOlderThan(), Timestamp.from(cutoff));
     }
 }
