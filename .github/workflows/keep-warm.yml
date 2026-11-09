@@ -1,0 +1,33 @@
+name: keep-warm
+
+# Ping de calentamiento del backend en Render (SCRUM-128, RNF-01/RNF-02).
+#
+# El tier gratis de Render duerme el servicio tras ~15 min sin trafico y el siguiente
+# usuario espera hasta ~60 s. Ningun ajuste de payload ni de cache arregla eso, asi que
+# se mantiene despierto con un GET a /health cada 10 min. Es un PARCHE, no una solucion:
+# ver docs/monitoring.md para lo que cubre y lo que no.
+#
+# Ventana: 06:00-23:00 hora de Bogota (UTC-5) = 11:00-04:00 UTC. Fuera de ella el
+# servicio puede dormirse. Se acota a proposito: las 750 h/mes gratis de Render se
+# gastan mientras el servicio esta despierto, y 24/7 deja solo ~6 h de margen.
+on:
+  schedule:
+    - cron: '*/10 11-23,0-3 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: GET /health
+        run: |
+          # 90 s cubre un cold start de ~60 s. Un fallo deja el run en rojo y GitHub
+          # avisa por correo: el ping tambien sirve de alarma si el backend se cae.
+          curl --fail --silent --show-error \
+               --max-time 90 --retry 2 --retry-delay 10 --retry-all-errors \
+               --output /dev/null \
+               --write-out 'status=%{http_code} total=%{time_total}s\n' \
+               https://fusaroute-backend.onrender.com/health
