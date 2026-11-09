@@ -12,6 +12,7 @@ import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidCoordinateException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
+import com.fusaroute.domain.exception.InvalidRideException;
 import com.fusaroute.domain.exception.InvalidFeedbackReplyException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
@@ -206,6 +207,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     public ProblemDetail handleUserNotFound(UserNotFoundException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
+    }
+
+    /** Datos del viaje "Ya me subi" invalidos: 400 con el mensaje del dominio. */
+    @ExceptionHandler(InvalidRideException.class)
+    public ProblemDetail handleInvalidRide(InvalidRideException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
     /** La ruta no existe o esta suspendida: para el catalogo publico es lo mismo. */
