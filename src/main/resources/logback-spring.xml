@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Logback de FusaRoute (SCRUM-186). Es la configuracion por defecto de Spring Boot
+    (consola) mas UN appender: DB_LOGS, que guarda WARN y ERROR en la tabla app_logs.
+
+    Por que se declara aqui y no como bean de Spring: los WARN del arranque salen antes
+    de que exista el contexto, y un bean los perderia. El appender encola desde el primer
+    instante y, cuando Spring esta listo, MonitoringLifecycle le conecta el escritor.
+    Ver DatabaseLogAppender.
+
+    Los tamanos salen de application.properties (app.logs.*) con springProperty, que lee
+    el Environment de Spring: aqui no se repite ningun valor.
+-->
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty scope="context" name="LOGS_QUEUE_SIZE" source="app.logs.queue-size" defaultValue="1000"/>
+    <springProperty scope="context" name="LOGS_BATCH_SIZE" source="app.logs.batch-size" defaultValue="50"/>
+    <springProperty scope="context" name="LOGS_FLUSH_INTERVAL_MS" source="app.logs.flush-interval-ms"
+                    defaultValue="1000"/>
+
+    <appender name="DB_LOGS" class="com.fusaroute.infrastructure.adapter.out.monitoring.DatabaseLogAppender">
+        <queueSize>${LOGS_QUEUE_SIZE}</queueSize>
+        <batchSize>${LOGS_BATCH_SIZE}</batchSize>
+        <flushIntervalMs>${LOGS_FLUSH_INTERVAL_MS}</flushIntervalMs>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="DB_LOGS"/>
+    </root>
+</configuration>

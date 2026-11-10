@@ -859,6 +859,159 @@
           ]
         }
       ]
+    },
+    {
+      "name": "7-Ya me subí e historial de viajes",
+      "item": [
+        {
+          "name": "Ya me subí → 201",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/users/me/rides",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"routeId\": 14,\n  \"destinationLabel\": \"Terminal de Transporte\",\n  \"destinationPlaceId\": 31,\n  \"destinationLat\": 4.3459,\n  \"destinationLng\": -74.3779,\n  \"originLabel\": \"Indio\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 201', () => pm.response.to.have.status(201));",
+                  "pm.test('Trae letrero y fecha', () => {",
+                  "  const r = pm.response.json();",
+                  "  pm.expect(r).to.have.property('signFile');",
+                  "  pm.expect(r).to.have.property('boardedAt');",
+                  "  pm.expect(r).to.not.have.property('userId');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Ruta inexistente → 404",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/users/me/rides",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"routeId\": 99999,\n  \"destinationLabel\": \"X\",\n  \"destinationLat\": 4.3,\n  \"destinationLng\": -74.3,\n  \"originLabel\": \"Y\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin coordenadas → 400",
+          "request": {
+            "method": "POST",
+            "url": "{{baseUrl}}/api/users/me/rides",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"routeId\": 14,\n  \"destinationLabel\": \"Terminal de Transporte\",\n  \"originLabel\": \"Indio\"\n}"
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400 ProblemDetail', () => {",
+                  "  pm.response.to.have.status(400);",
+                  "  pm.expect(pm.response.json()).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Tus últimos viajes (máx. 10)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me/rides",
+            "header": [
+              {
+                "key": "Authorization",
+                "value": "Bearer {{token}}"
+              }
+            ]
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Máximo 10, del más nuevo al más viejo', () => {",
+                  "  const a = pm.response.json();",
+                  "  pm.expect(a.length).to.be.at.most(10);",
+                  "  for (let i = 1; i < a.length; i++) pm.expect(new Date(a[i-1].boardedAt) >= new Date(a[i].boardedAt)).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin token → 401",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/users/me/rides",
+            "header": []
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ]
+        }
+      ]
     }
   ]
 }

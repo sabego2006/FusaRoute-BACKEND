@@ -218,3 +218,56 @@ Authorization: Bearer {{token}}
 
 ### Probe sin token → 401
 GET {{baseUrl}}/api/_internal/maps-probe?originLat=4.3392&originLon=-74.3647&destLat=4.2889&destLon=-74.2167
+
+### ──────────────── 7. YA ME SUBÍ E HISTORIAL DE VIAJES ────────────────
+### Distinto del historial de búsquedas (/history): aquí van los viajes que el
+### usuario confirmó con "¡Ya me subí!". Se guardan los 10 más recientes; el
+### primero de la lista es el "último destino al que fuiste".
+
+### Ya me subí → 201 con el viaje (destinationPlaceId es opcional)
+POST {{baseUrl}}/api/users/me/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "routeId": 14,
+  "destinationLabel": "Terminal de Transporte",
+  "destinationPlaceId": 31,
+  "destinationLat": 4.3459,
+  "destinationLng": -74.3779,
+  "originLabel": "Indio"
+}
+
+### Ya me subí con un punto del mapa (sin destinationPlaceId) → 201
+POST {{baseUrl}}/api/users/me/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "routeId": 14,
+  "destinationLabel": "Punto en el mapa",
+  "destinationLat": 4.3402,
+  "destinationLng": -74.3655,
+  "originLabel": "Mi ubicación"
+}
+
+### Ruta inexistente o suspendida → 404
+POST {{baseUrl}}/api/users/me/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "routeId": 99999, "destinationLabel": "X", "destinationLat": 4.3, "destinationLng": -74.3, "originLabel": "Y" }
+
+### Sin coordenadas del destino → 400 ProblemDetail
+POST {{baseUrl}}/api/users/me/rides
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{ "routeId": 14, "destinationLabel": "Terminal de Transporte", "originLabel": "Indio" }
+
+### Tus últimos viajes: los 10 más recientes, del más nuevo al más viejo
+GET {{baseUrl}}/api/users/me/rides
+Authorization: Bearer {{token}}
+
+### Sin token → 401
+GET {{baseUrl}}/api/users/me/rides

@@ -17,6 +17,7 @@ import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegenerateRecoveryCodesService;
 import com.fusaroute.application.usecase.RegisterUserService;
 import com.fusaroute.application.usecase.SearchHistoryService;
+import com.fusaroute.application.usecase.RideHistoryService;
 import com.fusaroute.application.usecase.SearchRouteService;
 import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
@@ -44,6 +45,7 @@ import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
 import com.fusaroute.domain.port.out.SearchHistoryRepositoryPort;
+import com.fusaroute.domain.port.out.RideRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
@@ -124,6 +126,13 @@ public class UseCaseConfig {
     public SearchHistoryService searchHistoryService(SearchHistoryRepositoryPort searchHistoryRepository,
                                                      Clock clock) {
         return new SearchHistoryService(searchHistoryRepository, clock);
+    }
+
+    /** Clase concreta por la misma razon: implementa "Ya me subi" y el historial de viajes. */
+    @Bean
+    public RideHistoryService rideHistoryService(RideRepositoryPort rideRepository,
+                                                 RouteRepositoryPort routeRepository, Clock clock) {
+        return new RideHistoryService(rideRepository, routeRepository, clock);
     }
 
     /**

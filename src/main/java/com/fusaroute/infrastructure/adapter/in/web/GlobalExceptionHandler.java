@@ -12,7 +12,9 @@ import com.fusaroute.domain.exception.IncorrectCurrentPasswordException;
 import com.fusaroute.domain.exception.InvalidCoordinateException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
+import com.fusaroute.domain.exception.InvalidRideException;
 import com.fusaroute.domain.exception.InvalidFeedbackReplyException;
+import com.fusaroute.domain.exception.InvalidMonitoringQueryException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.exception.InvalidTotpException;
@@ -208,6 +210,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
     }
 
+    /** Datos del viaje "Ya me subi" invalidos: 400 con el mensaje del dominio. */
+    @ExceptionHandler(InvalidRideException.class)
+    public ProblemDetail handleInvalidRide(InvalidRideException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
     /** La ruta no existe o esta suspendida: para el catalogo publico es lo mismo. */
     @ExceptionHandler(RouteNotFoundException.class)
     public ProblemDetail handleRouteNotFound(RouteNotFoundException e) {
@@ -252,6 +260,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** Coordenada fuera de rango en la busqueda (RF-04): error del cliente, no un 500. */
     @ExceptionHandler(InvalidCoordinateException.class)
     public ProblemDetail handleInvalidCoordinate(InvalidCoordinateException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    /** limit fuera de 1..500 en las consultas de monitoreo del administrador (SCRUM-186). */
+    @ExceptionHandler(InvalidMonitoringQueryException.class)
+    public ProblemDetail handleInvalidMonitoringQuery(InvalidMonitoringQueryException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
