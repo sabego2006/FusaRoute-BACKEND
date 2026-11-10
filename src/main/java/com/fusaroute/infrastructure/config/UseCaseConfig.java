@@ -12,6 +12,7 @@ import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
 import com.fusaroute.application.usecase.GetTotpStatusService;
 import com.fusaroute.application.usecase.ListActiveRoutesService;
+import com.fusaroute.application.usecase.ListPlacesService;
 import com.fusaroute.application.usecase.LoginService;
 import com.fusaroute.application.usecase.RegenerateRecoveryCodesService;
 import com.fusaroute.application.usecase.RegisterUserService;
@@ -28,6 +29,7 @@ import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
+import com.fusaroute.domain.port.in.ListPlacesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
 import com.fusaroute.domain.port.in.RegenerateRecoveryCodesUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
@@ -37,9 +39,11 @@ import com.fusaroute.domain.port.out.FavoriteDestinationRepositoryPort;
 import com.fusaroute.domain.port.out.FeedbackRepositoryPort;
 import com.fusaroute.domain.port.out.ForbiddenWordsPort;
 import com.fusaroute.domain.port.out.PasswordHasherPort;
+import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
+import com.fusaroute.domain.port.out.RouteSpeedPort;
 import com.fusaroute.domain.port.out.SearchHistoryRepositoryPort;
 import com.fusaroute.domain.port.out.RideRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
@@ -97,9 +101,19 @@ public class UseCaseConfig {
 
     @Bean
     public SearchRouteUseCase searchRouteUseCase(RouteRepositoryPort routeRepository,
+                                                  PlaceRepositoryPort placeRepository,
                                                   TravelTimePort travelTimePort,
+                                                  TrafficSectorRepositoryPort trafficSectorRepository,
+                                                  RouteSpeedPort routeSpeedPort,
                                                   MeterRegistry meterRegistry, Clock clock) {
-        return new SearchRouteService(routeRepository, travelTimePort, meterRegistry, clock);
+        return new SearchRouteService(routeRepository, placeRepository, travelTimePort,
+                trafficSectorRepository, routeSpeedPort, meterRegistry, clock);
+    }
+
+    @Bean
+    public ListPlacesUseCase listPlacesUseCase(PlaceRepositoryPort placeRepository,
+                                               RouteRepositoryPort routeRepository) {
+        return new ListPlacesService(placeRepository, routeRepository);
     }
 
     /**

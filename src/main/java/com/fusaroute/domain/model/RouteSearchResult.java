@@ -21,7 +21,28 @@ import java.util.OptionalDouble;
  * @param dropOffPoint donde bajarse; {@code null} sin trazado
  */
 public record RouteSearchResult(Route route, Duration estimatedTime, Double travelDistanceInMeters,
-                                BoardingPoint boardingPoint, BoardingPoint dropOffPoint) {
+                                BoardingPoint boardingPoint, BoardingPoint dropOffPoint,
+                                EtaSource etaSource, boolean longWalk,
+                                java.util.List<TrafficSector> congestionSectors,
+                                ResolvedPoint origin, ResolvedPoint destination) {
+
+    public RouteSearchResult {
+        etaSource = etaSource == null ? EtaSource.ESTIMATED : etaSource;
+        congestionSectors = congestionSectors == null ? java.util.List.of() : java.util.List.copyOf(congestionSectors);
+    }
+
+    /** Resultado sin los datos de la busqueda por geometria (P1): estimado, caminata normal, sin aviso. */
+    public RouteSearchResult(Route route, Duration estimatedTime, Double travelDistanceInMeters,
+                             BoardingPoint boardingPoint, BoardingPoint dropOffPoint) {
+        this(route, estimatedTime, travelDistanceInMeters, boardingPoint, dropOffPoint,
+                EtaSource.ESTIMATED, false, java.util.List.of(), null, null);
+    }
+
+    /** Copia con las puntas de la busqueda ya resueltas (nombre y coordenada con que se muestran). */
+    public RouteSearchResult withPoints(ResolvedPoint newOrigin, ResolvedPoint newDestination) {
+        return new RouteSearchResult(route, estimatedTime, travelDistanceInMeters, boardingPoint, dropOffPoint,
+                etaSource, longWalk, congestionSectors, newOrigin, newDestination);
+    }
 
     /** Resultado con red: la mejor es la mas rapida segun Google. */
     public static RouteSearchResult online(Route route, Duration estimatedTime,

@@ -6,6 +6,7 @@ import com.fusaroute.domain.model.BoardingPoint;
 import com.fusaroute.domain.model.CongestionWarning;
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Fare;
+import com.fusaroute.domain.model.ResolvedPoint;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
@@ -89,7 +90,7 @@ class RouteControllerTest {
      */
     @BeforeEach
     void sinCongestionSalvoQueElTestDigaOtraCosa() {
-        when(getCongestionWarningUseCase.forRoute(any())).thenReturn(new CongestionWarning(List.of()));
+        when(getCongestionWarningUseCase.forRoute(any(), any())).thenReturn(new CongestionWarning(List.of()));
     }
 
     private static Route urbana() {
@@ -246,7 +247,7 @@ class RouteControllerTest {
     @Test
     void el_detalle_avisa_de_los_sectores_congestionados_que_la_ruta_atraviesa() throws Exception {
         when(getRouteDetailUseCase.getById(1L)).thenReturn(urbana());
-        when(getCongestionWarningUseCase.forRoute(List.of("Centro", "La Pampa")))
+        when(getCongestionWarningUseCase.forRoute(org.mockito.ArgumentMatchers.eq(List.of("Centro", "La Pampa")), any()))
                 .thenReturn(new CongestionWarning(List.of(
                         new TrafficSector(1L, "Centro - Carrera 1", Set.of("Centro"),
                                 LocalTime.of(17, 0), LocalTime.of(19, 0)))));
@@ -352,7 +353,7 @@ class RouteControllerTest {
 
     @Test
     void busqueda_es_publica_y_devuelve_la_ruta_con_el_tiempo_estimado() throws Exception {
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRoute(any(), any()))
                 .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18),
                         new BoardingPoint(new Coordinate(4.3430, -74.3658), 240, 0),
                         new BoardingPoint(new Coordinate(4.3305, -74.3602), 90, 2_400),
@@ -372,9 +373,9 @@ class RouteControllerTest {
                 .andExpect(jsonPath("$.route.neighborhoods[1]").value("La Pampa"))
                 .andExpect(jsonPath("$.estimatedMinutes").value(18))
                 .andExpect(jsonPath("$.boarding.latitude").value(4.3430))
-                .andExpect(jsonPath("$.boarding.distanceInMeters").value(240))
-                .andExpect(jsonPath("$.boarding.walkingMinutes").value(2))
-                .andExpect(jsonPath("$.dropOff.distanceInMeters").value(90))
+                .andExpect(jsonPath("$.boarding.distanceInMeters").value(312))
+                .andExpect(jsonPath("$.boarding.walkingMinutes").value(4))
+                .andExpect(jsonPath("$.dropOff.distanceInMeters").value(117))
                 .andExpect(jsonPath("$.lastUpdatedAt").value("2026-02-05"));
     }
 
@@ -387,7 +388,7 @@ class RouteControllerTest {
                         "Los Comuneros", "Ciudad Jardin", "Cooviprof", "Potosi"),
                 List.of(new Fare(null, new BigDecimal("2600.00"), 0, LocalDate.of(2026, 2, 5))),
                 List.of());
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRoute(any(), any()))
                 .thenReturn(RouteSearchResult.online(conMuchosBarrios, Duration.ofMinutes(25), null, null, null));
 
         mockMvc.perform(get("/api/routes/search")
@@ -409,7 +410,7 @@ class RouteControllerTest {
     void busqueda_devuelve_el_trazado_para_pintar_el_mapa_del_resultado() throws Exception {
         // Que el trazado viaje en /search y no solo en /{id} evita una segunda llamada
         // para pintar el mapa: la busqueda ya decidio cual ruta sugerir.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRoute(any(), any()))
                 .thenReturn(RouteSearchResult.online(urbanaConTrazado(), Duration.ofMinutes(18), null, null, null));
 
         mockMvc.perform(get("/api/routes/search")
@@ -425,8 +426,9 @@ class RouteControllerTest {
     void busqueda_de_ruta_sin_trazado_responde_path_null() throws Exception {
         // El cliente tiene que poder distinguir "no hay dato" de "hay una linea vacia";
         // igual que RouteDetailResponse, GeoJsonLineStringResponse.from devuelve null.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -439,8 +441,9 @@ class RouteControllerTest {
     void busqueda_de_ruta_sin_trazado_responde_sin_ultima_milla() throws Exception {
         // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON. La sugerencia se devuelve
         // igual; lo que no se puede decir es por donde acercarse a pie.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -460,8 +463,9 @@ class RouteControllerTest {
         // El letrero viaja en la busqueda, no solo en el detalle, porque el resultado de
         // busqueda tiene que mostrarlo. Desde SCRUM-184 va dentro de 'route' y no en un
         // campo 'signs' aparte: con un letrero por ruta, el dato cabe en RouteResponse.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -489,7 +493,7 @@ class RouteControllerTest {
 
     @Test
     void la_busqueda_offline_es_publica_y_responde_sin_tiempo_estimado() throws Exception {
-        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRouteOffline(any(), any()))
                 .thenReturn(RouteSearchResult.offline(urbana(), 2_400d,
                         new BoardingPoint(new Coordinate(4.3430, -74.3658), 240, 0),
                         new BoardingPoint(new Coordinate(4.3305, -74.3602), 90, 2_400)));
@@ -508,12 +512,12 @@ class RouteControllerTest {
                 // Sin red no se consulta a Google, asi que no hay tiempo que dar.
                 .andExpect(jsonPath("$.estimatedMinutes").value(nullValue()))
                 .andExpect(jsonPath("$.travelDistanceInMeters").value(2400))
-                .andExpect(jsonPath("$.boarding.distanceInMeters").value(240));
+                .andExpect(jsonPath("$.boarding.distanceInMeters").value(312));
     }
 
     @Test
     void la_busqueda_offline_sin_candidatas_responde_404() throws Exception {
-        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRouteOffline(any(), any()))
                 .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
 
         mockMvc.perform(get("/api/routes/search/offline")
@@ -529,7 +533,7 @@ class RouteControllerTest {
 
     @Test
     void busqueda_sin_rutas_candidatas_responde_404_con_mensaje_explicito() throws Exception {
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRoute(any(), any()))
                 .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
 
         mockMvc.perform(get("/api/routes/search")
@@ -553,8 +557,9 @@ class RouteControllerTest {
     void busqueda_sin_coordenadas_responde_200_el_barrio_sigue_siendo_obligatorio() throws Exception {
         // SCRUM-130: el frontend ya no pide coordenadas a mano. Sin ellas, la busqueda
         // sigue siendo valida — solo el nombre del barrio es obligatorio.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -566,8 +571,9 @@ class RouteControllerTest {
     @Test
     void busqueda_con_solo_coordenadas_de_origen_responde_200() throws Exception {
         // Como en el frontend real: la geolocalizacion solo cubre el origen.
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -582,7 +588,7 @@ class RouteControllerTest {
     void busqueda_offline_sin_coordenadas_responde_200() throws Exception {
         // El modo offline nunca manda coordenadas: sin red no hay geolocalizacion
         // fiable que pedir.
-        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRouteOffline(any(), any()))
                 .thenReturn(RouteSearchResult.offline(urbana(), null, null, null));
 
         mockMvc.perform(get("/api/routes/search/offline")
@@ -606,8 +612,9 @@ class RouteControllerTest {
 
     @Test
     void la_busqueda_con_sesion_queda_en_el_historial() throws Exception {
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .with(jwt().jwt(j -> j.subject("42").claim("scope", "full")))
@@ -626,8 +633,9 @@ class RouteControllerTest {
 
     @Test
     void la_busqueda_anonima_no_escribe_historial() throws Exception {
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search")
                         .param("originNeighborhood", "Centro")
@@ -643,8 +651,9 @@ class RouteControllerTest {
 
     @Test
     void la_busqueda_offline_tambien_queda_en_el_historial() throws Exception {
-        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.offline(urbanaConTrazado(), 2_400d, null, null));
+        when(searchRouteUseCase.findBestRouteOffline(any(), any()))
+                .thenReturn(RouteSearchResult.offline(urbanaConTrazado(), 2_400d, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search/offline")
                         .with(jwt().jwt(j -> j.subject("42").claim("scope", "full")))
@@ -661,7 +670,7 @@ class RouteControllerTest {
 
     @Test
     void una_busqueda_sin_ruta_disponible_no_ensucia_el_historial() throws Exception {
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
+        when(searchRouteUseCase.findBestRoute(any(), any()))
                 .thenThrow(new NoRouteAvailableException("Centro", "Pasca"));
 
         mockMvc.perform(get("/api/routes/search")

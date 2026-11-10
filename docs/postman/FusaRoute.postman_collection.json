@@ -20,6 +20,14 @@
     {
       "key": "testPassword",
       "value": "GladysPass1"
+    },
+    {
+      "key": "placeA",
+      "value": ""
+    },
+    {
+      "key": "placeB",
+      "value": ""
     }
   ],
   "item": [
@@ -163,6 +171,119 @@
                   "pm.test('ProblemDetail con detail', () => {",
                   "  pm.expect(pm.response.json().detail).to.eql('Ruta no encontrada');",
                   "});"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "1b-Búsqueda por geometría",
+      "item": [
+        {
+          "name": "Lugares canónicos",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/places"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Hay al menos 100 lugares', () => pm.expect(pm.response.json().length).to.be.at.least(100));",
+                  "pm.collectionVariables.set('placeA', pm.response.json()[0].id); pm.collectionVariables.set('placeB', pm.response.json()[1].id);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar por lugar",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/search?originPlaceId={{placeA}}&destinationPlaceId={{placeB}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('200 o 404 (sin ruta directa)', () => pm.expect([200, 404]).to.include(pm.response.code));",
+                  "if (pm.response.code === 200) { const b = pm.response.json(); pm.test('Trae etaSource', () => pm.expect(['TRAFFIC', 'ESTIMATED']).to.include(b.etaSource)); pm.test('Trae longWalk', () => pm.expect(b.longWalk).to.be.a('boolean')); }"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar por nombre (legado)",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/search?originNeighborhood=Indio&destinationNeighborhood=Terminal"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Buscar sin conexión",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/search/offline?originNeighborhood=Indio&destinationNeighborhood=Terminal"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Siempre estimado', () => pm.expect(pm.response.json().etaSource).to.eql('ESTIMATED'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Lugar inexistente → 400",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/search?originPlaceId=999999&destinationPlaceId=1"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Dice cuál punta', () => pm.expect(pm.response.json().point).to.eql('origin'));"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Sin ruta → 404 con nearestRoutes",
+          "request": {
+            "method": "GET",
+            "url": "{{baseUrl}}/api/routes/search?originLat=4.20&originLng=-74.45&destinationPlaceId={{placeB}}"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "exec": [
+                  "pm.test('Status 404', () => pm.response.to.have.status(404));",
+                  "pm.test('Trae nearestRoutes', () => pm.expect(pm.response.json().nearestRoutes).to.be.an('object'));"
                 ]
               }
             }

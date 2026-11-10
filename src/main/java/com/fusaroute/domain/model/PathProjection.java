@@ -58,6 +58,71 @@ final class PathProjection {
     }
 
     /**
+     * TODAS las pasadas del trazado a menos de {@code maxMeters} de {@code from}: la mejor proyeccion
+     * sobre cada segmento que queda dentro del radio. {@link #nearestPointOn} solo da la mas cercana, y
+     * una ruta que pasa dos veces cerca del punto (ida y vuelta por la misma calle, o un lazo) puede
+     * tener la pasada mas cercana en el momento equivocado del recorrido y descartarse sin razon.
+     */
+    static List<BoardingPoint> passesWithin(List<Coordinate> path, Coordinate from, double maxMeters) {
+        if (path.size() < 2) {
+            return List.of();
+        }
+        List<BoardingPoint> passes = new java.util.ArrayList<>();
+        double traversed = 0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            Coordinate start = path.get(i);
+            Coordinate end = path.get(i + 1);
+            double segmentLength = start.distanceInMetersTo(end);
+            double ratio = projectionRatio(start, end, from);
+            Coordinate projected = interpolate(start, end, ratio);
+            double distance = from.distanceInMetersTo(projected);
+            if (distance <= maxMeters) {
+                passes.add(new BoardingPoint(projected, distance, traversed + ratio * segmentLength));
+            }
+            traversed += segmentLength;
+        }
+        return passes;
+    }
+
+    /**
+     * Tramo del trazado entre dos distancias acumuladas: el punto exacto de {@code fromAlong}, los
+     * vertices intermedios y el punto exacto de {@code toAlong}. Es lo que recorre la buseta entre el
+     * abordaje y la bajada, y es sobre lo que se mide la congestion y se muestrean los waypoints.
+     */
+    static List<Coordinate> subPath(List<Coordinate> path, double fromAlong, double toAlong) {
+        if (path.size() < 2 || toAlong < fromAlong) {
+            return List.of();
+        }
+        List<Coordinate> out = new java.util.ArrayList<>();
+        double traversed = 0;
+        for (int i = 0; i < path.size() - 1; i++) {
+            Coordinate start = path.get(i);
+            Coordinate end = path.get(i + 1);
+            double segmentLength = start.distanceInMetersTo(end);
+            double segFrom = traversed;
+            double segTo = traversed + segmentLength;
+            traversed = segTo;
+            if (segTo < fromAlong || segFrom > toAlong) {
+                continue;
+            }
+            if (segmentLength == 0) {
+                continue;
+            }
+            double r0 = Math.clamp((fromAlong - segFrom) / segmentLength, 0d, 1d);
+            double r1 = Math.clamp((toAlong - segFrom) / segmentLength, 0d, 1d);
+            Coordinate a = interpolate(start, end, r0);
+            Coordinate b = interpolate(start, end, r1);
+            if (out.isEmpty() || !out.get(out.size() - 1).equals(a)) {
+                out.add(a);
+            }
+            if (!out.get(out.size() - 1).equals(b)) {
+                out.add(b);
+            }
+        }
+        return out;
+    }
+
+    /**
      * Punto del trazado a una fraccion [0, 1] de su longitud total, midiendo por la
      * distancia real acumulada entre vertices y no por indice de vertice: un tramo
      * largo entre dos vertices no debe pesar lo mismo que uno corto.

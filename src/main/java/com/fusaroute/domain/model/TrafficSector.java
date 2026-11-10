@@ -3,6 +3,7 @@ package com.fusaroute.domain.model;
 import java.time.Duration;
 import java.time.LocalTime;
 import java.util.Collection;
+import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
@@ -27,7 +28,8 @@ import java.util.Set;
  * @param endTime hora en que afloja; el aviso se apaga al llegar aqui
  */
 public record TrafficSector(Long id, String name, Set<String> neighborhoods,
-                            LocalTime startTime, LocalTime endTime) {
+                            LocalTime startTime, LocalTime endTime,
+                            Double centerLat, Double centerLng, Integer radiusMeters) {
 
     /** Cuanto antes de la hora de inicio empieza a avisarse. */
     public static final Duration ADVANCE_NOTICE = Duration.ofMinutes(30);
@@ -37,6 +39,45 @@ public record TrafficSector(Long id, String name, Set<String> neighborhoods,
         Objects.requireNonNull(startTime, "startTime");
         Objects.requireNonNull(endTime, "endTime");
         neighborhoods = Set.copyOf(neighborhoods);
+        boolean someCircleField = centerLat != null || centerLng != null || radiusMeters != null;
+        boolean allCircleFields = centerLat != null && centerLng != null && radiusMeters != null;
+        if (someCircleField && !allCircleFields) {
+            throw new IllegalArgumentException("El circulo del sector necesita centro (lat, lng) y radio a la vez");
+        }
+        if (allCircleFields && radiusMeters <= 0) {
+            throw new IllegalArgumentException("El radio del sector debe ser positivo: " + radiusMeters);
+        }
+    }
+
+    /** Sector sin circulo: se cruza solo por nombre de barrio (el modelo previo a V22). */
+    public TrafficSector(Long id, String name, Set<String> neighborhoods, LocalTime startTime, LocalTime endTime) {
+        this(id, name, neighborhoods, startTime, endTime, null, null, null);
+    }
+
+    /**
+     * Si el sector se define por un circulo (centro y radio). Estos sectores aplican cuando el tramo
+     * recorrido pasa por el circulo, no por el nombre de un barrio (P1, V22).
+     */
+    public boolean hasCircle() {
+        return radiusMeters != null;
+    }
+
+    /** Centro del circulo; solo tiene sentido si {@link #hasCircle()}. */
+    public Coordinate center() {
+        return new Coordinate(centerLat, centerLng);
+    }
+
+    /**
+     * Si el trazado {@code path} pasa a {@code radiusMeters} o menos del centro del circulo. Falso para
+     * un sector sin circulo y para un tramo vacio.
+     */
+    public boolean isCrossedBy(List<Coordinate> path) {
+        if (!hasCircle() || path.isEmpty()) {
+            return false;
+        }
+        return PathProjection.nearestPointOn(path, center())
+                .map(nearest -> nearest.distanceInMeters() <= radiusMeters)
+                .orElse(false);
     }
 
     /**

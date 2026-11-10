@@ -1,28 +1,35 @@
 package com.fusaroute.application.usecase;
 
+import com.fusaroute.domain.exception.InvalidSearchPointException;
 import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.TravelTimeUnavailableException;
 import com.fusaroute.domain.model.Coordinate;
+import com.fusaroute.domain.model.EtaSource;
 import com.fusaroute.domain.model.Fare;
+import com.fusaroute.domain.model.Place;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
+import com.fusaroute.domain.model.SearchPoint;
+import com.fusaroute.domain.model.TrafficSector;
+import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
+import com.fusaroute.domain.port.out.RouteSpeedPort;
+import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
-import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 
 import java.math.BigDecimal;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -30,523 +37,535 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
+/**
+ * Busqueda por geometria (P1). El escenario es una recta este-oeste a la latitud 4.34: 0,001 grados de
+ * longitud son ~111 m, lo que permite fijar las distancias de caminata con la regla.
+ */
 class SearchRouteServiceTest {
 
-    private static final Coordinate ORIGIN = new Coordinate(4.3433, -74.3661);
-    private static final Coordinate DESTINATION = new Coordinate(4.3300, -74.3600);
-    private static final Clock CLOCK = Clock.fixed(Instant.parse("2026-09-27T15:00:00Z"), ZoneId.of("America/Bogota"));
+    private static final double LAT = 4.3400;
+    /** 17:10 en Bogota (UTC-5): dentro del aviso de la franja de la tarde del Indio. */
+    private static final Clock TARDE = Clock.fixed(Instant.parse("2026-11-08T22:10:00Z"), ZoneId.of("America/Bogota"));
+    private static final Clock MANANA = Clock.fixed(Instant.parse("2026-11-08T15:00:00Z"), ZoneId.of("America/Bogota"));
 
-    @Mock
-    private RouteRepositoryPort routeRepository;
+    private static final Place OESTE = place(1, "oeste", "Oeste", LAT, -74.395, "Barrio Oeste");
+    private static final Place CENTRO = place(2, "centro", "Centro", LAT, -74.375);
+    private static final Place ESTE = place(3, "este", "Este", LAT, -74.360);
+    /** A ~450 m al norte del trazado (4.344), cerca del centro. */
+    private static final Place NORTE = place(4, "norte", "Norte", 4.3440, -74.375);
+    /** A ~1.100 m al norte: pasa el umbral de 800 m pero no el de 1.500 m. */
+    private static final Place LEJOS = place(5, "lejos", "Lejos", 4.3500, -74.375);
+    /** A ~5,5 km: no hay ruta ni con caminata ampliada. */
+    private static final Place MUY_LEJOS = place(6, "muy-lejos", "Muy lejos", 4.3900, -74.375);
 
-    @Mock
-    private TravelTimePort travelTimePort;
+    private final List<Place> places = new ArrayList<>(List.of(OESTE, CENTRO, ESTE, NORTE, LEJOS, MUY_LEJOS));
+    private final List<Route> routes = new ArrayList<>();
+    private final List<TrafficSector> sectors = new ArrayList<>();
+    private final Map<Long, List<Double>> observations = new java.util.HashMap<>();
+    private final List<Object[]> recordedSpeeds = new ArrayList<>();
+    private TravelTimePort travelTime;
+    private Clock clock = MANANA;
+
+    private final PlaceRepositoryPort placeRepository = new PlaceRepositoryPort() {
+        @Override
+        public List<Place> findAll() {
+            return places;
+        }
+
+        @Override
+        public Optional<Place> findById(Long id) {
+            return places.stream().filter(p -> p.id().equals(id)).findFirst();
+        }
+    };
+
+    private final RouteSpeedPort speedPort = new RouteSpeedPort() {
+        @Override
+        public Map<Long, List<Double>> recentObservations(int perRoute) {
+            return observations;
+        }
+
+        @Override
+        public void record(long routeId, double observedKmh) {
+            recordedSpeeds.add(new Object[] {routeId, observedKmh});
+        }
+    };
+
+    @BeforeEach
+    void setUp() {
+        travelTime = mock(TravelTimePort.class);
+    }
 
     private SearchRouteService service() {
-        return new SearchRouteService(routeRepository, travelTimePort, new SimpleMeterRegistry(), CLOCK);
-    }
-
-    private static Route route(long id, String name, RouteStatus status, String... neighborhoods) {
-        return new Route(id, name, null, RouteType.URBANA, status, List.of(neighborhoods), List.of(), List.of());
-    }
-
-    private static Route routeWithPath(long id, String name, List<Coordinate> path, String... neighborhoods) {
-        return new Route(id, name, null, RouteType.URBANA, RouteStatus.ACTIVA, List.of(neighborhoods), List.of(), path);
-    }
-
-    /** Misma forma que {@link #route}, pero con tarifas: para el caso de RF-06 en la busqueda. */
-    private static Route routeWithFares(long id, String name, RouteType type, List<Fare> fares,
-                                        String... neighborhoods) {
-        return new Route(id, name, null, type, RouteStatus.ACTIVA, List.of(neighborhoods), fares, List.of());
-    }
-
-    /** Trazado que pasa por el origen y el destino, asi la ultima milla no lo descarta. */
-    private static List<Coordinate> trazadoQuePasaPorAmbos(double desvio) {
-        return List.of(
-                new Coordinate(ORIGIN.latitude() + desvio, ORIGIN.longitude() + desvio),
-                new Coordinate(DESTINATION.latitude() + desvio, DESTINATION.longitude() + desvio));
-    }
-
-    /**
-     * Trazado paralelo al de origen->destino pero corrido ~metros al norte, asi la
-     * caminata hasta el abordaje es de ese orden de magnitud (un solo eje para que no
-     * se dispare por encima de los 800 m). 1 grado de latitud ~ 111 km.
-     */
-    private static List<Coordinate> trazadoCorridoAlNorte(double metros) {
-        double delta = metros / 111_000d;
-        return List.of(
-                new Coordinate(ORIGIN.latitude() + delta, ORIGIN.longitude()),
-                new Coordinate(DESTINATION.latitude() + delta, DESTINATION.longitude()));
-    }
-
-    /**
-     * Devuelve el tiempo en buseta segun el trazado de la candidata, imitando al
-     * adaptador real: Google cotiza por el par de puntos (abordaje-bajada) de cada
-     * ruta, que es distinto para cada trazado. Clave por {@code path} para no tener que
-     * predecir las coordenadas exactas de la proyeccion.
-     */
-    private void stubBusTimePorTrazado(Map<List<Coordinate>, Duration> porTrazado) {
-        when(travelTimePort.getTravelTime(any(), any(), any()))
-                .thenAnswer(inv -> porTrazado.get(inv.<List<Coordinate>>getArgument(2)));
-    }
-
-    @Test
-    void elige_la_candidata_con_menor_tiempo_estimado() {
-        // Dos trazados distintos que pasan por origen y destino: en produccion cada ruta
-        // tiene su propio par abordaje-bajada, asi que Google les da tiempos distintos.
-        Route lenta = routeWithPath(1L, "Lenta", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        Route rapida = routeWithPath(2L, "Rapida", trazadoCorridoAlNorte(80), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(lenta, rapida));
-        stubBusTimePorTrazado(Map.of(
-                lenta.path(), Duration.ofMinutes(25),
-                rapida.path(), Duration.ofMinutes(12)));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(rapida);
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(12));
-    }
-
-    @Test
-    void cronometra_el_tramo_de_abordaje_a_bajada_no_el_par_origen_destino() {
-        // Guarda de la regresion que hacia pasar el test viejo mientras produccion fallaba:
-        // el trazado NO pasa por el origen, asi que los puntos que se le pasan a Google
-        // son la proyeccion (abordaje/bajada), no el origen/destino crudos del usuario.
-        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoCorridoAlNorte(300), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(14));
-
-        service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        ArgumentCaptor<Coordinate> from = ArgumentCaptor.forClass(Coordinate.class);
-        ArgumentCaptor<Coordinate> to = ArgumentCaptor.forClass(Coordinate.class);
-        verify(travelTimePort).getTravelTime(from.capture(), to.capture(), eq(conTrazado.path()));
-
-        assertThat(from.getValue()).isNotEqualTo(ORIGIN);
-        assertThat(to.getValue()).isNotEqualTo(DESTINATION);
-        assertThat(from.getValue()).isEqualTo(conTrazado.boardingPointFor(ORIGIN).orElseThrow().point());
-        assertThat(to.getValue()).isEqualTo(conTrazado.boardingPointFor(DESTINATION).orElseThrow().point());
-    }
-
-    @Test
-    void la_caminata_cuenta_en_el_ranking() {
-        // La lejana tiene una buseta mas rapida (19 vs 20 min) pero deja al usuario a
-        // ~700 m de cada punta; a 5 km/h esa caminata la vuelve mas lenta puerta a puerta.
-        Route cercana = routeWithPath(1L, "Cercana", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        Route lejana = routeWithPath(2L, "Lejana", trazadoCorridoAlNorte(700), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(cercana, lejana));
-        stubBusTimePorTrazado(Map.of(
-                cercana.path(), Duration.ofMinutes(20),
-                lejana.path(), Duration.ofMinutes(19)));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(cercana);
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(20));
-    }
-
-    @Test
-    void el_tiempo_estimado_es_el_tramo_en_buseta_no_el_puerta_a_puerta() {
-        // Con ~400 m de caminata a cada punta el puerta a puerta pasa de 14 min, pero lo
-        // que se reporta es el tramo en buseta: la caminata viaja aparte en cada punto.
-        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoCorridoAlNorte(400), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(14));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(14));
-    }
-
-    @Test
-    void con_tiempos_iguales_gana_la_primera() {
-        // Desempate determinista: a igual tiempo puerta a puerta se queda la primera que
-        // devuelve el repositorio. Trazados distintos (uno con vertice intermedio sobre
-        // la misma linea) para no colisionar la clave del stub, pero misma caminata ~0.
-        Coordinate medio = new Coordinate(
-                (ORIGIN.latitude() + DESTINATION.latitude()) / 2,
-                (ORIGIN.longitude() + DESTINATION.longitude()) / 2);
-        Route primera = routeWithPath(1L, "Primera", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
-        Route segunda = routeWithPath(2L, "Segunda", List.of(ORIGIN, medio, DESTINATION), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(primera, segunda));
-        stubBusTimePorTrazado(Map.of(
-                primera.path(), Duration.ofMinutes(15),
-                segunda.path(), Duration.ofMinutes(15)));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(primera);
-    }
-
-    @Test
-    void ignora_rutas_suspendidas_y_que_no_conectan_en_el_orden_correcto() {
-        Route suspendida = route(1L, "Suspendida", RouteStatus.SUSPENDIDA, "Centro", "Terminal");
-        Route sentidoContrario = route(2L, "Contraria", RouteStatus.ACTIVA, "Terminal", "Centro");
-        Route valida = route(3L, "Valida", RouteStatus.ACTIVA, "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(suspendida, sentidoContrario, valida));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, valida.path())).thenReturn(Duration.ofMinutes(10));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(valida);
-    }
-
-    @Test
-    void sin_candidatas_lanza_no_route_available() {
-        when(routeRepository.findAll()).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
-                .isInstanceOf(NoRouteAvailableException.class);
-    }
-
-    @Test
-    void el_resultado_trae_el_punto_de_abordaje_y_el_de_bajada() {
-        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, conTrazado.path()))
-                .thenReturn(Duration.ofMinutes(14));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.boarding()).isPresent();
-        assertThat(result.dropOff()).isPresent();
-        assertThat(result.boarding().orElseThrow().distanceInMeters()).isLessThan(50);
-    }
-
-    @Test
-    void descarta_la_candidata_que_obliga_a_caminar_mas_de_ochocientos_metros() {
-        // El trazado corre a ~1.1 km al norte: conecta los barrios, pero no se puede
-        // llegar a el a pie desde el origen.
-        Route lejana = routeWithPath(1L, "Lejana", List.of(
-                new Coordinate(ORIGIN.latitude() + 0.01, ORIGIN.longitude()),
-                new Coordinate(DESTINATION.latitude() + 0.01, DESTINATION.longitude())),
-                "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(lejana));
-
-        assertThatThrownBy(() -> service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
-                .isInstanceOf(NoRouteAvailableException.class);
-    }
-
-    @Test
-    void una_ruta_sin_trazado_se_cronometra_de_origen_a_destino() {
-        // Hoy 7 de las 9 rutas sembradas no tienen GeoJSON todavia. Sin trazado no hay
-        // abordaje que proyectar, asi que se cronometra el par origen-destino del usuario
-        // y se sugiere igual, solo que sin ultima milla.
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of()))
-                .thenReturn(Duration.ofMinutes(20));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(sinTrazado);
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(20));
-        assertThat(result.boarding()).isEmpty();
-        assertThat(result.dropOff()).isEmpty();
-    }
-
-    @Test
-    void offline_elige_la_de_menor_recorrido_y_no_consulta_a_google() {
-        // Las dos conectan los mismos barrios y arrancan y terminan en el mismo punto;
-        // la "larga" se desvia por el noroeste antes de llegar.
-        Route corta = routeWithPath(1L, "Corta", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
-        Route larga = routeWithPath(2L, "Larga",
-                List.of(ORIGIN, new Coordinate(4.3500, -74.3800), DESTINATION), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(larga, corta));
-
-        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(corta);
-        assertThat(result.travelTime()).isEmpty();
-        assertThat(result.travelDistance()).isPresent();
-        // Sin red no se pregunta el tiempo: ese es el punto del modo offline.
-        verifyNoInteractions(travelTimePort);
-    }
-
-    @Test
-    void offline_deja_de_ultimas_las_rutas_sin_trazado() {
-        // No hay con que medirlas, asi que solo ganan si ninguna otra pudo compararse.
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        Route conTrazado = routeWithPath(2L, "Con trazado", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado, conTrazado));
-
-        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(conTrazado);
-    }
-
-    @Test
-    void offline_con_solo_rutas_sin_trazado_la_sugiere_igual_pero_sin_distancia() {
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
-
-        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(sinTrazado);
-        // Vacio y no cero: no se midio nada, y un 0 se leeria como "ya estas encima".
-        assertThat(result.travelDistance()).isEmpty();
-    }
-
-    @Test
-    void offline_sin_candidatas_lanza_no_route_available() {
-        when(routeRepository.findAll()).thenReturn(List.of());
-
-        assertThatThrownBy(() -> service().findBestRouteOffline("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
-                .isInstanceOf(NoRouteAvailableException.class);
-    }
-
-    // --- SCRUM-130: coordenadas opcionales, derivadas del nombre del barrio ---
-
-    @Test
-    void sin_coordenadas_del_cliente_deriva_el_punto_del_barrio_sobre_el_trazado() {
-        // Trazado real entre dos barrios, sin coordenadas del cliente en ninguna
-        // punta: el unico origen de un punto es "Centro" -> indice 0 -> fraccion 0 del
-        // trazado, y "Terminal" -> indice 1 (ultimo) -> fraccion 1.
-        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(16));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
-
-        assertThat(result.route()).isEqualTo(conTrazado);
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(16));
-        assertThat(result.boarding()).isPresent();
-        assertThat(result.dropOff()).isPresent();
-    }
-
-    @Test
-    void solo_coordenadas_de_origen_la_de_destino_se_deriva_del_barrio() {
-        // Como en el frontend real: la geolocalizacion solo cubre el origen. El
-        // destino se resuelve igual, solo que a partir del nombre del barrio.
-        Route conTrazado = routeWithPath(1L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(16));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.empty());
-
-        assertThat(result.route()).isEqualTo(conTrazado);
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(16));
-    }
-
-    @Test
-    void sin_coordenadas_el_filtro_de_ochocientos_metros_no_aplica() {
-        // Mismo trazado que "descarta_la_candidata_que_obliga_a_caminar_mas_de_
-        // ochocientos_metros" (corrido 1.1 km al norte de ORIGIN/DESTINATION): con
-        // esas coordenadas crudas la ruta se descartaria. Sin coordenadas del cliente,
-        // el punto es el del propio trazado (distancia ~0) y la ruta se sugiere.
-        Route lejanaDeOrigenCrudo = routeWithPath(1L, "Lejana", List.of(
-                new Coordinate(ORIGIN.latitude() + 0.01, ORIGIN.longitude()),
-                new Coordinate(DESTINATION.latitude() + 0.01, DESTINATION.longitude())),
-                "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(lejanaDeOrigenCrudo));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(16));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
-
-        assertThat(result.route()).isEqualTo(lejanaDeOrigenCrudo);
-    }
-
-    @Test
-    void sin_coordenadas_y_sin_trazado_no_hay_tiempo_conocido_pero_la_ruta_se_sugiere() {
-        // 7 de las 9 rutas sembradas no tienen trazado todavia: sin el, no hay como
-        // derivar un punto del nombre del barrio ni coordenadas del cliente que
-        // cronometrar. La ruta se sugiere igual, solo que sin tiempo.
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
-
-        assertThat(result.route()).isEqualTo(sinTrazado);
-        assertThat(result.travelTime()).isEmpty();
-        assertThat(result.boarding()).isEmpty();
-        assertThat(result.dropOff()).isEmpty();
-        verifyNoInteractions(travelTimePort);
-    }
-
-    @Test
-    void entre_una_candidata_con_tiempo_conocido_y_otra_sin_el_gana_la_que_si_tiene() {
-        // 45 minutos es ya un viaje largo en buseta por Fusagasuga; el centinela
-        // interno de la candidata sin tiempo (ver UNKNOWN_TIME_RANK) es de un dia
-        // entero a proposito, para que ningun tiempo real plausible le gane.
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        Route conTrazado = routeWithPath(2L, "Con trazado", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado, conTrazado));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(45));
-
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.empty(), "Terminal", Optional.empty());
-
-        // La candidata sin tiempo real nunca debe ganarle a una que si tiene un
-        // tiempo real que reportar, aunque ese tiempo sea alto.
-        assertThat(result.route()).isEqualTo(conTrazado);
-        assertThat(result.travelTime()).isPresent();
-    }
-
-    @Test
-    void offline_sin_coordenadas_usa_el_punto_derivado_del_barrio() {
-        Route conTrazado = routeWithPath(1L, "Con trazado", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(conTrazado));
-
-        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.empty(), "Terminal", Optional.empty());
-
-        assertThat(result.route()).isEqualTo(conTrazado);
-        assertThat(result.travelDistance()).isPresent();
-        verifyNoInteractions(travelTimePort);
-    }
-
-    @Test
-    void offline_sin_coordenadas_y_sin_trazado_no_hay_distancia_pero_se_sugiere_igual() {
-        Route sinTrazado = route(1L, "Sin trazado", RouteStatus.ACTIVA, "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(sinTrazado));
-
-        RouteSearchResult result = service().findBestRouteOffline("Centro", Optional.empty(), "Terminal", Optional.empty());
-
-        assertThat(result.route()).isEqualTo(sinTrazado);
-        assertThat(result.travelDistance()).isEmpty();
-    }
-
-    // --- Degradación cuando Google no responde ---
-
-    @Test
-    void si_una_candidata_falla_la_otra_que_responde_gana() {
-        // Produccion: a veces Google rechaza una llamada (quota, bloqueo pasajero) y
-        // responde la otra. La busqueda no se cae: la candidata que si tuvo tiempo gana.
-        Route caida = routeWithPath(1L, "Caida", trazadoQuePasaPorAmbos(0), "Centro", "Terminal");
-        Route viva = routeWithPath(2L, "Viva", trazadoCorridoAlNorte(80), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(caida, viva));
-        when(travelTimePort.getTravelTime(any(), any(), any())).thenAnswer(inv -> {
-            List<Coordinate> path = inv.getArgument(2);
-            if (path.equals(caida.path())) {
-                throw new TravelTimeUnavailableException("Distance Matrix fallo", null);
+        RouteRepositoryPort routeRepository = new RouteRepositoryPort() {
+            @Override
+            public List<Route> findAll() {
+                return routes;
             }
-            return Duration.ofMinutes(12);
-        });
 
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
+            @Override
+            public Optional<Route> findById(Long id) {
+                return routes.stream().filter(r -> id.equals(r.id())).findFirst();
+            }
+        };
+        TrafficSectorRepositoryPort sectorRepository = () -> sectors;
+        return new SearchRouteService(routeRepository, placeRepository, travelTime, sectorRepository,
+                speedPort, new SimpleMeterRegistry(), clock);
+    }
 
-        assertThat(result.route()).isEqualTo(viva);
-        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(12));
+    private static Place place(long id, String slug, String name, double lat, double lng, String... aliases) {
+        return new Place(id, slug, name, new Coordinate(lat, lng), List.of(aliases));
+    }
+
+    /** Recta este-oeste de -74.40 a -74.34 (~6,6 km) con un vertice cada 0,005 grados. */
+    private static List<Coordinate> pathEastward() {
+        List<Coordinate> path = new ArrayList<>();
+        for (int i = 0; i <= 12; i++) {
+            path.add(new Coordinate(LAT, -74.40 + i * 0.005));
+        }
+        return path;
+    }
+
+    private static List<Coordinate> reversed(List<Coordinate> path) {
+        List<Coordinate> copy = new ArrayList<>(path);
+        java.util.Collections.reverse(copy);
+        return copy;
+    }
+
+    private static Route route(long id, String name, RouteType type, RouteStatus status, List<Coordinate> path,
+                               String... neighborhoods) {
+        return new Route(id, name, null, type, status, List.of(neighborhoods), List.of(), path);
+    }
+
+    private static Route urban(long id, String name, List<Coordinate> path) {
+        return route(id, name, RouteType.URBANA, RouteStatus.ACTIVA, path);
+    }
+
+    private static SearchPoint at(Place place) {
+        return new SearchPoint.OfPlace(place.id());
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Candidatas por geometria
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void la_ruta_que_pasa_por_ambos_lugares_en_orden_es_candidata_con_su_abordaje_y_bajada() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        assertThat(result.route().id()).isEqualTo(10);
+        assertThat(result.boarding()).isPresent();
+        assertThat(result.dropOff()).isPresent();
+        assertThat(result.boarding().get().distanceAlongPathInMeters())
+                .isLessThan(result.dropOff().get().distanceAlongPathInMeters());
+        // OESTE esta sobre el trazado: caminata cero.
+        assertThat(result.boarding().get().distanceInMeters()).isLessThan(1);
+        assertThat(result.longWalk()).isFalse();
+        assertThat(result.origin().label()).isEqualTo("Oeste");
+        assertThat(result.destination().label()).isEqualTo("Este");
     }
 
     @Test
-    void si_google_falla_para_todas_las_candidatas_delega_en_offline_sin_tirar_la_busqueda() {
-        // Caso de PROD de 2026-10-29: REQUEST_DENIED en toda la busqueda. En vez de
-        // propagar un 503, se devuelve el resultado del modo offline: sin tiempo, con
-        // distancia, y la ganadora elegida por menor recorrido.
-        Route corta = routeWithPath(1L, "Corta", List.of(ORIGIN, DESTINATION), "Centro", "Terminal");
-        Route larga = routeWithPath(2L, "Larga",
-                List.of(ORIGIN, new Coordinate(4.3500, -74.3800), DESTINATION), "Centro", "Terminal");
-        when(routeRepository.findAll()).thenReturn(List.of(larga, corta));
-        when(travelTimePort.getTravelTime(any(), any(), any()))
-                .thenThrow(new TravelTimeUnavailableException("Distance Matrix respondio status=REQUEST_DENIED", null));
+    void el_sentido_contrario_no_es_candidato_una_ruta_es_un_solo_sentido() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
 
-        RouteSearchResult result = service().findBestRoute("Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(corta);
-        assertThat(result.travelTime()).isEmpty();
-        assertThat(result.travelDistance()).isPresent();
-    }
-
-    @Test
-    void la_busqueda_online_aplica_solo_las_tarifas_vigentes_a_la_ruta_sugerida() {
-        // Caso de la ruta Pasca que V3 documenta: dos series de vigencia con order_index
-        // solapados (Alaska aparece en las dos). Sin filtrar por vigencia, Alaska saldria
-        // dos veces y fuera de orden en el resultado de busqueda.
-        List<Fare> fares = List.of(
-                new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
-                new Fare("Corregimiento", new BigDecimal("3000.00"), 0, LocalDate.of(2025, 1, 16)),
-                new Fare("Alaska", new BigDecimal("3300.00"), 3, LocalDate.of(2025, 1, 16)),
-                new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16)));
-        Route pasca = routeWithFares(8L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, fares,
-                "Fusagasugá", "Alaska", "Pasca");
-        when(routeRepository.findAll()).thenReturn(List.of(pasca));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, List.of())).thenReturn(Duration.ofMinutes(40));
-
-        RouteSearchResult result = service().findBestRoute("Fusagasugá", Optional.of(ORIGIN), "Pasca", Optional.of(DESTINATION));
-
-        assertThat(result.route().fares()).extracting(Fare::referencePoint)
-                .containsExactly("Corregimiento", "Alaska", "Pasca");
-        assertThat(result.route().fares()).extracting(f -> f.amount().intValue())
-                .containsExactly(3000, 3550, 4300);
-        assertThat(result.route().lastFareUpdate()).contains(LocalDate.of(2026, 2, 5));
-    }
-
-    @Test
-    void la_busqueda_offline_aplica_solo_las_tarifas_vigentes_a_la_ruta_sugerida() {
-        // Mismo caso, pero por el camino de findBestRouteOffline: tambien debe filtrar.
-        List<Fare> fares = List.of(
-                new Fare("Alaska", new BigDecimal("3550.00"), 0, LocalDate.of(2026, 2, 5)),
-                new Fare("Corregimiento", new BigDecimal("3000.00"), 0, LocalDate.of(2025, 1, 16)),
-                new Fare("Alaska", new BigDecimal("3300.00"), 3, LocalDate.of(2025, 1, 16)),
-                new Fare("Pasca", new BigDecimal("4300.00"), 7, LocalDate.of(2025, 1, 16)));
-        Route pasca = routeWithFares(8L, "Fusagasugá - Pasca", RouteType.INTERMUNICIPAL, fares,
-                "Fusagasugá", "Alaska", "Pasca");
-        when(routeRepository.findAll()).thenReturn(List.of(pasca));
-
-        RouteSearchResult result = service().findBestRouteOffline("Fusagasugá", Optional.of(ORIGIN), "Pasca", Optional.of(DESTINATION));
-
-        assertThat(result.route().fares()).extracting(Fare::referencePoint)
-                .containsExactly("Corregimiento", "Alaska", "Pasca");
-        assertThat(result.route().lastFareUpdate()).contains(LocalDate.of(2026, 2, 5));
-    }
-// --- Coincidencia de barrios (SCRUM-184) ----------------------------------
-
-    @Test
-    void la_deriva_de_mayusculas_de_la_semilla_ya_no_deja_una_ruta_fuera() {
-        // Caso real: V12 sembró 'Terminal de Transporte' en Gaitán y 'Terminal de
-        // transportes' en Siboney. Con String.equals, buscar desde una escritura dejaba
-        // fuera la ruta que usaba la otra.
-        Route siboney = route(1L, "Siboney", RouteStatus.ACTIVA, "Terminal de transportes", "Comuneros");
-        when(routeRepository.findAll()).thenReturn(List.of(siboney));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, siboney.path())).thenReturn(Duration.ofMinutes(10));
-
-        RouteSearchResult result = service().findBestRoute(
-                "Terminal de Transporte", Optional.of(ORIGIN), "Comuneros", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(siboney);
-    }
-
-    @Test
-    void las_tildes_del_barrio_ya_no_dejan_una_ruta_fuera() {
-        Route conTildes = route(1L, "Maíz Amarillo", RouteStatus.ACTIVA, "Maíz Amarillo", "Centro");
-        when(routeRepository.findAll()).thenReturn(List.of(conTildes));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, conTildes.path())).thenReturn(Duration.ofMinutes(10));
-
-        RouteSearchResult result = service().findBestRoute(
-                "maiz amarillo", Optional.of(ORIGIN), "centro", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(conTildes);
-    }
-
-    @Test
-    void el_termino_contenido_en_el_nombre_del_lugar_tambien_encuentra_la_ruta() {
-        // Los lugares nuevos del letrero son largos ('Antiguo Colsubsidio'): escribir
-        // solo 'Colsubsidio' tiene que servir.
-        Route larga = route(1L, "Olaya", RouteStatus.ACTIVA, "Antiguo Colsubsidio", "Barrio Olaya");
-        when(routeRepository.findAll()).thenReturn(List.of(larga));
-        when(travelTimePort.getTravelTime(ORIGIN, DESTINATION, larga.path())).thenReturn(Duration.ofMinutes(10));
-
-        RouteSearchResult result = service().findBestRoute(
-                "Colsubsidio", Optional.of(ORIGIN), "Olaya", Optional.of(DESTINATION));
-
-        assertThat(result.route()).isEqualTo(larga);
-    }
-
-    @Test
-    void el_sentido_contrario_sigue_quedando_fuera_pese_a_la_coincidencia_flexible() {
-        // La condición origen antes que destino no se relaja: el sentido opuesto es otra
-        // ruta, con su propio letrero. Si esto fallara, la búsqueda devolvería una buseta
-        // que no lleva al usuario a donde va.
-        Route contraria = route(1L, "Contraria", RouteStatus.ACTIVA, "TERMINAL", "centro");
-        when(routeRepository.findAll()).thenReturn(List.of(contraria));
-
-        assertThatThrownBy(() -> service().findBestRoute(
-                "Centro", Optional.of(ORIGIN), "Terminal", Optional.of(DESTINATION)))
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(ESTE), at(OESTE)))
                 .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
+    void la_ruta_de_sentido_contrario_si_sirve_para_el_viaje_inverso() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        routes.add(urban(11, "Este - Oeste", reversed(pathEastward())));
+
+        assertThat(service().findBestRouteOffline(at(ESTE), at(OESTE)).route().id()).isEqualTo(11);
+        assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).route().id()).isEqualTo(10);
+    }
+
+    @Test
+    void ignora_rutas_suspendidas() {
+        routes.add(route(10, "Suspendida", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(OESTE), at(ESTE)))
+                .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
+    void una_ruta_que_vuelve_a_pasar_por_el_origen_despues_del_destino_sigue_siendo_candidata() {
+        // Va de oeste a este y regresa: el destino (CENTRO) queda a la ida y a la vuelta, y el origen
+        // (OESTE) solo al principio y al final. La pasada de la ida sirve; usar solo la mas cercana
+        // podria elegir una pasada incorrecta del recorrido.
+        List<Coordinate> lazo = new ArrayList<>(pathEastward());
+        lazo.addAll(reversed(pathEastward()));
+        routes.add(urban(10, "Lazo", lazo));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(CENTRO), at(OESTE));
+
+        assertThat(result.route().id()).isEqualTo(10);
+        assertThat(result.boarding().get().distanceAlongPathInMeters())
+                .isLessThan(result.dropOff().get().distanceAlongPathInMeters());
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Umbrales de caminata
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void la_caminata_se_muestra_con_el_factor_de_rodeo_1_3() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(NORTE), at(ESTE));
+
+        double straight = result.boarding().get().distanceInMeters();
+        assertThat(straight).isBetween(430d, 470d);
+        assertThat(result.boarding().get().walkingDistanceInMeters()).isEqualTo(straight * 1.3);
+        assertThat(result.longWalk()).isFalse();
+    }
+
+    @Test
+    void sin_ruta_a_800_m_ofrece_la_mejor_con_hasta_1500_m_y_la_marca_long_walk() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(LEJOS), at(ESTE));
+
+        assertThat(result.longWalk()).isTrue();
+        assertThat(result.boarding().get().distanceInMeters()).isBetween(1000d, 1200d);
+    }
+
+    @Test
+    void sin_ruta_ni_a_1500_m_responde_404_con_la_ruta_mas_cercana_a_cada_punta() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(MUY_LEJOS), at(ESTE)))
+                .isInstanceOfSatisfying(NoRouteAvailableException.class, e -> {
+                    assertThat(e.nearestToOrigin().routeName()).isEqualTo("Oeste - Este");
+                    // 5,5 km en linea recta por 1,3.
+                    assertThat(e.nearestToOrigin().distanceInMeters()).isBetween(6_000L, 8_000L);
+                    assertThat(e.nearestToDestination().distanceInMeters()).isLessThan(5);
+                });
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Ranking y tiempo
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void gana_la_ruta_de_menor_tiempo_puerta_a_puerta_la_intermunicipal_va_mas_rapido() {
+        routes.add(urban(10, "Urbana", pathEastward()));
+        routes.add(route(11, "Intermunicipal", RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA, pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        // Mismo trazado y misma caminata: gana la de 30 km/h sobre la de 15 km/h.
+        assertThat(result.route().id()).isEqualTo(11);
+    }
+
+    @Test
+    void el_tiempo_estimado_es_recorrido_sobre_velocidad_redondeado_hacia_arriba() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        // 3.885 m aprox. a 15 km/h = 15,5 min -> 16.
+        double ride = result.travelDistanceInMeters();
+        long expected = (long) Math.ceil(ride / (15_000d / 60));
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(expected));
+        assertThat(result.etaSource()).isEqualTo(EtaSource.ESTIMATED);
+    }
+
+    @Test
+    void la_caminata_cuenta_en_el_ranking_una_ruta_un_poco_mas_lenta_pero_sin_caminata_gana() {
+        // Misma recta: la ruta 10 pasa por el lugar; la 11 corre 400 m al sur (caminata de ida).
+        List<Coordinate> sur = new ArrayList<>();
+        pathEastward().forEach(c -> sur.add(new Coordinate(c.latitude() - 0.0036, c.longitude())));
+        routes.add(route(11, "Intermunicipal al sur", RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA, sur));
+        routes.add(urban(10, "Urbana directa", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        // La intermunicipal anda al doble de velocidad pero obliga a caminar ~2 x 400 m x 1,3.
+        // 3.900 m: 15 km/h = 15,6 min; 30 km/h = 7,8 min + 2 x ~7 min de caminata = ~22 min.
+        assertThat(result.route().id()).isEqualTo(10);
+    }
+
+    @Test
+    void la_velocidad_calibrada_con_5_o_mas_muestras_reemplaza_a_la_fija() {
+        routes.add(urban(10, "Lenta en la practica", pathEastward()));
+        routes.add(urban(11, "Rapida en la practica", pathEastward()));
+        // La 10 mide 6 km/h, la 11 mide 25 km/h: la mediana de la lista decide.
+        observations.put(10L, List.of(6d, 6d, 6d, 6d, 6d, 40d));
+        observations.put(11L, List.of(25d, 25d, 25d, 25d, 25d));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        assertThat(result.route().id()).isEqualTo(11);
+    }
+
+    @Test
+    void con_menos_de_5_muestras_no_hay_calibracion_y_se_usa_la_velocidad_fija() {
+        routes.add(urban(10, "Con 4 muestras", pathEastward()));
+        routes.add(route(11, "Intermunicipal", RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA, pathEastward()));
+        observations.put(11L, List.of(2d, 2d, 2d, 2d));
+
+        // Si las 4 muestras contaran, la intermunicipal iria a 2 km/h y perderia.
+        assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).route().id()).isEqualTo(11);
+    }
+
+    @Test
+    void la_mediana_de_un_conjunto_par_es_el_promedio_de_los_dos_centrales() {
+        assertThat(SearchRouteService.median(List.of(10d, 20d, 30d, 40d))).isEqualTo(25d);
+        assertThat(SearchRouteService.median(List.of(30d, 10d, 20d))).isEqualTo(20d);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Google
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void online_cronometra_solo_a_la_ganadora_con_una_sola_llamada() {
+        routes.add(urban(10, "Urbana", pathEastward()));
+        routes.add(route(11, "Intermunicipal", RouteType.INTERMUNICIPAL, RouteStatus.ACTIVA, pathEastward()));
+        routes.add(urban(12, "Otra urbana", pathEastward()));
+        when(travelTime.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(9).plusSeconds(10));
+
+        RouteSearchResult result = service().findBestRoute(at(OESTE), at(ESTE));
+
+        verify(travelTime, times(1)).getTravelTime(any(), any(), any());
+        assertThat(result.route().id()).isEqualTo(11);
+        assertThat(result.etaSource()).isEqualTo(EtaSource.TRAFFIC);
+        // 9 min 10 s se redondea hacia arriba.
+        assertThat(result.estimatedTime()).isEqualTo(Duration.ofMinutes(10));
+    }
+
+    @Test
+    void a_google_se_le_manda_el_tramo_entre_abordaje_y_bajada() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        when(travelTime.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(12));
+
+        RouteSearchResult result = service().findBestRoute(at(CENTRO), at(ESTE));
+
+        verify(travelTime).getTravelTime(
+                org.mockito.ArgumentMatchers.eq(result.boarding().get().point()),
+                org.mockito.ArgumentMatchers.eq(result.dropOff().get().point()),
+                org.mockito.ArgumentMatchers.argThat(path -> path.size() >= 2
+                        && path.get(0).equals(result.boarding().get().point())
+                        && path.get(path.size() - 1).equals(result.dropOff().get().point())));
+    }
+
+    @Test
+    void si_google_falla_el_tiempo_sigue_siendo_un_numero_estimado_y_la_busqueda_no_falla() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        when(travelTime.getTravelTime(any(), any(), any()))
+                .thenThrow(new TravelTimeUnavailableException("sin llave", null));
+
+        RouteSearchResult result = service().findBestRoute(at(OESTE), at(ESTE));
+
+        assertThat(result.etaSource()).isEqualTo(EtaSource.ESTIMATED);
+        assertThat(result.estimatedTime()).isNotNull();
+        assertThat(result.estimatedTime().toMinutes()).isPositive();
+    }
+
+    @Test
+    void offline_nunca_llama_a_google() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        verify(travelTime, never()).getTravelTime(any(), any(), any());
+    }
+
+    @Test
+    void guarda_la_velocidad_observada_cuando_google_responde() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        when(travelTime.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(10));
+
+        RouteSearchResult result = service().findBestRoute(at(OESTE), at(ESTE));
+
+        assertThat(recordedSpeeds).hasSize(1);
+        double expectedKmh = result.travelDistanceInMeters() / 600d * 3.6;
+        assertThat((Double) recordedSpeeds.get(0)[1]).isCloseTo(expectedKmh, org.assertj.core.data.Offset.offset(0.01));
+        assertThat(recordedSpeeds.get(0)[0]).isEqualTo(10L);
+    }
+
+    @Test
+    void una_velocidad_implausible_no_se_guarda() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        // 3,9 km en 1 minuto = 234 km/h: dato malo.
+        when(travelTime.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(1));
+
+        service().findBestRoute(at(OESTE), at(ESTE));
+
+        assertThat(recordedSpeeds).isEmpty();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Congestion por circulo
+    // ------------------------------------------------------------------------------------------
+
+    private static TrafficSector indioDeLaTarde(double lat, double lng) {
+        return new TrafficSector(1L, "Indio (tarde)", java.util.Set.of("Indio"),
+                LocalTime.of(17, 0), LocalTime.of(19, 0), lat, lng, 450);
+    }
+
+    @Test
+    void el_tramo_que_cruza_el_circulo_en_la_franja_trae_el_aviso() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        sectors.add(indioDeLaTarde(LAT, -74.375));
+        clock = TARDE;
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        assertThat(result.congestionSectors()).extracting(TrafficSector::name).containsExactly("Indio (tarde)");
+    }
+
+    @Test
+    void fuera_de_la_franja_y_de_su_aviso_previo_no_hay_aviso() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        sectors.add(indioDeLaTarde(LAT, -74.375));
+        clock = MANANA;
+
+        assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).congestionSectors()).isEmpty();
+    }
+
+    @Test
+    void un_tramo_que_no_cruza_el_circulo_no_trae_aviso_aunque_la_ruta_completa_si_lo_cruce() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        // Indio en -74.375; el viaje va de ESTE a un punto aun mas al este: no lo toca.
+        Place masAlEste = place(7, "mas-este", "Mas al este", LAT, -74.345);
+        places.add(masAlEste);
+        sectors.add(indioDeLaTarde(LAT, -74.375));
+        clock = TARDE;
+
+        RouteSearchResult result = service().findBestRouteOffline(at(ESTE), at(masAlEste));
+
+        assertThat(result.congestionSectors()).isEmpty();
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Resolucion de puntas
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void una_coordenada_se_etiqueta_con_el_lugar_canonico_mas_cercano() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(
+                new SearchPoint.OfCoordinate(new Coordinate(LAT, -74.3951)), at(ESTE));
+
+        assertThat(result.origin().label()).isEqualTo("Cerca de Oeste");
+    }
+
+    @Test
+    void un_nombre_legado_se_resuelve_por_nombre_o_alias_sin_tildes_ni_mayusculas() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(
+                new SearchPoint.OfName("barrio OESTE"), new SearchPoint.OfName("ÉSTE"));
+
+        assertThat(result.route().id()).isEqualTo(10);
+        assertThat(result.origin().label()).isEqualTo("Oeste");
+        assertThat(result.destination().label()).isEqualTo("Este");
+    }
+
+    @Test
+    void un_lugar_que_no_existe_es_400_y_dice_que_punta_fallo() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(OESTE), new SearchPoint.OfPlace(999)))
+                .isInstanceOfSatisfying(InvalidSearchPointException.class, e -> {
+                    assertThat(e.side()).isEqualTo("destination");
+                    assertThat(e.getMessage()).contains("destino");
+                });
+    }
+
+    @Test
+    void origen_y_destino_en_el_mismo_lugar_es_400_no_un_viaje_de_cero_metros() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRoute(at(OESTE), new SearchPoint.OfName("barrio oeste")))
+                .isInstanceOfSatisfying(InvalidSearchPointException.class, e -> {
+                    assertThat(e.side()).isEqualTo("destination");
+                    assertThat(e.getMessage()).contains("mismo lugar");
+                });
+    }
+
+    @Test
+    void un_nombre_desconocido_sin_ruta_por_nombre_es_400_no_404() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(new SearchPoint.OfName("Narnia"), at(ESTE)))
+                .isInstanceOfSatisfying(InvalidSearchPointException.class, e -> assertThat(e.side()).isEqualTo("origin"));
+    }
+
+    @Test
+    void un_nombre_que_corresponde_a_varios_lugares_es_400() {
+        places.add(place(8, "oeste-2", "Oeste (otro)", 4.40, -74.30, "Barrio Oeste"));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(new SearchPoint.OfName("Barrio Oeste"), at(ESTE)))
+                .isInstanceOf(InvalidSearchPointException.class)
+                .hasMessageContaining("varios lugares");
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Rutas sin trazado: camino legado por nombre
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void una_ruta_sin_trazado_se_encuentra_por_nombre_pero_sin_abordaje_ni_tiempo() {
+        Route sinTrazado = route(20, "Sin trazado", RouteType.URBANA, RouteStatus.ACTIVA, List.of(),
+                "Barrio Oeste", "Algo", "Este");
+        routes.add(sinTrazado);
+
+        RouteSearchResult result = service().findBestRoute(at(OESTE), at(ESTE));
+
+        assertThat(result.route().id()).isEqualTo(20);
+        assertThat(result.boarding()).isEmpty();
+        assertThat(result.dropOff()).isEmpty();
+        assertThat(result.travelTime()).isEmpty();
+        verify(travelTime, never()).getTravelTime(any(), any(), any());
+    }
+
+    @Test
+    void una_ruta_sin_trazado_nunca_le_gana_a_una_con_trazado() {
+        routes.add(route(20, "Sin trazado", RouteType.URBANA, RouteStatus.ACTIVA, List.of(),
+                "Oeste", "Este"));
+        routes.add(urban(10, "Con trazado", pathEastward()));
+
+        assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).route().id()).isEqualTo(10);
+    }
+
+    @Test
+    void la_ruta_sin_trazado_exige_el_orden_origen_antes_que_destino() {
+        routes.add(route(20, "Sin trazado", RouteType.URBANA, RouteStatus.ACTIVA, List.of(),
+                "Este", "Oeste"));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(OESTE), at(ESTE)))
+                .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Tarifas
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void la_ruta_sugerida_trae_solo_las_tarifas_vigentes() {
+        List<Fare> fares = List.of(
+                new Fare(null, BigDecimal.valueOf(2400), 0, LocalDate.of(2026, 1, 1)),
+                new Fare(null, BigDecimal.valueOf(2600), 0, LocalDate.of(2026, 6, 1)),
+                new Fare(null, BigDecimal.valueOf(3000), 0, LocalDate.of(2027, 1, 1)));
+        routes.add(new Route(10L, "Con tarifas", null, RouteType.URBANA, RouteStatus.ACTIVA, List.of(), fares,
+                pathEastward()));
+
+        RouteSearchResult result = service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        assertThat(result.route().fares()).hasSize(1);
+        assertThat(result.route().fares().get(0).amount()).isEqualByComparingTo("2600");
     }
 }

@@ -2,7 +2,9 @@ package com.fusaroute.infrastructure.adapter.in.web;
 
 import com.fusaroute.domain.model.Coordinate;
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.exception.InvalidSearchPointException;
 import com.fusaroute.domain.model.RouteSearchResult;
+import com.fusaroute.domain.model.SearchPoint;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
@@ -23,7 +25,6 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.time.Duration;
 import java.util.List;
-import java.util.Optional;
 
 /** Catalogo publico de rutas (RF-15, SCRUM-19) y busqueda de la mejor ruta (RF-04, SCRUM-54). Solo lectura y sin sesion. */
 @RestController
@@ -80,9 +81,12 @@ public class RouteController {
      * Se llama despues de que la busqueda tuvo exito: una consulta que termino en
      * 404 no es una busqueda que valga la pena repetir.
      */
-    private void recordIfAuthenticated(Jwt jwt, String origin, String destination) {
-        if (jwt != null) {
-            recordSearchUseCase.record(Long.parseLong(jwt.getSubject()), origin, destination);
+    private void recordIfAuthenticated(Jwt jwt, RouteSearchResult result) {
+        if (jwt != null && result.origin() != null && result.destination() != null) {
+            // El historial guarda el nombre del lugar resuelto (lo que el usuario vio en el selector),
+            // no el parametro crudo: un id o unas coordenadas no se pueden volver a mostrar.
+            recordSearchUseCase.record(Long.parseLong(jwt.getSubject()),
+                    result.origin().label(), result.destination().label());
         }
     }
 
@@ -95,70 +99,86 @@ public class RouteController {
     }
 
     /**
-     * Busca la mejor ruta entre un origen y un destino. Va antes de {@code /{id}} en
-     * este archivo solo por orden de lectura: Spring ya prefiere el segmento literal
+     * Busca la mejor ruta entre un origen y un destino, por geometria (P1). Va antes de
+     * {@code /{id}} en este archivo solo por orden de lectura: Spring ya prefiere el segmento literal
      * "search" sobre el patron {@code /{id}} sin importar el orden de declaracion.
      *
-     * Las coordenadas son opcionales desde SCRUM-130: el frontend ya no le pide a nadie
-     * que escriba una latitud o una longitud. Origen y destino se eligen por nombre de
-     * barrio (obligatorio, es con lo que el dominio filtra candidatas); las coordenadas,
-     * cuando llegan, son la geolocalizacion del navegador para el origen — nunca hay
-     * geolocalizacion del destino de otra persona.
+     * Cada punta acepta UNA de tres formas, en este orden de prioridad: {@code originPlaceId} (lugar
+     * canonico de {@code GET /api/places}), {@code originLat}+{@code originLng} (GPS o punto del mapa)
+     * y {@code originNeighborhood} (legado: se resuelve por nombre o alias al lugar canonico). Igual
+     * con {@code destination...}.
      */
+    @Operation(summary = "Buscar ruta",
+            description = "Sugiere la mejor ruta directa (sin transbordos) entre un origen y un destino. Cada punta se manda como "
+                    + "placeId, lat+lng o nombre (en ese orden de prioridad). Rankea con tiempo propio y cronometra solo la "
+                    + "ganadora con Google; si Google falla, etaSource es ESTIMATED.")
+    @ApiResponse(responseCode = "200", description = "Ruta sugerida")
+    @ApiResponse(responseCode = "400", description = "Una punta no se puede resolver; el detalle dice cual")
+    @ApiResponse(responseCode = "404", description = "Ninguna ruta sirve; trae nearestRoutes con la ruta mas cercana a cada punta")
     @GetMapping("/search")
-    public RouteSearchResponse search(@RequestParam String originNeighborhood,
+    public RouteSearchResponse search(@RequestParam(required = false) Long originPlaceId,
                                       @RequestParam(required = false) Double originLat,
                                       @RequestParam(required = false) Double originLng,
-                                      @RequestParam String destinationNeighborhood,
+                                      @RequestParam(required = false) String originNeighborhood,
+                                      @RequestParam(required = false) Long destinationPlaceId,
                                       @RequestParam(required = false) Double destinationLat,
                                       @RequestParam(required = false) Double destinationLng,
+                                      @RequestParam(required = false) String destinationNeighborhood,
                                       @AuthenticationPrincipal Jwt jwt) {
         RouteSearchResult result = searchRouteUseCase.findBestRoute(
-                originNeighborhood, coordinateOf(originLat, originLng),
-                destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
-        recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
+                pointOf("origin", originPlaceId, originLat, originLng, originNeighborhood),
+                pointOf("destination", destinationPlaceId, destinationLat, destinationLng, destinationNeighborhood));
+        recordIfAuthenticated(jwt, result);
         return RouteSearchResponse.from(result);
     }
 
     /**
-     * Busqueda sin conexion (RF-04): la app llama aqui cuando no tiene red. No consulta
-     * a Google, asi que no devuelve tiempo estimado; elige por el recorrido mas corto
-     * sobre el trazado propio del catalogo. El modo offline nunca manda coordenadas
-     * (SCRUM-130): sin red no hay geolocalizacion fiable que pedir.
+     * Busqueda sin conexion (RF-04): la app llama aqui cuando no tiene red. No consulta a Google, asi
+     * que {@code etaSource} siempre es {@code ESTIMATED}; usa el mismo algoritmo geometrico y acepta las
+     * mismas tres formas de punta.
      */
     @Operation(summary = "Buscar ruta sin conexión",
-            description = "Sugiere la ruta de menor recorrido usando solo el trazado del catálogo, sin consultar Google. "
-                    + "No devuelve tiempo estimado.")
-    @ApiResponse(responseCode = "200", description = "Ruta sugerida por distancia")
-    @ApiResponse(responseCode = "404", description = "Ninguna ruta conecta el origen con el destino")
+            description = "Misma busqueda por geometria sin consultar Google: el tiempo siempre es estimado.")
+    @ApiResponse(responseCode = "200", description = "Ruta sugerida")
+    @ApiResponse(responseCode = "400", description = "Una punta no se puede resolver; el detalle dice cual")
+    @ApiResponse(responseCode = "404", description = "Ninguna ruta sirve; trae nearestRoutes con la ruta mas cercana a cada punta")
     @GetMapping("/search/offline")
-    public RouteSearchResponse searchOffline(@RequestParam String originNeighborhood,
-                                      @RequestParam(required = false) Double originLat,
-                                      @RequestParam(required = false) Double originLng,
-                                      @RequestParam String destinationNeighborhood,
-                                      @RequestParam(required = false) Double destinationLat,
-                                      @RequestParam(required = false) Double destinationLng,
-                                      @AuthenticationPrincipal Jwt jwt) {
+    public RouteSearchResponse searchOffline(@RequestParam(required = false) Long originPlaceId,
+                                             @RequestParam(required = false) Double originLat,
+                                             @RequestParam(required = false) Double originLng,
+                                             @RequestParam(required = false) String originNeighborhood,
+                                             @RequestParam(required = false) Long destinationPlaceId,
+                                             @RequestParam(required = false) Double destinationLat,
+                                             @RequestParam(required = false) Double destinationLng,
+                                             @RequestParam(required = false) String destinationNeighborhood,
+                                             @AuthenticationPrincipal Jwt jwt) {
         RouteSearchResult result = searchRouteUseCase.findBestRouteOffline(
-                originNeighborhood, coordinateOf(originLat, originLng),
-                destinationNeighborhood, coordinateOf(destinationLat, destinationLng));
+                pointOf("origin", originPlaceId, originLat, originLng, originNeighborhood),
+                pointOf("destination", destinationPlaceId, destinationLat, destinationLng, destinationNeighborhood));
         // El historial no distingue online de offline: para el usuario fue la misma
         // busqueda, y lo que repite despues es el par origen-destino.
-        recordIfAuthenticated(jwt, originNeighborhood, destinationNeighborhood);
+        recordIfAuthenticated(jwt, result);
         return RouteSearchResponse.from(result);
     }
 
     /**
-     * Vacio si cualquiera de las dos coordenadas falta. Una sola de las dos no sirve
-     * para ubicar un punto, asi que mandar solo una equivale a no mandar ninguna — no
-     * es un error del cliente que valga la pena rechazar con 400, el dominio ya sabe
-     * resolver un punto ausente derivandolo del nombre del barrio.
+     * Escoge UNA forma de punta con la prioridad lugar, coordenadas, nombre. Una sola de las dos
+     * coordenadas no ubica nada, asi que equivale a no mandarla.
+     *
+     * @throws InvalidSearchPointException si la punta no trae ninguna de las tres formas
      */
-    private static Optional<Coordinate> coordinateOf(Double lat, Double lng) {
-        if (lat == null || lng == null) {
-            return Optional.empty();
+    private static SearchPoint pointOf(String side, Long placeId, Double lat, Double lng, String name) {
+        if (placeId != null) {
+            return new SearchPoint.OfPlace(placeId);
         }
-        return Optional.of(new Coordinate(lat, lng));
+        if (lat != null && lng != null) {
+            return new SearchPoint.OfCoordinate(new Coordinate(lat, lng));
+        }
+        if (name != null && !name.isBlank()) {
+            return new SearchPoint.OfName(name);
+        }
+        throw new InvalidSearchPointException(side,
+                "falta el punto: manda " + side + "PlaceId, " + side + "Lat+" + side + "Lng o " + side + "Neighborhood");
     }
 
     @Operation(summary = "Detalle de ruta",
@@ -174,7 +194,7 @@ public class RouteController {
         // recorrido completo, asi que aplica cualquier sector que la ruta atraviese. En
         // una busqueda, en cambio, solo cuentan los barrios entre origen y destino.
         return ResponseEntity.ok().cacheControl(DETAIL_CACHE).body(RouteDetailResponse.from(route,
-                getCongestionWarningUseCase.forRoute(route.neighborhoods())));
+                getCongestionWarningUseCase.forRoute(route.neighborhoods(), route.path())));
     }
 
     @Operation(summary = "Costo del pasaje de una ruta",

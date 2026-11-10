@@ -1,9 +1,9 @@
 package com.fusaroute.domain.model;
 
-/** De donde salio el tiempo estimado de llegada que se le mostro al usuario. */
+/** De donde sale el tiempo en buseta que se le muestra al usuario. */
 public enum EtaSource {
-    /** Google Directions con trafico en tiempo real. */
+    /** Google Routes con trafico, para la ruta ganadora. */
     TRAFFIC,
-    /** Estimacion propia a partir de la distancia, sin consultar trafico. */
+    /** Estimado propio: recorrido sobre el trazado entre abordaje y bajada, dividido por la velocidad de la ruta. */
     ESTIMATED
 }

@@ -77,7 +77,7 @@ com.fusaroute
 - **`SearchRecord`** — búsqueda guardada en el historial del usuario (origen + destino); se conservan las últimas 6 por usuario, asociadas a la cuenta (no al dispositivo), para que persistan al cambiar de equipo.
 - **`Feedback`** — comentario de un usuario (10–100 caracteres, sin URLs, filtrado contra un banco de palabras prohibidas) vinculado a su perfil, y la respuesta del administrador. Editable/borrable por su autor solo mientras esté pendiente de respuesta; una vez respondido, queda bloqueado (protege la métrica de "comentarios pendientes" de RF-13).
 
-**Regla de negocio central:** hay más de 20 rutas y varias sirven para llegar al mismo destino. El caso de uso de búsqueda filtra las rutas candidatas que conectan origen y destino y **el dominio decide cuál es la mejor** por menor tiempo estimado — el tiempo lo informa un puerto de salida `TravelTimePort`, implementado por un adaptador que consulta Google Directions (Google cronometra rutas ya filtradas por el dominio; nunca elige el trazado ni decide cuál es mejor — eso rompería RNF-03 y dejaría `domain/` sin nada que cubrir en JaCoCo). El catálogo de rutas (con su trazado GeoJSON) es nuestro dato propio. Sin ruta candidata que conecte origen-destino, se devuelve un mensaje explícito, no una lista vacía.
+**Regla de negocio central:** hay más de 20 rutas y varias sirven para llegar al mismo destino. El caso de uso de búsqueda filtra las rutas candidatas que conectan origen y destino y **el dominio decide cuál es la mejor** por menor tiempo estimado — el tiempo lo informa un puerto de salida `TravelTimePort`, implementado por un adaptador que consulta la Routes API de Google (computeRoutes) (Google cronometra rutas ya filtradas por el dominio; nunca elige el trazado ni decide cuál es mejor — eso rompería RNF-03 y dejaría `domain/` sin nada que cubrir en JaCoCo). El catálogo de rutas (con su trazado GeoJSON) es nuestro dato propio. Sin ruta candidata que conecte origen-destino, se devuelve un mensaje explícito, no una lista vacía.
 
 **Cómo se decide que dos nombres de lugar son el mismo lugar (SCRUM-184):** la comparación la hace el dominio (`PlaceName.normalize` + `Route.indexOfPlace`), nunca `String.equals`. Se normaliza a minúsculas, sin tildes, sin puntos y con los espacios colapsados, y se acepta que el término esté **contenido** en el nombre del lugar — pero la coincidencia **exacta tiene prioridad** sobre la parcial, para que buscar "Centro" en una ruta que pasa por `Centro` y por `Centro Comercial Manila` caiga en el barrio y no en el centro comercial. El origen toma la primera coincidencia y el destino la última, de modo que una ruta circular siga cumpliendo "origen antes que destino"; esa condición de orden **sigue siendo estricta**, porque el sentido contrario es otra ruta con su propio letrero. Existe por un problema real de los datos: los barrios se cargan a mano de fuentes distintas y la semilla ya trae deriva (`'Terminal de Transporte'` en una ruta y `'Terminal de transportes'` en otra).
 
@@ -155,7 +155,7 @@ spring.datasource.url=${DB_URL}
 spring.datasource.username=${DB_USERNAME}
 spring.datasource.password=${DB_PASSWORD}
 server.port=${PORT:8080}
-google.maps.api.key=${GOOGLE_MAPS_API_KEY}
+google.maps.api.key=${GOOGLE_MAPS_API_KEY:}
 ```
 
 `.env.example` está versionado con las claves vacías y **es la documentación ejecutable: si una variable no está ahí, no existe.** `.env` está en `.gitignore` junto con `application-local.*`.

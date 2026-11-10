@@ -33,6 +33,7 @@ public class TrafficSectorPersistenceAdapter implements TrafficSectorRepositoryP
     private static TrafficSector toDomain(TrafficSectorJpaEntity entity) {
         Set<String> neighborhoods = entity.getNeighborhoods() == null ? Set.of() : entity.getNeighborhoods();
         return new TrafficSector(entity.getId(), entity.getName(), neighborhoods,
-                entity.getStartTime(), entity.getEndTime());
+                entity.getStartTime(), entity.getEndTime(),
+                entity.getCenterLat(), entity.getCenterLng(), entity.getRadiusM());
     }
 }

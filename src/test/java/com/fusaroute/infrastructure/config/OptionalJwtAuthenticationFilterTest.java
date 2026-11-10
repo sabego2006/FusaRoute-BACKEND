@@ -1,6 +1,7 @@
 package com.fusaroute.infrastructure.config;
 
 import com.fusaroute.domain.model.Fare;
+import com.fusaroute.domain.model.ResolvedPoint;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
@@ -108,9 +109,10 @@ class OptionalJwtAuthenticationFilterTest {
 
     @BeforeEach
     void stubs() {
-        when(getCongestionWarningUseCase.forRoute(any())).thenReturn(new CongestionWarning(List.of()));
-        when(searchRouteUseCase.findBestRoute(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null));
+        when(getCongestionWarningUseCase.forRoute(any(), any())).thenReturn(new CongestionWarning(List.of()));
+        when(searchRouteUseCase.findBestRoute(any(), any()))
+                .thenReturn(RouteSearchResult.online(urbana(), Duration.ofMinutes(18), null, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
     }
 
     @Test
@@ -188,8 +190,9 @@ class OptionalJwtAuthenticationFilterTest {
 
     @Test
     void la_busqueda_offline_con_token_valido_tambien_queda_en_el_historial() throws Exception {
-        when(searchRouteUseCase.findBestRouteOffline(any(), any(), any(), any()))
-                .thenReturn(RouteSearchResult.offline(urbana(), 2_400d, null, null));
+        when(searchRouteUseCase.findBestRouteOffline(any(), any()))
+                .thenReturn(RouteSearchResult.offline(urbana(), 2_400d, null, null)
+                        .withPoints(new ResolvedPoint(null, "Centro", null), new ResolvedPoint(null, "La Pampa", null)));
 
         mockMvc.perform(get("/api/routes/search/offline")
                         .header("Authorization", "Bearer " + token("42", Instant.now().plusSeconds(3600)))
