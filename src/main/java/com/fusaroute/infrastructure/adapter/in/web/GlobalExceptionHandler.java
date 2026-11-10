@@ -14,6 +14,7 @@ import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
 import com.fusaroute.domain.exception.InvalidRideException;
 import com.fusaroute.domain.exception.InvalidFeedbackReplyException;
+import com.fusaroute.domain.exception.InvalidMonitoringQueryException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.exception.InvalidTotpException;
@@ -237,6 +238,12 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     /** Coordenada fuera de rango en la busqueda (RF-04): error del cliente, no un 500. */
     @ExceptionHandler(InvalidCoordinateException.class)
     public ProblemDetail handleInvalidCoordinate(InvalidCoordinateException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+    }
+
+    /** limit fuera de 1..500 en las consultas de monitoreo del administrador (SCRUM-186). */
+    @ExceptionHandler(InvalidMonitoringQueryException.class)
+    public ProblemDetail handleInvalidMonitoringQuery(InvalidMonitoringQueryException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }
 
