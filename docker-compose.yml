@@ -1,25 +1,43 @@
-# Entorno local completo del backend: Postgres propio + el backend empaquetado
-# con el Dockerfile de este repo. NO es el flujo del dia a dia (para eso sigue
-# estando `mvn spring-boot:run -Dspring-boot.run.profiles=dev` contra Supabase):
-# esto sirve para probar migraciones de Flyway contra una base vacia sin tocar
-# la base compartida del equipo.
+# FusaRoute completo en local: PostgreSQL + backend + frontend, con un solo
+# comando (`docker compose up --build`). Ver la seccion "Docker" del README.
+#
+# NO es el flujo del dia a dia (para eso sigue estando
+# `mvn spring-boot:run -Dspring-boot.run.profiles=dev` contra Supabase y
+# `npm start` en el frontend). Sirve para levantar el sistema entero sin instalar
+# Java, Node ni Postgres, para probar migraciones de Flyway contra una base vacia
+# sin tocar la base compartida del equipo, y como ambiente de las pruebas de
+# carga y de extremo a extremo.
+#
+# Por que vive en el repo del backend y no en uno aparte: el backend ya traia el
+# compose (db + backend) y el Dockerfile que usa Render; un tercer repo solo para
+# un archivo seria otro lugar que mantener sincronizado. El frontend se construye
+# desde su propio repo, clonado al lado (ver FRONTEND_CONTEXT).
 #
 # La clave `version:` se quito a proposito: Compose v2 la ignora y avisa que es
 # obsoleta.
 
+# Nombre fijo del proyecto: sin esto Compose usa el nombre de la carpeta, y los
+# contenedores, la red y el volumen cambiarian de nombre segun donde se clone.
+name: fusaroute
+
 services:
-  # Base de datos PostgreSQL para desarrollo local.
-  # Se usa la imagen oficial de Postgres.
+  # Base de datos PostgreSQL propia de este entorno (imagen oficial). No es la
+  # base del equipo: nace vacia y Flyway le aplica todas las migraciones.
   db:
     image: postgres:16-alpine
-    container_name: fusaroute-db
-    restart: always
+    restart: unless-stopped
     environment:
+      # Rol propio, nunca el superusuario postgres de la app. La contrasena es
+      # literal porque esta base solo existe en la maquina de quien la levanta;
+      # ningun ambiente real usa estas credenciales.
       - POSTGRES_USER=fusaroute_dev
       - POSTGRES_PASSWORD=dev_password
       - POSTGRES_DB=postgres
     ports:
-      - "5432:5432"
+      # Publicado para poder entrar con psql o DBeaver. Si ya hay un Postgres en
+      # 5432, cambiar DB_PORT en el .env; el backend no se entera, porque habla
+      # con la base por la red interna (db:5432).
+      - "${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -32,15 +50,15 @@ services:
     networks:
       - fusaroute-network
 
-  # Aplicación Backend de FusaRoute
+  # API REST (Spring Boot), empaquetada con el Dockerfile de este repo: la misma
+  # imagen que corre en Render.
   backend:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: fusaroute-backend
     restart: on-failure
     ports:
-      - "8080:8080"
+      - "${BACKEND_PORT:-8080}:8080"
     environment:
       - SPRING_PROFILES_ACTIVE=dev
       # El esquema no existe en una base recien creada; Flyway lo crea porque
@@ -59,15 +77,64 @@ services:
       - JWT_SECRET=${JWT_SECRET:?falta JWT_SECRET en el .env}
       - TOTP_ENCRYPTION_KEY=${TOTP_ENCRYPTION_KEY:?falta TOTP_ENCRYPTION_KEY en el .env}
       - GOOGLE_MAPS_API_KEY=${GOOGLE_MAPS_API_KEY:-}
+      # El navegador llama a la API desde el origen del frontend de este compose;
+      # si no esta en la lista, CORS rechaza todas las peticiones.
+      - CORS_ALLOWED_ORIGINS=http://localhost:${FRONTEND_PORT:-4200}
+    healthcheck:
+      # /health responde UP cuando Flyway ya migro y Tomcat acepta peticiones.
+      # start_period cubre el arranque de la JVM mas las migraciones en una base
+      # vacia; los fallos dentro de esa ventana no cuentan como reintentos.
+      # La imagen del JRE no trae curl ni wget, y no se le agregan solo para
+      # esto (es la misma imagen de Render): bash abre el socket con /dev/tcp,
+      # pide /health y comprueba que la respuesta diga UP.
+      test:
+        - CMD
+        - bash
+        - -c
+        - exec 3<>/dev/tcp/127.0.0.1/8080 && printf 'GET /health HTTP/1.0\r\n\r\n' >&3 && grep -q '"UP"' <&3
+      interval: 10s
+      timeout: 5s
+      retries: 6
+      start_period: 60s
     depends_on:
       db:
         condition: service_healthy
     networks:
       - fusaroute-network
 
+  # Interfaz web (Angular servido por Nginx). Se construye desde el repo del
+  # frontend, que se espera clonado al lado de este; FRONTEND_CONTEXT lo cambia.
+  frontend:
+    build:
+      context: ${FRONTEND_CONTEXT:-../FusaRoute-FRONTEND}
+      dockerfile: Dockerfile
+    restart: on-failure
+    ports:
+      # Nginx escucha en 8080 dentro del contenedor porque corre sin privilegios.
+      - "${FRONTEND_PORT:-4200}:8080"
+    environment:
+      # Configuracion de EJECUCION del frontend (factor 3): Nginx la entrega en
+      # /config.json y Angular la lee al arrancar. Es la URL del backend vista
+      # DESDE EL NAVEGADOR (por eso localhost y no `backend`, que solo resuelve
+      # dentro de la red de Docker).
+      - API_URL=http://localhost:${BACKEND_PORT:-8080}
+      # Clave de Maps del FRONTEND: publica por naturaleza, restringida por
+      # dominio, y distinta de la del backend. Vacia = la app funciona sin mapa.
+      - GOOGLE_MAPS_API_KEY=${FRONTEND_GOOGLE_MAPS_API_KEY:-}
+    depends_on:
+      # El frontend son archivos estaticos y podria arrancar solo, pero esperar
+      # al backend sano hace que `docker compose up` termine con la app usable.
+      backend:
+        condition: service_healthy
+    networks:
+      - fusaroute-network
+
 networks:
+  # Red propia del proyecto: los servicios se encuentran por nombre (db, backend).
   fusaroute-network:
     driver: bridge
 
 volumes:
+  # Los datos de Postgres sobreviven a `docker compose down`; se borran solo con
+  # `docker compose down -v`.
   postgres_data:

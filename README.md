@@ -23,6 +23,55 @@ mvn spring-boot:run -Dspring-boot.run.profiles=dev
 # Comprobar: GET http://localhost:8080/health  →  {"status":"UP"}
 ```
 
+## Docker: todo el sistema con un comando
+
+`docker-compose.yml` levanta **PostgreSQL + backend + frontend**. No reemplaza el flujo
+del día a día (`mvn spring-boot:run` contra Supabase): sirve para correr el sistema entero
+sin instalar Java, Node ni Postgres, para probar migraciones de Flyway contra una base vacía
+y como ambiente de las pruebas de carga y de extremo a extremo.
+
+**Requisitos:** Docker Desktop (o Docker Engine + Compose v2) y el repo `FusaRoute-FRONTEND`
+clonado **al lado** de este (`../FusaRoute-FRONTEND`); si está en otra carpeta, se indica
+con `FRONTEND_CONTEXT` en el `.env`.
+
+```bash
+cp .env.example .env
+# En .env, lo único obligatorio para Compose:
+#   JWT_SECRET=$(openssl rand -base64 48)
+#   TOTP_ENCRYPTION_KEY=$(openssl rand -base64 32)
+docker compose up --build
+```
+
+| Servicio | Imagen | URL en la máquina | Variable del puerto |
+|---|---|---|---|
+| `frontend` | Angular compilado, servido por Nginx sin privilegios | <http://localhost:4200> | `FRONTEND_PORT` |
+| `backend` | Spring Boot (el mismo `Dockerfile` de Render) | <http://localhost:8080/health> | `BACKEND_PORT` |
+| `db` | `postgres:16-alpine`, rol `fusaroute_dev` | `localhost:5432` | `DB_PORT` |
+
+El orden de arranque lo imponen los *healthchecks*: `backend` espera a que `db` acepte
+conexiones y `frontend` espera a que `/health` del backend responda. La base nace vacía y
+Flyway le aplica todas las migraciones, así que el catálogo de rutas ya viene sembrado; los
+usuarios no: hay que registrarse desde la app.
+
+Si un puerto ya está ocupado (un Postgres instalado en 5432, otro servicio en 8080), se
+cambia en el `.env` (`DB_PORT`, `BACKEND_PORT`, `FRONTEND_PORT`). El compose ajusta solo la
+URL de la API que recibe el frontend y el origen permitido por CORS.
+
+```bash
+docker compose ps          # estado y salud de los tres servicios
+docker compose logs -f backend
+docker compose down        # detiene y borra los contenedores; conserva los datos
+docker compose down -v     # además borra el volumen: la base vuelve a nacer vacía
+```
+
+**Sin secretos en el repo:** `JWT_SECRET` y `TOTP_ENCRYPTION_KEY` salen del `.env` local, que
+no se versiona ni entra a la imagen (`.dockerignore`); si faltan, Compose se niega a arrancar
+con un mensaje que lo dice. La contraseña `dev_password` de la base es literal a propósito:
+esa base solo existe en la máquina de quien levanta el compose.
+
+La evidencia de una corrida real y la explicación línea por línea de los `Dockerfile` están
+en [`docs/evidencias/docker/`](docs/evidencias/docker/).
+
 ## Despliegue (PROD)
 
 | Pieza | Dónde | Configuración versionada |

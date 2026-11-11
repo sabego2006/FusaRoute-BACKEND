@@ -1,0 +1,82 @@
+$ curl -i http://localhost:18080/health
+HTTP/1.1 200 
+Content-Type: application/json
+{"status":"UP"}
+
+
+$ curl -i http://localhost:4200/config.json
+HTTP/1.1 200 OK
+Server: nginx
+Date: Wed, 11 Nov 2026 02:40:25 GMT
+Content-Type: application/json
+Content-Length: 57
+Connection: keep-alive
+Cache-Control: no-store
+X-Content-Type-Options: nosniff
+
+{"apiUrl":"http://localhost:18080","googleMapsApiKey":""}
+
+$ curl -I http://localhost:4200/rutas/5   (fallback SPA: la ruta no existe como archivo)
+HTTP/1.1 200 OK
+Server: nginx
+Date: Wed, 11 Nov 2026 02:40:25 GMT
+Content-Type: text/html
+Content-Length: 5933
+Last-Modified: Wed, 11 Nov 2026 02:18:46 GMT
+Connection: keep-alive
+ETag: "6af3d086-172d"
+Cache-Control: no-cache
+X-Content-Type-Options: nosniff
+X-Frame-Options: DENY
+Referrer-Policy: strict-origin-when-cross-origin
+Accept-Ranges: bytes
+
+$ docker compose exec frontend id   (Nginx sin privilegios)
+uid=101(nginx) gid=101(nginx) groups=101(nginx)
+$ docker compose exec backend id
+uid=999(fusaroute) gid=999(fusaroute) groups=999(fusaroute)
+
+$ recorrido con navegador (Playwright 1.56, Chromium): registro > login con TOTP > busqueda
+lugares candidatos: Carrera 17(32), Carrera 8(32), Clínica Belén(32), Santa Anita(32), Santa Anita (Calle 17)(32), Av. Las Palmas(30)
+tras registro: http://localhost:4200/login?email=docker.1794364800454@example.com
+tras login: http://localhost:4200/rutas/buscar
+busqueda Carrera 17 -> Carrera 8: HTTP 200
+ruta sugerida: Cuja - Horizonte - Mesitas
+perfil tras recargar (sesion persiste): http://localhost:4200/perfil
+--- peticiones del navegador ---
+200 GET http://localhost:4200/config.json
+201 POST http://localhost:18080/api/auth/register
+401 POST http://localhost:18080/api/auth/login
+200 POST http://localhost:18080/api/users/me/totp/enroll
+200 POST http://localhost:18080/api/users/me/totp/confirm
+204 GET http://localhost:18080/api/users/me/favorite-destination
+200 GET http://localhost:18080/api/users/me/rides
+200 GET http://localhost:18080/api/places
+200 GET http://localhost:18080/api/routes/search?originPlaceId=38&destinationPlaceId=42
+200 GET http://localhost:18080/api/routes
+200 GET http://localhost:18080/api/users/me/totp
+200 GET http://localhost:18080/api/users/me
+
+$ psql: lo que el recorrido dejo en la base
+ usuarios 
+----------
+        1
+(1 row)
+
+ busquedas_en_historial 
+------------------------
+                      1
+(1 row)
+
+ rutas_sembradas 
+-----------------
+              34
+(1 row)
+
+ version |      description      | success 
+---------+-----------------------+---------
+ 25      | historial de viajes   | t
+ 24      | logs y eventos de uso | t
+ 23      | trazados osm y pasca  | t
+(3 rows)
+

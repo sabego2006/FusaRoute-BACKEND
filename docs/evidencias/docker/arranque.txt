@@ -1,0 +1,40 @@
+$ docker compose up --build -d   (base vacia tras 'docker compose down -v'; imagenes ya en cache; 50 s hasta los tres servicios sanos)
+ Image fusaroute-backend Built 
+ Image fusaroute-frontend Built 
+ Network fusaroute_fusaroute-network Creating 
+ Volume fusaroute_postgres_data Creating 
+ Volume fusaroute_postgres_data Created 
+ Network fusaroute_fusaroute-network Created 
+ Container fusaroute-db-1 Creating 
+ Container fusaroute-db-1 Created 
+ Container fusaroute-backend-1 Creating 
+ Container fusaroute-backend-1 Created 
+ Container fusaroute-frontend-1 Creating 
+ Container fusaroute-frontend-1 Created 
+ Container fusaroute-db-1 Starting 
+ Container fusaroute-db-1 Started 
+ Container fusaroute-db-1 Waiting 
+ Container fusaroute-db-1 Healthy 
+ Container fusaroute-backend-1 Starting 
+ Container fusaroute-backend-1 Started 
+ Container fusaroute-backend-1 Waiting 
+ Container fusaroute-backend-1 Healthy 
+ Container fusaroute-frontend-1 Starting 
+ Container fusaroute-frontend-1 Started 
+
+$ docker compose logs backend   (extracto: Flyway y arranque)
+2026-11-11T02:39:41.940Z  INFO 1 --- [fusaroute-backend] [           main] o.f.core.internal.database.base.Schema   : Creating schema "fusaroute" ...
+2026-11-11T02:39:44.168Z  INFO 1 --- [fusaroute-backend] [           main] o.f.core.internal.command.DbMigrate      : Successfully applied 23 migrations to schema "fusaroute", now at version v25 (execution time 00:01.202s)
+2026-11-11T02:39:53.639Z  INFO 1 --- [fusaroute-backend] [           main] o.s.b.w.embedded.tomcat.TomcatWebServer  : Tomcat started on port 8080 (http) with context path '/'
+2026-11-11T02:39:53.692Z  INFO 1 --- [fusaroute-backend] [           main] com.fusaroute.FusaRouteApplication       : Started FusaRouteApplication in 21.317 seconds (process running for 22.784)
+
+$ docker compose logs frontend   (extracto: envsubst de la plantilla y arranque de Nginx)
+/docker-entrypoint.sh: Launching /docker-entrypoint.d/20-envsubst-on-templates.sh
+20-envsubst-on-templates.sh: Running envsubst on /etc/nginx/templates/default.conf.template to /etc/nginx/conf.d/default.conf
+/docker-entrypoint.sh: Configuration complete; ready for start up
+2026/11/11 02:39:57 [notice] 1#1: start worker processes
+
+$ docker compose logs db   (extracto)
+2026-11-11 02:39:24.568 UTC [42] LOG:  database system is ready to accept connections
+PostgreSQL init process complete; ready for start up.
+2026-11-11 02:39:24.945 UTC [1] LOG:  database system is ready to accept connections

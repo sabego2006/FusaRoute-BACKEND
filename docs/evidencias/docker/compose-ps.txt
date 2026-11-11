@@ -1,0 +1,5 @@
+$ docker compose ps
+NAME                   IMAGE                COMMAND                  SERVICE    CREATED              STATUS                        PORTS
+fusaroute-backend-1    fusaroute-backend    "java -jar /app/app.…"   backend    About a minute ago   Up 51 seconds (healthy)       0.0.0.0:18080->8080/tcp, [::]:18080->8080/tcp
+fusaroute-db-1         postgres:16-alpine   "docker-entrypoint.s…"   db         About a minute ago   Up About a minute (healthy)   0.0.0.0:15432->5432/tcp, [::]:15432->5432/tcp
+fusaroute-frontend-1   fusaroute-frontend   "/docker-entrypoint.…"   frontend   About a minute ago   Up 25 seconds (healthy)       0.0.0.0:4200->8080/tcp, [::]:4200->8080/tcp
