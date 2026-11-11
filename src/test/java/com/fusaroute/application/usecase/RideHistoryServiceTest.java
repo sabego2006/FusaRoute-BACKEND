@@ -7,6 +7,9 @@ import com.fusaroute.domain.model.Ride;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
+import com.fusaroute.domain.model.SearchOutcome;
+import com.fusaroute.domain.model.UsageEvent;
+import com.fusaroute.domain.model.UsageEventType;
 import com.fusaroute.domain.port.in.RecordRideCommand;
 import com.fusaroute.domain.port.out.RideRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
@@ -20,6 +23,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneId;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -48,8 +52,12 @@ class RideHistoryServiceTest {
 
     private final Clock reloj = Clock.fixed(AHORA, ZoneId.of("America/Bogota"));
 
+    private final List<UsageEvent> eventos = new ArrayList<>();
+
+    private com.fusaroute.domain.port.out.UsageEventRecorderPort registro = eventos::add;
+
     private RideHistoryService service() {
-        return new RideHistoryService(rides, routes, reloj);
+        return new RideHistoryService(rides, routes, reloj, registro);
     }
 
     private static Route ruta(RouteStatus status) {
@@ -134,5 +142,43 @@ class RideHistoryServiceTest {
 
         assertThat(service().ridesOf(1L)).isEmpty();
         verify(rides).findRecentByUser(1L, 10);
+    }
+
+    @Test
+    void ya_me_subi_registra_un_boarded_sin_usuario_ni_coordenadas() {
+        when(routes.findById(14L)).thenReturn(Optional.of(ruta(RouteStatus.ACTIVA)));
+        when(rides.saveKeepingLatest(any(), anyInt())).thenAnswer(inv -> inv.getArgument(0));
+
+        service().record(comando(31L, 4.3459, -74.3779));
+
+        assertThat(eventos).singleElement().satisfies(e -> {
+            assertThat(e.type()).isEqualTo(UsageEventType.BOARDED);
+            assertThat(e.outcome()).isEqualTo(SearchOutcome.FOUND);
+            assertThat(e.routeId()).isEqualTo(14L);
+            assertThat(e.originLabel()).isEqualTo("Indio");
+            assertThat(e.destinationLabel()).isEqualTo("Terminal de Transporte");
+            assertThat(e.occurredAt()).isEqualTo(AHORA);
+            assertThat(e.etaSource()).isNull();
+        });
+    }
+
+    @Test
+    void un_viaje_rechazado_no_registra_evento() {
+        when(routes.findById(14L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service().record(comando(31L, 4.3, -74.3)))
+                .isInstanceOf(RouteNotFoundException.class);
+        assertThat(eventos).isEmpty();
+    }
+
+    @Test
+    void si_el_registro_falla_el_viaje_queda_guardado_igual() {
+        when(routes.findById(14L)).thenReturn(Optional.of(ruta(RouteStatus.ACTIVA)));
+        when(rides.saveKeepingLatest(any(), anyInt())).thenAnswer(inv -> inv.getArgument(0));
+        registro = evento -> {
+            throw new IllegalStateException("cola rota");
+        };
+
+        assertThat(service().record(comando(31L, 4.3459, -74.3779))).isNotNull();
     }
 }

@@ -11,6 +11,8 @@ import com.fusaroute.domain.model.NearestRoute;
  */
 public class NoRouteAvailableException extends RuntimeException {
 
+    private final String originLabel;
+    private final String destinationLabel;
     private final transient NearestRoute nearestToOrigin;
     private final transient NearestRoute nearestToDestination;
 
@@ -21,8 +23,20 @@ public class NoRouteAvailableException extends RuntimeException {
     public NoRouteAvailableException(String origin, String destination,
                                      NearestRoute nearestToOrigin, NearestRoute nearestToDestination) {
         super(String.format("No hay rutas disponibles que conecten %s con %s", origin, destination));
+        this.originLabel = origin;
+        this.destinationLabel = destination;
         this.nearestToOrigin = nearestToOrigin;
         this.nearestToDestination = nearestToDestination;
+    }
+
+    /** Origen tal como se muestra (lugar canonico o "Cerca de ..."). */
+    public String originLabel() {
+        return originLabel;
+    }
+
+    /** Destino tal como se muestra (lugar canonico o "Cerca de ..."). */
+    public String destinationLabel() {
+        return destinationLabel;
     }
 
     /** Ruta mas cercana al origen; {@code null} si no se pudo calcular. */
