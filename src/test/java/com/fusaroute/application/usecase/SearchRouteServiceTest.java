@@ -12,7 +12,10 @@ import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
 import com.fusaroute.domain.model.RouteType;
 import com.fusaroute.domain.model.SearchPoint;
+import com.fusaroute.domain.model.SearchOutcome;
 import com.fusaroute.domain.model.TrafficSector;
+import com.fusaroute.domain.model.UsageEvent;
+import com.fusaroute.domain.model.UsageEventType;
 import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
@@ -70,6 +73,8 @@ class SearchRouteServiceTest {
     private final Map<Long, List<Double>> observations = new java.util.HashMap<>();
     private final List<Object[]> recordedSpeeds = new ArrayList<>();
     private TravelTimePort travelTime;
+    private final List<UsageEvent> events = new ArrayList<>();
+    private com.fusaroute.domain.port.out.UsageEventRecorderPort recorder = events::add;
     private Clock clock = MANANA;
 
     private final PlaceRepositoryPort placeRepository = new PlaceRepositoryPort() {
@@ -115,7 +120,7 @@ class SearchRouteServiceTest {
         };
         TrafficSectorRepositoryPort sectorRepository = () -> sectors;
         return new SearchRouteService(routeRepository, placeRepository, travelTime, sectorRepository,
-                speedPort, new SimpleMeterRegistry(), clock);
+                speedPort, new SimpleMeterRegistry(), clock, recorder);
     }
 
     private static Place place(long id, String slug, String name, double lat, double lng, String... aliases) {
@@ -567,5 +572,108 @@ class SearchRouteServiceTest {
 
         assertThat(result.route().fares()).hasSize(1);
         assertThat(result.route().fares().get(0).amount()).isEqualByComparingTo("2600");
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // Eventos de uso en search_events (SCRUM-186, P6)
+    // ------------------------------------------------------------------------------------------
+
+    @Test
+    void una_busqueda_con_ruta_registra_un_search_found_con_ruta_tiempo_y_latencia() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        assertThat(events).singleElement().satisfies(e -> {
+            assertThat(e.type()).isEqualTo(UsageEventType.SEARCH);
+            assertThat(e.outcome()).isEqualTo(SearchOutcome.FOUND);
+            assertThat(e.routeId()).isEqualTo(10L);
+            assertThat(e.originLabel()).isEqualTo("Oeste");
+            assertThat(e.destinationLabel()).isEqualTo("Este");
+            assertThat(e.etaSource()).isEqualTo(EtaSource.ESTIMATED);
+            assertThat(e.latencyMs()).isNotNull().isNotNegative();
+            assertThat(e.congestion()).isFalse();
+            assertThat(e.occurredAt()).isEqualTo(clock.instant());
+        });
+    }
+
+    @Test
+    void la_busqueda_online_con_google_registra_eta_traffic() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        when(travelTime.getTravelTime(any(), any(), any())).thenReturn(Duration.ofMinutes(12));
+
+        service().findBestRoute(at(OESTE), at(ESTE));
+
+        assertThat(events).singleElement().extracting(UsageEvent::etaSource).isEqualTo(EtaSource.TRAFFIC);
+    }
+
+    @Test
+    void una_caminata_larga_registra_long_walk() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        service().findBestRouteOffline(at(LEJOS), at(ESTE));
+
+        assertThat(events).singleElement().extracting(UsageEvent::outcome).isEqualTo(SearchOutcome.LONG_WALK);
+    }
+
+    @Test
+    void sin_ruta_registra_not_found_con_las_etiquetas_y_sin_ruta() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(MUY_LEJOS), at(ESTE)))
+                .isInstanceOf(NoRouteAvailableException.class);
+
+        assertThat(events).singleElement().satisfies(e -> {
+            assertThat(e.outcome()).isEqualTo(SearchOutcome.NOT_FOUND);
+            assertThat(e.routeId()).isNull();
+            assertThat(e.etaSource()).isNull();
+            assertThat(e.originLabel()).isEqualTo("Muy lejos");
+            assertThat(e.destinationLabel()).isEqualTo("Este");
+        });
+    }
+
+    @Test
+    void una_busqueda_que_falla_registra_error() {
+        assertThatThrownBy(() -> service().findBestRouteOffline(new SearchPoint.OfPlace(999), at(ESTE)))
+                .isInstanceOf(InvalidSearchPointException.class);
+
+        assertThat(events).singleElement().satisfies(e -> {
+            assertThat(e.outcome()).isEqualTo(SearchOutcome.ERROR);
+            assertThat(e.originLabel()).isEqualTo("lugar #999");
+        });
+    }
+
+    @Test
+    void el_aviso_de_congestion_queda_marcado_en_el_evento() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        sectors.add(indioDeLaTarde(LAT, -74.375));
+        clock = TARDE;
+
+        service().findBestRouteOffline(at(OESTE), at(ESTE));
+
+        assertThat(events).singleElement().extracting(UsageEvent::congestion).isEqualTo(true);
+    }
+
+    @Test
+    void una_coordenada_nunca_llega_al_evento_solo_el_lugar_cercano() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+
+        service().findBestRouteOffline(new SearchPoint.OfCoordinate(new Coordinate(LAT, -74.3951)), at(ESTE));
+        assertThatThrownBy(() -> service().findBestRouteOffline(
+                new SearchPoint.OfCoordinate(new Coordinate(4.39, -74.3951)), new SearchPoint.OfPlace(999)))
+                .isInstanceOf(InvalidSearchPointException.class);
+
+        assertThat(events).extracting(UsageEvent::originLabel).containsExactly("Cerca de Oeste", "Coordenada");
+        assertThat(events).extracting(UsageEvent::originLabel).noneMatch(label -> label.contains("74."));
+    }
+
+    @Test
+    void si_el_registro_falla_la_busqueda_responde_igual() {
+        routes.add(urban(10, "Oeste - Este", pathEastward()));
+        recorder = event -> {
+            throw new IllegalStateException("cola rota");
+        };
+
+        assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).route().id()).isEqualTo(10L);
     }
 }

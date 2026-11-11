@@ -13,14 +13,18 @@ import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteMatch;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteType;
+import com.fusaroute.domain.model.SearchOutcome;
 import com.fusaroute.domain.model.SearchPoint;
 import com.fusaroute.domain.model.TrafficSector;
+import com.fusaroute.domain.model.UsageEvent;
+import com.fusaroute.domain.model.UsageEventType;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
+import com.fusaroute.domain.port.out.UsageEventRecorderPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
 import org.slf4j.Logger;
@@ -28,6 +32,7 @@ import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
+import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Comparator;
@@ -81,9 +86,20 @@ public class SearchRouteService implements SearchRouteUseCase {
     private final MeterRegistry meterRegistry;
     private final Clock clock;
 
+    private final UsageEventRecorderPort usageEvents;
+
+    /** Sin registro de eventos de uso: para pruebas que no miden el uso. */
     public SearchRouteService(RouteRepositoryPort routeRepository, PlaceRepositoryPort placeRepository,
                               TravelTimePort travelTimePort, TrafficSectorRepositoryPort trafficSectorRepository,
                               RouteSpeedPort routeSpeedPort, MeterRegistry meterRegistry, Clock clock) {
+        this(routeRepository, placeRepository, travelTimePort, trafficSectorRepository, routeSpeedPort,
+                meterRegistry, clock, event -> { });
+    }
+
+    public SearchRouteService(RouteRepositoryPort routeRepository, PlaceRepositoryPort placeRepository,
+                              TravelTimePort travelTimePort, TrafficSectorRepositoryPort trafficSectorRepository,
+                              RouteSpeedPort routeSpeedPort, MeterRegistry meterRegistry, Clock clock,
+                              UsageEventRecorderPort usageEvents) {
         this.routeRepository = routeRepository;
         this.placeRepository = placeRepository;
         this.travelTimePort = travelTimePort;
@@ -91,28 +107,87 @@ public class SearchRouteService implements SearchRouteUseCase {
         this.routeSpeedPort = routeSpeedPort;
         this.meterRegistry = meterRegistry;
         this.clock = clock;
+        this.usageEvents = usageEvents;
     }
 
     @Override
     public RouteSearchResult findBestRoute(SearchPoint origin, SearchPoint destination) {
-        Timer.Sample sample = Timer.start(meterRegistry);
-        try {
-            return search(origin, destination, true);
-        } finally {
-            // Etiquetado por modo a proposito: el p95 < 8 s de RNF-01 es sobre la busqueda que
-            // consulta a Google; mezclar la offline en la misma serie haria ver un p95 mejor del real.
-            sample.stop(meterRegistry.timer(LATENCY_METRIC, "mode", "online"));
-        }
+        return measured(origin, destination, true);
     }
 
     @Override
     public RouteSearchResult findBestRouteOffline(SearchPoint origin, SearchPoint destination) {
+        return measured(origin, destination, false);
+    }
+
+    /**
+     * Busca, mide la latencia y deja un evento {@code SEARCH} en {@code search_events} (SCRUM-186),
+     * tanto si hubo ruta como si no o si fallo. El registro es asincrono: la busqueda no espera por el.
+     */
+    private RouteSearchResult measured(SearchPoint origin, SearchPoint destination, boolean online) {
+        Instant startedAt = clock.instant();
         Timer.Sample sample = Timer.start(meterRegistry);
+        RouteSearchResult result = null;
+        RuntimeException failure = null;
         try {
-            return search(origin, destination, false);
+            result = search(origin, destination, online);
+            return result;
+        } catch (RuntimeException e) {
+            failure = e;
+            throw e;
         } finally {
-            sample.stop(meterRegistry.timer(LATENCY_METRIC, "mode", "offline"));
+            // Etiquetado por modo a proposito: el p95 < 8 s de RNF-01 es sobre la busqueda que
+            // consulta a Google; mezclar la offline en la misma serie haria ver un p95 mejor del real.
+            long nanos = sample.stop(meterRegistry.timer(LATENCY_METRIC, "mode", online ? "online" : "offline"));
+            recordSearch(startedAt, origin, destination, result, failure, nanos);
         }
+    }
+
+    private void recordSearch(Instant startedAt, SearchPoint originPoint, SearchPoint destinationPoint,
+                              RouteSearchResult result, RuntimeException failure, long nanos) {
+        try {
+            int latencyMs = (int) Math.min(Integer.MAX_VALUE, Math.max(0, nanos / 1_000_000));
+            UsageEvent event;
+            if (result != null) {
+                event = UsageEvent.of(startedAt, UsageEventType.SEARCH,
+                        labelOf(result.origin(), originPoint), labelOf(result.destination(), destinationPoint),
+                        result.route().id(), result.longWalk() ? SearchOutcome.LONG_WALK : SearchOutcome.FOUND,
+                        result.etaSource(), latencyMs, !result.congestionSectors().isEmpty());
+            } else if (failure instanceof NoRouteAvailableException noRoute) {
+                event = UsageEvent.of(startedAt, UsageEventType.SEARCH,
+                        firstNonNull(noRoute.originLabel(), originPoint), firstNonNull(noRoute.destinationLabel(), destinationPoint),
+                        null, SearchOutcome.NOT_FOUND, null, latencyMs, false);
+            } else {
+                event = UsageEvent.of(startedAt, UsageEventType.SEARCH,
+                        rawLabel(originPoint), rawLabel(destinationPoint),
+                        null, SearchOutcome.ERROR, null, latencyMs, false);
+            }
+            usageEvents.record(event);
+        } catch (RuntimeException e) {
+            // Una estadistica nunca tumba una busqueda.
+            log.debug("No se pudo registrar el evento de busqueda: {}", e.getMessage());
+        }
+    }
+
+    private static String labelOf(ResolvedPoint resolved, SearchPoint raw) {
+        return resolved != null && resolved.label() != null ? resolved.label() : rawLabel(raw);
+    }
+
+    private static String firstNonNull(String label, SearchPoint raw) {
+        return label != null ? label : rawLabel(raw);
+    }
+
+    /**
+     * Etiqueta de una punta sin resolver. Una coordenada NO se guarda: es la ubicacion de una persona,
+     * y search_events no lleva datos personales.
+     */
+    private static String rawLabel(SearchPoint point) {
+        return switch (point) {
+            case null -> null;
+            case SearchPoint.OfPlace p -> "lugar #" + p.placeId();
+            case SearchPoint.OfCoordinate c -> "Coordenada";
+            case SearchPoint.OfName n -> n.name();
+        };
     }
 
     // ------------------------------------------------------------------------------------------

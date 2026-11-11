@@ -50,6 +50,7 @@ import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
+import com.fusaroute.domain.port.out.UsageEventRecorderPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
@@ -105,9 +106,10 @@ public class UseCaseConfig {
                                                   TravelTimePort travelTimePort,
                                                   TrafficSectorRepositoryPort trafficSectorRepository,
                                                   RouteSpeedPort routeSpeedPort,
-                                                  MeterRegistry meterRegistry, Clock clock) {
+                                                  MeterRegistry meterRegistry, Clock clock,
+                                                  UsageEventRecorderPort usageEventRecorder) {
         return new SearchRouteService(routeRepository, placeRepository, travelTimePort,
-                trafficSectorRepository, routeSpeedPort, meterRegistry, clock);
+                trafficSectorRepository, routeSpeedPort, meterRegistry, clock, usageEventRecorder);
     }
 
     @Bean
@@ -131,8 +133,9 @@ public class UseCaseConfig {
     /** Clase concreta por la misma razon: implementa "Ya me subi" y el historial de viajes. */
     @Bean
     public RideHistoryService rideHistoryService(RideRepositoryPort rideRepository,
-                                                 RouteRepositoryPort routeRepository, Clock clock) {
-        return new RideHistoryService(rideRepository, routeRepository, clock);
+                                                 RouteRepositoryPort routeRepository, Clock clock,
+                                                 UsageEventRecorderPort usageEventRecorder) {
+        return new RideHistoryService(rideRepository, routeRepository, clock, usageEventRecorder);
     }
 
     /**
