@@ -1,0 +1,10 @@
+$ docker compose images
+CONTAINER              REPOSITORY           TAG                 PLATFORM            IMAGE ID            SIZE                CREATED
+fusaroute-backend-1    fusaroute-backend    latest              linux/amd64         65e6a3727ec1        608MB               7 minutes ago
+fusaroute-db-1         postgres             16-alpine           linux/amd64         0cefaabd882e        419MB               2 weeks ago
+fusaroute-frontend-1   fusaroute-frontend   latest              linux/amd64         bca56ed41905        83.7MB              19 minutes ago
+
+$ docker image ls (tamano de las imagenes construidas)
+REPOSITORY                      TAG                        SIZE
+fusaroute-backend               latest                     608MB
+fusaroute-frontend              latest                     83.7MB
