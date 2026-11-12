@@ -1,0 +1,1 @@
+-Jq.users=100 -Jq.rampup=20 -Jq.loops=10

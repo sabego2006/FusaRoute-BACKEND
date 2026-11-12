@@ -1,0 +1,12 @@
+Primera peticion a PROD antes de las corridas (21:44:16):
+GET /health -> 200 en 2.407032 s
+GET /health (segunda) -> 200 en 2.640624 s
+GET /health tras las corridas -> 200 en 1.275567 s
+GET /health tras prod-e6 (repeticion) -> 503 en 0.960349 s
+
+Incidente tras la repeticion de prod-e6 (100 usuarios, solo GET publicos):
+21:56:05 ultima respuesta 200 de la corrida; despues todo fue 429, 503 o espera agotada
+21:58:27 a 21:59:54  GET /health -> 503, cabecera x-render-routing: hibernate-wake-error (5 sondeos)
+22:00:17 GET /health -> 429 (limite de peticiones de Render hacia esta maquina)
+22:02:19 GET /health -> 200 en 0.85 s (x-render-origin-server: Render). Se recupero solo, sin intervencion.
+Tiempo sin servicio observado: unos 6 minutos (ultimo 200 de la corrida a las 21:56:05; primer 200 del sondeo a las 22:02:19).

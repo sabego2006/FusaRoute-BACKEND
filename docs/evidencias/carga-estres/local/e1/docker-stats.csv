@@ -1,0 +1,27 @@
+hora,contenedor,cpu,memoria
+18:17:31,fusaroute-backend-1,5.47%,321.8MiB / 512MiB
+18:17:31,fusaroute-db-1,0.00%,54.13MiB / 7.756GiB
+18:17:38,fusaroute-backend-1,96.16%,327.5MiB / 512MiB
+18:17:38,fusaroute-db-1,0.32%,54.64MiB / 7.756GiB
+18:17:45,fusaroute-backend-1,97.36%,331.1MiB / 512MiB
+18:17:45,fusaroute-db-1,0.21%,54.46MiB / 7.756GiB
+18:17:52,fusaroute-backend-1,97.91%,334.4MiB / 512MiB
+18:17:52,fusaroute-db-1,0.38%,54.82MiB / 7.756GiB
+18:18:00,fusaroute-backend-1,96.61%,334.6MiB / 512MiB
+18:18:00,fusaroute-db-1,3.52%,54.63MiB / 7.756GiB
+18:18:06,fusaroute-backend-1,97.36%,335.5MiB / 512MiB
+18:18:06,fusaroute-db-1,0.54%,55.11MiB / 7.756GiB
+18:18:14,fusaroute-backend-1,97.76%,335.8MiB / 512MiB
+18:18:14,fusaroute-db-1,0.41%,54.88MiB / 7.756GiB
+18:18:21,fusaroute-backend-1,98.37%,336MiB / 512MiB
+18:18:21,fusaroute-db-1,1.66%,54.25MiB / 7.756GiB
+18:18:28,fusaroute-backend-1,94.39%,340.6MiB / 512MiB
+18:18:28,fusaroute-db-1,0.18%,54.25MiB / 7.756GiB
+18:18:35,fusaroute-backend-1,97.83%,337.6MiB / 512MiB
+18:18:35,fusaroute-db-1,0.43%,54.93MiB / 7.756GiB
+18:18:43,fusaroute-backend-1,100.73%,336.8MiB / 512MiB
+18:18:43,fusaroute-db-1,0.27%,55.1MiB / 7.756GiB
+18:18:50,fusaroute-backend-1,96.45%,337.5MiB / 512MiB
+18:18:50,fusaroute-db-1,4.34%,54.77MiB / 7.756GiB
+18:18:56,fusaroute-backend-1,4.00%,337.5MiB / 512MiB
+18:18:56,fusaroute-db-1,0.83%,55.14MiB / 7.756GiB

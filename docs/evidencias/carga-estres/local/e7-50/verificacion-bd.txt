@@ -1,0 +1,1 @@
+Filas en fusaroute.feedback tras e4 y los tres niveles de e7 (consulta unica al final de e7-150, 20:38:18): 100. Esperado: 100 (los comentarios del escenario 4); todo lo creado por el escenario 7 se borro.

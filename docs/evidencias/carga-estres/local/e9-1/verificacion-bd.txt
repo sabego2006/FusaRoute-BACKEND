@@ -1,0 +1,2 @@
+antes de e9-1: 0 bloqueadas, 118 con intentos fallidos, 332 filas en feedback
+despues de e9-1 y del sondeo: 0 bloqueadas, 200 con intentos fallidos, 1658 filas en feedback

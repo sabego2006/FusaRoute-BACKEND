@@ -1,0 +1,1 @@
+-Jlogin.users=100 -Jlogin.rampup=20 -Jlogin.loops=5 -Jq.users=300 -Jq.rampup=20 -Jq.loops=10 -Jc.users=150 -Jc.rampup=20 -Jc.loops=10

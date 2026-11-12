@@ -1,0 +1,17 @@
+Sondeo de /health cada 15 s tras terminar e9-1 (21:39:21), sin reiniciar nada:
++5 s: 000 5.005134s
++25 s: 000 5.014544s
++45 s: 000 5.009203s
++65 s: 000 5.002312s
++85 s: 000 5.016310s
++106 s: 000 5.003703s
++126 s: 000 5.013939s
++146 s: 000 5.004987s
++166 s: 000 5.013192s
++186 s: 000 5.009610s
++201 s: 200 0.005357s
++216 s: 200 0.006581s
++232 s: 200 0.015380s
+fusaroute-frontend-1 3.00% 17.07MiB / 7.756GiB
+fusaroute-backend-1 0.10% 508MiB / 512MiB
+fusaroute-db-1 0.01% 54.02MiB / 7.756GiB
