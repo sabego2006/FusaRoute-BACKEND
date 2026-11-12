@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.adapter.out.persistence;
 import com.fusaroute.domain.model.Feedback;
 import com.fusaroute.domain.model.FeedbackStatus;
 import com.fusaroute.domain.port.out.FeedbackRepositoryPort;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -61,6 +62,20 @@ public class FeedbackPersistenceAdapter implements FeedbackRepositoryPort {
         return repository.findByStatusOrderByCreatedAtDesc(status).stream()
                 .map(FeedbackPersistenceAdapter::toDomain)
                 .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<Feedback> findAllPage(int page, int size) {
+        return repository.findAllByOrderByCreatedAtDescIdDesc(PageRequest.of(page, size)).stream()
+                .map(FeedbackPersistenceAdapter::toDomain)
+                .toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countAll() {
+        return repository.count();
     }
 
     @Override

@@ -5,6 +5,8 @@ import com.fusaroute.domain.port.in.ListAllFeedbackUseCase;
 import com.fusaroute.domain.port.in.ReplyToFeedbackUseCase;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PutMapping;
@@ -35,8 +37,10 @@ import java.util.List;
  * falta enumerar cada ruta, y la que se olvide queda abierta a cualquier usuario
  * autenticado.
  *
- * <p>El id del administrador no se usa: la respuesta no se atribuye a una persona en
- * el alcance actual. Ver {@link ReplyToFeedbackUseCase}.
+ * <p>El id del administrador NO se pasa al caso de uso: la respuesta no se atribuye a
+ * una persona en el alcance actual (ver {@link ReplyToFeedbackUseCase}). Solo se lee
+ * del JWT para calcular {@code mine} en {@link CommentResponse}, porque un
+ * administrador tambien escribe comentarios y puede listar o responder los propios.
  */
 @RestController
 @RequestMapping("/api/admin/comments")
@@ -60,14 +64,18 @@ public class AdminCommentController {
     @ApiResponse(responseCode = "401", description = "No autenticado")
     @ApiResponse(responseCode = "403", description = "Autenticado pero sin rol de administrador")
     @GetMapping
-    public List<CommentResponse> all(@RequestParam(required = false) FeedbackStatus status) {
+    public List<CommentResponse> all(@AuthenticationPrincipal Jwt jwt,
+                                     @RequestParam(required = false) FeedbackStatus status) {
+        // El id sale del JWT solo para calcular "mine" (un administrador tambien deja
+        // comentarios); la respuesta sigue sin atribuirse a una persona.
+        Long viewerId = Long.parseLong(jwt.getSubject());
         // Spring convierte el texto del parametro al enum; un valor que no existe
         // termina en 400 por MethodArgumentTypeMismatchException, que ya traduce
         // GlobalExceptionHandler. No hace falta validarlo a mano.
         var comments = status == null
                 ? listAllFeedback.allFeedbackPendingFirst()
                 : listAllFeedback.allFeedbackWithStatus(status);
-        return comments.stream().map(CommentResponse::from).toList();
+        return comments.stream().map(feedback -> CommentResponse.from(feedback, viewerId)).toList();
     }
 
     @Operation(summary = "Responder un comentario",
@@ -81,10 +89,13 @@ public class AdminCommentController {
     @ApiResponse(responseCode = "403", description = "Autenticado pero sin rol de administrador")
     @ApiResponse(responseCode = "404", description = "El comentario no existe")
     @PutMapping("/{id}/reply")
-    public CommentResponse reply(@PathVariable Long id, @RequestBody FeedbackReplyRequest request) {
+    public CommentResponse reply(@AuthenticationPrincipal Jwt jwt,
+                                 @PathVariable Long id,
+                                 @RequestBody FeedbackReplyRequest request) {
         // PUT y no POST: responder es idempotente en su efecto. Mandar la misma
         // respuesta dos veces deja el comentario igual, y eso es justo lo que pide
         // "una respuesta por comentario, no un hilo".
-        return CommentResponse.from(replyToFeedback.reply(id, request.reply()));
+        return CommentResponse.from(replyToFeedback.reply(id, request.reply()),
+                Long.parseLong(jwt.getSubject()));
     }
 }

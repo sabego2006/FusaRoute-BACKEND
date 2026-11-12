@@ -1,13 +1,16 @@
 package com.fusaroute.application.usecase;
 
 import com.fusaroute.domain.exception.FeedbackNotFoundException;
+import com.fusaroute.domain.exception.InvalidFeedbackPageException;
 import com.fusaroute.domain.exception.UserNotFoundException;
 import com.fusaroute.domain.model.Feedback;
+import com.fusaroute.domain.model.FeedbackPage;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.port.in.CountPendingFeedbackUseCase;
 import com.fusaroute.domain.port.in.CountUnreadRepliesUseCase;
 import com.fusaroute.domain.port.in.DeleteFeedbackUseCase;
 import com.fusaroute.domain.port.in.EditFeedbackUseCase;
+import com.fusaroute.domain.port.in.ListFeedbackFeedUseCase;
 import com.fusaroute.domain.port.in.ListMyFeedbackUseCase;
 import com.fusaroute.domain.port.in.SubmitFeedbackUseCase;
 import com.fusaroute.domain.port.out.FeedbackRepositoryPort;
@@ -37,7 +40,7 @@ import java.util.List;
  */
 public class FeedbackService implements SubmitFeedbackUseCase, ListMyFeedbackUseCase,
         EditFeedbackUseCase, DeleteFeedbackUseCase, CountPendingFeedbackUseCase,
-        CountUnreadRepliesUseCase {
+        CountUnreadRepliesUseCase, ListFeedbackFeedUseCase {
 
     private final FeedbackRepositoryPort repository;
     private final UserRepositoryPort userRepository;
@@ -68,6 +71,19 @@ public class FeedbackService implements SubmitFeedbackUseCase, ListMyFeedbackUse
     @Override
     public List<Feedback> myFeedback(Long userId) {
         return repository.findByUser(userId);
+    }
+
+    @Override
+    public FeedbackPage feed(int page, int size) {
+        if (page < 0) {
+            throw new InvalidFeedbackPageException("La pagina no puede ser negativa");
+        }
+        if (size < 1) {
+            throw new InvalidFeedbackPageException("El tamano de pagina debe ser al menos 1");
+        }
+        int effectiveSize = Math.min(size, FeedbackPage.MAX_SIZE);
+        return new FeedbackPage(
+                repository.findAllPage(page, effectiveSize), page, effectiveSize, repository.countAll());
     }
 
     @Override

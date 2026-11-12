@@ -4,9 +4,11 @@ import com.fusaroute.domain.exception.FeedbackAlreadyAnsweredException;
 import com.fusaroute.domain.exception.FeedbackForbiddenWordException;
 import com.fusaroute.domain.exception.FeedbackLengthException;
 import com.fusaroute.domain.exception.FeedbackNotFoundException;
+import com.fusaroute.domain.exception.InvalidFeedbackPageException;
 import com.fusaroute.domain.exception.UserNotFoundException;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.Feedback;
+import com.fusaroute.domain.model.FeedbackPage;
 import com.fusaroute.domain.model.FeedbackStatus;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.model.UserRole;
@@ -30,9 +32,11 @@ import java.util.Set;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 /**
@@ -286,5 +290,105 @@ class FeedbackServiceTest {
 
         assertThatThrownBy(() -> service.unreadReplies(AUTOR))
                 .isInstanceOf(UserNotFoundException.class);
+    }
+
+    // --- Feed compartido ---------------------------------------------------------
+
+    private static Feedback respondidoDeBeto() {
+        return new Feedback(6L, OTRO, "Beto", "Comentario respondido de Beto",
+                FeedbackStatus.ANSWERED, "Ya lo revisamos", AHORA, AHORA, AHORA);
+    }
+
+    @Test
+    void el_feed_devuelve_los_comentarios_de_otros_usuarios_ademas_de_los_propios() {
+        when(repository.findAllPage(0, 20)).thenReturn(List.of(respondidoDeBeto(), pendienteDeAna()));
+        when(repository.countAll()).thenReturn(2L);
+
+        FeedbackPage pagina = service.feed(0, 20);
+
+        assertThat(pagina.items()).extracting(Feedback::getAuthorName).containsExactly("Beto", "Ana");
+        assertThat(pagina.items()).extracting(Feedback::getStatus)
+                .containsExactly(FeedbackStatus.ANSWERED, FeedbackStatus.PENDING);
+        assertThat(pagina.page()).isZero();
+        assertThat(pagina.size()).isEqualTo(20);
+        assertThat(pagina.totalItems()).isEqualTo(2L);
+        assertThat(pagina.hasMore()).isFalse();
+    }
+
+    @Test
+    void el_feed_recorta_el_tamano_al_maximo_y_lo_informa() {
+        when(repository.findAllPage(0, FeedbackPage.MAX_SIZE)).thenReturn(List.of());
+        when(repository.countAll()).thenReturn(0L);
+
+        FeedbackPage pagina = service.feed(0, 500);
+
+        // El repositorio nunca ve el 500, y la pagina informa el tamano EFECTIVO.
+        verify(repository).findAllPage(0, 50);
+        assertThat(pagina.size()).isEqualTo(50);
+    }
+
+    @Test
+    void un_tamano_dentro_del_maximo_no_se_toca() {
+        when(repository.findAllPage(1, 50)).thenReturn(List.of());
+        when(repository.countAll()).thenReturn(0L);
+
+        assertThat(service.feed(1, 50).size()).isEqualTo(50);
+    }
+
+    @Test
+    void el_feed_vacio_es_una_pagina_vacia_y_no_un_error() {
+        when(repository.findAllPage(0, 20)).thenReturn(List.of());
+        when(repository.countAll()).thenReturn(0L);
+
+        FeedbackPage pagina = service.feed(0, 20);
+
+        assertThat(pagina.items()).isEmpty();
+        assertThat(pagina.totalItems()).isZero();
+        assertThat(pagina.hasMore()).isFalse();
+    }
+
+    @Test
+    void una_pagina_mas_alla_del_final_viene_vacia_y_sin_mas_paginas() {
+        when(repository.findAllPage(9, 20)).thenReturn(List.of());
+        when(repository.countAll()).thenReturn(5L);
+
+        FeedbackPage pagina = service.feed(9, 20);
+
+        assertThat(pagina.items()).isEmpty();
+        assertThat(pagina.hasMore()).isFalse();
+    }
+
+    @Test
+    void hay_mas_paginas_solo_si_el_total_supera_lo_ya_recorrido() {
+        // 45 comentarios, paginas de 20: 0 y 1 tienen siguiente, la 2 (con 5) no.
+        when(repository.findAllPage(anyInt(), anyInt())).thenReturn(List.of());
+        when(repository.countAll()).thenReturn(45L);
+
+        assertThat(service.feed(0, 20).hasMore()).isTrue();
+        assertThat(service.feed(1, 20).hasMore()).isTrue();
+        assertThat(service.feed(2, 20).hasMore()).isFalse();
+    }
+
+    @Test
+    void una_ultima_pagina_exactamente_llena_no_anuncia_otra() {
+        when(repository.findAllPage(1, 20)).thenReturn(List.of());
+        when(repository.countAll()).thenReturn(40L);
+
+        assertThat(service.feed(1, 20).hasMore()).isFalse();
+    }
+
+    @Test
+    void un_tamano_menor_que_uno_se_rechaza_sin_tocar_el_repositorio() {
+        assertThatThrownBy(() -> service.feed(0, 0)).isInstanceOf(InvalidFeedbackPageException.class);
+        assertThatThrownBy(() -> service.feed(0, -5)).isInstanceOf(InvalidFeedbackPageException.class);
+
+        verifyNoInteractions(repository);
+    }
+
+    @Test
+    void una_pagina_negativa_se_rechaza_sin_tocar_el_repositorio() {
+        assertThatThrownBy(() -> service.feed(-1, 20)).isInstanceOf(InvalidFeedbackPageException.class);
+
+        verifyNoInteractions(repository);
     }
 }

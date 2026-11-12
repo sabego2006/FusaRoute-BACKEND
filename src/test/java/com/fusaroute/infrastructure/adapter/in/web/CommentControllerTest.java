@@ -5,11 +5,14 @@ import com.fusaroute.domain.exception.FeedbackContainsUrlException;
 import com.fusaroute.domain.exception.FeedbackForbiddenWordException;
 import com.fusaroute.domain.exception.FeedbackLengthException;
 import com.fusaroute.domain.exception.FeedbackNotFoundException;
+import com.fusaroute.domain.exception.InvalidFeedbackPageException;
 import com.fusaroute.domain.model.Feedback;
+import com.fusaroute.domain.model.FeedbackPage;
 import com.fusaroute.domain.model.FeedbackStatus;
 import com.fusaroute.domain.port.in.CountUnreadRepliesUseCase;
 import com.fusaroute.domain.port.in.DeleteFeedbackUseCase;
 import com.fusaroute.domain.port.in.EditFeedbackUseCase;
+import com.fusaroute.domain.port.in.ListFeedbackFeedUseCase;
 import com.fusaroute.domain.port.in.ListMyFeedbackUseCase;
 import com.fusaroute.domain.port.in.SubmitFeedbackUseCase;
 import com.fusaroute.infrastructure.config.JwtConfig;
@@ -19,6 +22,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.TestPropertySource;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
@@ -26,17 +30,21 @@ import org.springframework.test.web.servlet.MockMvc;
 import java.time.Instant;
 import java.util.List;
 
+import static org.hamcrest.Matchers.containsString;
+import static org.hamcrest.Matchers.not;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -75,6 +83,19 @@ class CommentControllerTest {
 
     @MockitoBean
     private CountUnreadRepliesUseCase countUnreadReplies;
+
+    @MockitoBean
+    private ListFeedbackFeedUseCase listFeedbackFeed;
+
+    private static Feedback deBetoPendiente() {
+        return new Feedback(7L, 2L, "Beto", "Comentario pendiente de Beto",
+                FeedbackStatus.PENDING, null, null, AHORA, AHORA);
+    }
+
+    private static Feedback deCarlaRespondido() {
+        return new Feedback(8L, 3L, "Carla", "Comentario respondido de Carla",
+                FeedbackStatus.ANSWERED, "Ya lo revisamos", AHORA.plusSeconds(60), AHORA, AHORA);
+    }
 
     private static Feedback pendiente() {
         return new Feedback(5L, 1L, "Ana", "Comentario pendiente de Ana",
@@ -193,7 +214,149 @@ class CommentControllerTest {
                 .andExpect(status().isUnauthorized());
     }
 
+    // --- GET /api/comments: feed compartido -------------------------------------
+
+    @Test
+    void el_feed_exige_sesion() throws Exception {
+        mockMvc.perform(get("/api/comments"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(listFeedbackFeed);
+    }
+
+    @Test
+    void un_usuario_ve_comentarios_de_varios_autores_con_mine_y_editable_resueltos() throws Exception {
+        when(listFeedbackFeed.feed(0, 20)).thenReturn(new FeedbackPage(
+                List.of(deCarlaRespondido(), deBetoPendiente(), pendiente()), 0, 20, 3L));
+
+        mockMvc.perform(get("/api/comments")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items.length()").value(3))
+                .andExpect(jsonPath("$.items[0].authorName").value("Carla"))
+                .andExpect(jsonPath("$.items[0].reply").value("Ya lo revisamos"))
+                .andExpect(jsonPath("$.items[0].mine").value(false))
+                .andExpect(jsonPath("$.items[1].authorName").value("Beto"))
+                .andExpect(jsonPath("$.items[1].mine").value(false))
+                // Pendiente pero ajeno: no editable.
+                .andExpect(jsonPath("$.items[1].editable").value(false))
+                .andExpect(jsonPath("$.items[2].authorName").value("Ana"))
+                .andExpect(jsonPath("$.items[2].mine").value(true))
+                .andExpect(jsonPath("$.items[2].editable").value(true))
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalItems").value(3))
+                .andExpect(jsonPath("$.hasMore").value(false));
+    }
+
+    @Test
+    void un_administrador_tambien_puede_leer_el_feed() throws Exception {
+        when(listFeedbackFeed.feed(0, 20)).thenReturn(new FeedbackPage(List.of(pendiente()), 0, 20, 1L));
+
+        mockMvc.perform(get("/api/comments")
+                        .with(jwt().jwt(j -> j.subject("5").claim("scope", "full").claim("role", "ADMIN"))
+                                .authorities(new SimpleGrantedAuthority("SCOPE_full"),
+                                        new SimpleGrantedAuthority("ROLE_ADMIN"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.items[0].mine").value(false));
+    }
+
+    @Test
+    void el_feed_no_expone_el_id_de_ningun_usuario() throws Exception {
+        when(listFeedbackFeed.feed(0, 20)).thenReturn(new FeedbackPage(
+                List.of(deBetoPendiente(), pendiente()), 0, 20, 2L));
+
+        mockMvc.perform(get("/api/comments")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(jsonPath("$.items[0].userId").doesNotExist())
+                .andExpect(jsonPath("$.items[1].userId").doesNotExist())
+                .andExpect(content().string(not(containsString("userId"))))
+                .andExpect(content().string(not(containsString("email"))));
+    }
+
+    @Test
+    void sin_parametros_el_feed_pide_la_pagina_0_de_20() throws Exception {
+        when(listFeedbackFeed.feed(0, 20)).thenReturn(new FeedbackPage(List.of(), 0, 20, 0L));
+
+        mockMvc.perform(get("/api/comments")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk());
+
+        verify(listFeedbackFeed).feed(0, 20);
+    }
+
+    @Test
+    void page_y_size_llegan_al_caso_de_uso_tal_cual() throws Exception {
+        when(listFeedbackFeed.feed(2, 10)).thenReturn(new FeedbackPage(List.of(), 2, 10, 25L));
+
+        mockMvc.perform(get("/api/comments").param("page", "2").param("size", "10")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page").value(2))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.totalItems").value(25))
+                .andExpect(jsonPath("$.hasMore").value(false));
+    }
+
+    /**
+     * El recorte al maximo es del caso de uso (probado en FeedbackServiceTest): el
+     * controlador reenvia el 500 sin tocarlo y devuelve el tamano EFECTIVO que le
+     * informa el dominio, para que el cliente pagine con ese.
+     */
+    @Test
+    void un_size_enorme_se_reenvia_y_la_respuesta_informa_el_tamano_efectivo() throws Exception {
+        when(listFeedbackFeed.feed(0, 500)).thenReturn(new FeedbackPage(List.of(), 0, 50, 120L));
+
+        mockMvc.perform(get("/api/comments").param("size", "500")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(50))
+                .andExpect(jsonPath("$.hasMore").value(true));
+
+        verify(listFeedbackFeed).feed(0, 500);
+    }
+
+    @Test
+    void un_size_menor_que_uno_responde_400_con_el_mensaje_del_dominio() throws Exception {
+        when(listFeedbackFeed.feed(0, 0))
+                .thenThrow(new InvalidFeedbackPageException("El tamano de pagina debe ser al menos 1"));
+
+        mockMvc.perform(get("/api/comments").param("size", "0")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El tamano de pagina debe ser al menos 1"));
+    }
+
+    @Test
+    void una_pagina_negativa_responde_400() throws Exception {
+        when(listFeedbackFeed.feed(-1, 20))
+                .thenThrow(new InvalidFeedbackPageException("La pagina no puede ser negativa"));
+
+        mockMvc.perform(get("/api/comments").param("page", "-1")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void un_size_que_no_es_numero_responde_400_y_no_500() throws Exception {
+        mockMvc.perform(get("/api/comments").param("size", "muchos")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isBadRequest());
+
+        verifyNoInteractions(listFeedbackFeed);
+    }
+
     // --- GET /api/comments/me ---------------------------------------------------
+
+    @Test
+    void mis_comentarios_siempre_son_mine() throws Exception {
+        when(listMyFeedback.myFeedback(1L)).thenReturn(List.of(respondido(), pendiente()));
+
+        mockMvc.perform(get("/api/comments/me")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(jsonPath("$[0].mine").value(true))
+                .andExpect(jsonPath("$[1].mine").value(true));
+    }
 
     @Test
     void devuelve_mis_comentarios_con_estado_y_respuesta() throws Exception {

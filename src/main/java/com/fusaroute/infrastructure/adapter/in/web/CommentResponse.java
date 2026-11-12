@@ -15,20 +15,28 @@ import java.time.Instant;
  * usuarios desde el cliente. El nombre ya identifica al autor para lo que la interfaz
  * necesita.
  *
+ * {@code mine} dice si quien mira es el autor. Existe porque el feed compartido
+ * mezcla comentarios de todos y el cliente no conoce ningun id de usuario con el cual
+ * compararse: el backend lo resuelve contra el sujeto del JWT y manda solo el booleano.
+ *
  * {@code editable} se calcula aqui y se manda resuelto en vez de dejar que el
- * frontend lo deduzca del estado. Es una sola fuente de verdad: si manana la regla de
- * "hasta cuando se puede editar" cambia, cambia en el dominio y el boton de Angular
- * se adapta sin tocar el frontend. Ojo con lo que NO es: esconder el boton no es
- * seguridad, y el backend vuelve a verificar la regla en cada PUT y DELETE.
+ * frontend lo deduzca del estado: es el comentario PROPIO y aun pendiente. Es una
+ * sola fuente de verdad: si manana la regla de "hasta cuando se puede editar"
+ * cambia, cambia en el dominio y el boton de Angular se adapta sin tocar el
+ * frontend. Ojo con lo que NO es: esconder el boton no es seguridad, y el backend
+ * vuelve a verificar la regla en cada PUT y DELETE.
  *
  * @param reply      respuesta del administrador, o {@code null} si sigue pendiente.
+ *                   No lleva el nombre de quien respondio.
  * @param answeredAt cuando se respondio, o {@code null} si sigue pendiente.
+ * @param mine       {@code true} solo si quien consulta es el autor.
  */
 public record CommentResponse(Long id, String authorName, String text, String status,
                               String reply, Instant answeredAt, Instant createdAt,
-                              Instant updatedAt, boolean editable) {
+                              Instant updatedAt, boolean editable, boolean mine) {
 
-    public static CommentResponse from(Feedback feedback) {
+    public static CommentResponse from(Feedback feedback, Long viewerId) {
+        boolean mine = feedback.getUserId().equals(viewerId);
         return new CommentResponse(
                 feedback.getId(),
                 feedback.getAuthorName(),
@@ -38,6 +46,7 @@ public record CommentResponse(Long id, String authorName, String text, String st
                 feedback.getAnsweredAt(),
                 feedback.getCreatedAt(),
                 feedback.getUpdatedAt(),
-                feedback.isPending());
+                mine && feedback.isPending(),
+                mine);
     }
 }

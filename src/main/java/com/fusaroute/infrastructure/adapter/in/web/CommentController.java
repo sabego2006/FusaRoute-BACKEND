@@ -3,6 +3,8 @@ package com.fusaroute.infrastructure.adapter.in.web;
 import com.fusaroute.domain.port.in.CountUnreadRepliesUseCase;
 import com.fusaroute.domain.port.in.DeleteFeedbackUseCase;
 import com.fusaroute.domain.port.in.EditFeedbackUseCase;
+import com.fusaroute.domain.model.FeedbackPage;
+import com.fusaroute.domain.port.in.ListFeedbackFeedUseCase;
 import com.fusaroute.domain.port.in.ListMyFeedbackUseCase;
 import com.fusaroute.domain.port.in.SubmitFeedbackUseCase;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,6 +20,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -27,6 +30,7 @@ import java.util.List;
  * Caja de comentarios del usuario autenticado (RF-08, SCRUM-22):
  * <ul>
  *   <li>POST   /api/comments                  → dejar un comentario (SCRUM-92)</li>
+ *   <li>GET    /api/comments                  → feed compartido de todos los usuarios, paginado</li>
  *   <li>GET    /api/comments/me               → mis comentarios con estado y respuesta</li>
  *   <li>PUT    /api/comments/{id}             → editar, solo si sigue pendiente (SCRUM-94)</li>
  *   <li>DELETE /api/comments/{id}             → borrar, solo si sigue pendiente (SCRUM-95)</li>
@@ -54,12 +58,15 @@ public class CommentController {
     private final EditFeedbackUseCase editFeedback;
     private final DeleteFeedbackUseCase deleteFeedback;
     private final CountUnreadRepliesUseCase countUnreadReplies;
+    private final ListFeedbackFeedUseCase listFeedbackFeed;
 
     public CommentController(SubmitFeedbackUseCase submitFeedback,
                              ListMyFeedbackUseCase listMyFeedback,
                              EditFeedbackUseCase editFeedback,
                              DeleteFeedbackUseCase deleteFeedback,
-                             CountUnreadRepliesUseCase countUnreadReplies) {
+                             CountUnreadRepliesUseCase countUnreadReplies,
+                             ListFeedbackFeedUseCase listFeedbackFeed) {
+        this.listFeedbackFeed = listFeedbackFeed;
         this.submitFeedback = submitFeedback;
         this.listMyFeedback = listMyFeedback;
         this.editFeedback = editFeedback;
@@ -79,7 +86,29 @@ public class CommentController {
     public CommentResponse submit(@AuthenticationPrincipal Jwt jwt,
                                   @RequestBody CommentRequest request) {
         Long userId = Long.parseLong(jwt.getSubject());
-        return CommentResponse.from(submitFeedback.submit(userId, request.text()));
+        return CommentResponse.from(submitFeedback.submit(userId, request.text()), userId);
+    }
+
+    @Operation(summary = "Feed de comentarios",
+            description = "Comentarios de TODOS los usuarios, pendientes y respondidos, del más "
+                    + "reciente al más antiguo, paginados con ?page (desde 0, por defecto 0) y ?size "
+                    + "(por defecto 20, máximo 50: un valor mayor se recorta). Cada comentario trae "
+                    + "el nombre de su autor, la fecha y la respuesta del administrador si ya la "
+                    + "tiene, sin atribuirla a una persona. El campo mine indica si el comentario es "
+                    + "del usuario autenticado; editable solo es true en los propios aún pendientes. "
+                    + "Cualquier usuario autenticado, USER o ADMIN, puede consultarlo (RF-08).")
+    @ApiResponse(responseCode = "200", description = "Página del feed recuperada exitosamente")
+    @ApiResponse(responseCode = "400", description = "page es negativa, size es menor que 1 o alguno no es numérico")
+    @ApiResponse(responseCode = "401", description = "No autenticado")
+    @GetMapping
+    public CommentPageResponse feed(@AuthenticationPrincipal Jwt jwt,
+                                    @RequestParam(defaultValue = "0") int page,
+                                    @RequestParam(defaultValue = "" + FeedbackPage.DEFAULT_SIZE) int size) {
+        Long viewerId = Long.parseLong(jwt.getSubject());
+        // Un valor no numerico en page o size lo rechaza Spring con
+        // MethodArgumentTypeMismatchException (400, ya traducida por GlobalExceptionHandler);
+        // el rango y el recorte al maximo son del caso de uso.
+        return CommentPageResponse.from(listFeedbackFeed.feed(page, size), viewerId);
     }
 
     @Operation(summary = "Mis comentarios",
@@ -92,7 +121,8 @@ public class CommentController {
         Long userId = Long.parseLong(jwt.getSubject());
         // Lista vacia y no 404 cuando no hay comentarios: no haber escrito ninguno es
         // el estado normal de una cuenta nueva, no un recurso que falte.
-        return listMyFeedback.myFeedback(userId).stream().map(CommentResponse::from).toList();
+        return listMyFeedback.myFeedback(userId).stream()
+                .map(feedback -> CommentResponse.from(feedback, userId)).toList();
     }
 
     @Operation(summary = "Editar mi comentario",
@@ -108,7 +138,7 @@ public class CommentController {
                                 @PathVariable Long id,
                                 @RequestBody CommentRequest request) {
         Long userId = Long.parseLong(jwt.getSubject());
-        return CommentResponse.from(editFeedback.edit(userId, id, request.text()));
+        return CommentResponse.from(editFeedback.edit(userId, id, request.text()), userId);
     }
 
     @Operation(summary = "Borrar mi comentario",
