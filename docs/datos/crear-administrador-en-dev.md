@@ -82,9 +82,56 @@ SELECT id, name, email, role, active, totp_enabled, last_login_at
 Se espera `role = ADMIN`, `active = true` y `totp_enabled = true`. Si
 `totp_enabled` está en `false`, falta el paso 2 y la cuenta no puede iniciar sesión.
 
-## Estado al 2026-11-07
+## Con el script (sin celular)
 
-**No verificado.** Las credenciales de DEV no están en el repositorio (y no deben
-estarlo), así que esta sesión no pudo consultar si la base compartida ya tiene un
-administrador. Antes de probar `/api/admin/**` por primera vez, correr la consulta de
-arriba; si devuelve cero filas, seguir el procedimiento.
+`scripts/admin-cli.mjs` hace los pasos 1 y 2 por API y deja el resultado en un archivo
+local. Node 20 o superior, sin dependencias. `--help` lista todo.
+
+```bash
+# 1. Con el backend local corriendo (perfil dev):
+node scripts/admin-cli.mjs crear --email <correo> --name "<nombre>"
+
+# 2. Subir el rol (paso 3 de arriba, una línea de SQL).
+
+# 3. Entrar:
+node scripts/admin-cli.mjs codigo   # código TOTP de 6 dígitos para la pantalla de login
+node scripts/admin-cli.mjs token    # JWT por stdout, para curl
+```
+
+- Si el backend no corre en `http://localhost:8080`, pasar `--api <url>` o la variable `API_URL`.
+- Con `--file <ruta>` se usa otro archivo de credenciales, por ejemplo para una cuenta `USER`.
+- La contraseña la genera el script (24 caracteres) salvo que venga en `ADMIN_PASSWORD`.
+- El script nunca imprime la contraseña, el secreto TOTP ni los códigos de respaldo.
+- El TOTP es RFC 6238 y el script lo comprueba contra los vectores del RFC en cada
+  ejecución (`probar-totp` lo hace solo).
+- Tras subir el rol hay que pedir un token nuevo: el rol viaja dentro del JWT.
+
+### Dónde queda el archivo
+
+`.admin.local.json` en la raíz del repo (o del worktree donde se corrió el script). Está
+en `.gitignore` junto con `*.local.json`. Trae contraseña, secreto TOTP y los 10 códigos
+de respaldo, así que **lo guarda quien creó la cuenta y se comparte por un canal privado**,
+nunca por el repositorio ni por un chat de grupo. Si se pierde, el administrador de DEV se
+puede volver a crear con otro correo.
+
+## Estado al 2026-11-11
+
+**Verificado.** La cuenta `admin.dev@fusaroute.dev` existe en DEV (`fusaroute-dev`) con
+`role = ADMIN`, `active = true` y `totp_enabled = true`. Antes de crearla había 7 usuarios,
+todos `USER`. Se creó con `admin-cli.mjs` y se subió el rol con el `UPDATE` del paso 3.
+
+RF-14 se comprobó por API contra DEV con una cuenta `USER` de prueba
+(`rf14.user.dev@fusaroute.test`):
+
+| Verificación | HTTP |
+|---|---|
+| `GET /api/admin/comments` sin token | 401 |
+| `GET /api/admin/comments` con token `USER` | 403 |
+| `GET /api/admin/comments` con token `ADMIN` | 200 |
+| `POST /api/comments` del `USER` | 201 |
+| ADMIN lista `?status=PENDING` y ve el comentario | 200 |
+| `PUT /api/admin/comments/{id}/reply` | 200 (estado `ANSWERED`) |
+| `GET /api/comments/me` del `USER` ve la respuesta | 200 |
+| `GET /api/comments/me/unread-count` tras volver a entrar | 200, `count` 0 → 1 |
+
+El comentario de prueba (`[PRUEBA A1]`) y la cuenta `USER` de prueba quedaron en DEV.

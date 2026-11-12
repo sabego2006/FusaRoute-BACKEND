@@ -65,3 +65,7 @@ bin/
 # herramienta (id del workspace y globals vacias), propios de cada maquina.
 .postman/
 postman/
+
+# Credenciales locales del script scripts/admin-cli.mjs (contraseña, secreto TOTP, códigos de respaldo)
+.admin.local.json
+*.local.json
