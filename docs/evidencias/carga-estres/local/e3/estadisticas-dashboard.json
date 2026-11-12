@@ -1,0 +1,50 @@
+{
+  "POST /api/auth/register (mismo correo: espera 409)" : {
+    "transaction" : "POST /api/auth/register (mismo correo: espera 409)",
+    "sampleCount" : 40,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 3787.1000000000013,
+    "medianResTime" : 1832.5,
+    "minResTime" : 7.0,
+    "maxResTime" : 18624.0,
+    "pct1ResTime" : 16726.299999999996,
+    "pct2ResTime" : 18056.049999999996,
+    "pct3ResTime" : 18624.0,
+    "throughput" : 1.728832605782945,
+    "receivedKBytesPerSec" : 0.9674034014781518,
+    "sentKBytesPerSec" : 0.524305630591693
+  },
+  "Total" : {
+    "transaction" : "Total",
+    "sampleCount" : 80,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 10913.100000000006,
+    "medianResTime" : 12328.0,
+    "minResTime" : 7.0,
+    "maxResTime" : 24299.0,
+    "pct1ResTime" : 21597.7,
+    "pct2ResTime" : 22950.6,
+    "pct3ResTime" : 24299.0,
+    "throughput" : 2.739069401170952,
+    "receivedKBytesPerSec" : 1.4826149339199506,
+    "sentKBytesPerSec" : 0.830681643099257
+  },
+  "POST /api/auth/register" : {
+    "transaction" : "POST /api/auth/register",
+    "sampleCount" : 40,
+    "errorCount" : 0,
+    "errorPct" : 0.0,
+    "meanResTime" : 18039.100000000002,
+    "medianResTime" : 19834.0,
+    "minResTime" : 5937.0,
+    "maxResTime" : 24299.0,
+    "pct1ResTime" : 22947.2,
+    "pct2ResTime" : 24243.299999999996,
+    "pct3ResTime" : 24299.0,
+    "throughput" : 1.3701445502500516,
+    "receivedKBytesPerSec" : 0.7165829237172022,
+    "sentKBytesPerSec" : 0.41552577156264986
+  }
+}

@@ -1,0 +1,45 @@
+Volcado de hilos del backend (kill -3) tomado a las 18:41:09, ~33 min despues de terminar e5-300, sin carga entrante.
+
+Estado de los hilos:
+    211 RUNNABLE
+      3 TIMED_WAITING (on object monitor)
+      4 TIMED_WAITING (parking)
+      1 TIMED_WAITING (sleeping)
+      1 WAITING (on object monitor)
+      1 WAITING (parking)
+
+Marcos de pila mas repetidos (hilos de Tomcat):
+    199 at org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder.matches(BCryptPasswordEncoder.java:133)
+    199 at org.springframework.security.crypto.bcrypt.BCrypt.hashpwforcheck(BCrypt.java:579)
+    199 at org.springframework.security.crypto.bcrypt.BCrypt.hashpw(BCrypt.java:660)
+    199 at org.springframework.security.crypto.bcrypt.BCrypt.checkpw(BCrypt.java:768)
+    199 at com.fusaroute.infrastructure.adapter.out.security.BCryptRecoveryCodeAdapter.matches(BCryptRecoveryCodeAdapter.java:54)
+    199 at com.fusaroute.infrastructure.adapter.in.web.AuthController.login(AuthController.java:50)
+    199 at com.fusaroute.application.usecase.LoginService.tryConsumeRecoveryCode(LoginService.java:207)
+    199 at com.fusaroute.application.usecase.LoginService.login(LoginService.java:176)
+
+Memoria del proceso y del cgroup:
+VmRSS:	  496436 kB
+VmSwap:	  224220 kB
+Threads:	224
+pgmajfault 37953
+low 0
+high 0
+max 3858
+oom 0
+oom_kill 0
+oom_group_kill 0
+
+fusaroute-frontend-1 0.00% 14.82MiB / 7.756GiB
+fusaroute-backend-1 95.84% 507.4MiB / 512MiB
+fusaroute-db-1 0.05% 50.99MiB / 7.756GiB
+
+Heap
+ DefNew     total 117696K, used 73965K [0x00000000e8000000, 0x00000000effb0000, 0x00000000
+  eden space 104640K,  67% used [0x00000000e8000000, 0x00000000ec4bf1f0, 0x00000000ee63000
+  from space 13056K,  27% used [0x00000000ef2f0000, 0x00000000ef66c4a0, 0x00000000effb0000
+  to   space 13056K,   0% used [0x00000000ee630000, 0x00000000ee630000, 0x00000000ef2f0000
+ Tenured    total 261388K, used 135883K [0x00000000f0000000, 0x00000000fff43000, 0x0000000
+  the  space 261388K,  51% used [0x00000000f0000000, 0x00000000f84b2f88, 0x00000000fff4300
+ Metaspace       used 104893K, committed 106112K, reserved 1179648K
+  class space    used 14422K, committed 14976K, reserved 1048576K

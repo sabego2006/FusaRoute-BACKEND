@@ -1,0 +1,5 @@
+ registros | correos_distintos 
+-----------+-------------------
+        40 |                40
+(1 row)
+

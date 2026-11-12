@@ -1,0 +1,23 @@
+# Ajustes del compose SOLO para las pruebas de carga y estres. Se superpone al
+# docker-compose.yml de la raiz:
+#
+#   docker compose -f docker-compose.yml -f perf/jmeter/docker-compose.perf.yml up --build -d
+#
+# Objetivo: que el backend local se parezca mas a PROD (Render, plan gratis) que
+# a un portatil de 16 nucleos, para que la degradacion aparezca donde apareceria
+# alla. No es una replica: Render da 0,1 CPU y aqui se deja 1 CPU, porque con
+# 0,1 la JVM tarda minutos en arrancar y la bateria no terminaria.
+
+services:
+  backend:
+    environment:
+      # El mismo tamano de pool que application-prod.properties.
+      - SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE=5
+      # El perfil dev imprime cada SQL; bajo carga eso mide la consola, no la app.
+      - SPRING_JPA_SHOW_SQL=false
+    deploy:
+      resources:
+        limits:
+          # 512 MB es la memoria de la instancia gratis de Render.
+          memory: 512M
+          cpus: "1.0"

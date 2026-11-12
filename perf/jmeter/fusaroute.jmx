@@ -1,0 +1,967 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jmeterTestPlan version="1.2" properties="5.0" jmeter="5.6.3">
+<hashTree>
+<TestPlan guiclass="TestPlanGui" testclass="TestPlan" testname="FusaRoute - carga y estres" enabled="true">
+  <stringProp name="TestPlan.comments">Un grupo de hilos por tipo de escenario. Todos arrancan con 0 usuarios: cada corrida enciende los suyos con propiedades -J (ver run.sh y README). El escenario 9 (falla controlada) enciende varios grupos a la vez.</stringProp>
+  <boolProp name="TestPlan.functional_mode">false</boolProp>
+  <boolProp name="TestPlan.tearDown_on_shutdown">true</boolProp>
+  <boolProp name="TestPlan.serialize_threadgroups">false</boolProp>
+  <elementProp name="TestPlan.user_defined_variables" elementType="Arguments" guiclass="ArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</TestPlan>
+<hashTree>
+<ConfigTestElement guiclass="HttpDefaultsGui" testclass="ConfigTestElement" testname="Servidor (host, port, protocol, timeout)" enabled="true">
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+  <stringProp name="HTTPSampler.domain">${__P(host,localhost)}</stringProp>
+  <stringProp name="HTTPSampler.port">${__P(port,8080)}</stringProp>
+  <stringProp name="HTTPSampler.protocol">${__P(protocol,http)}</stringProp>
+  <stringProp name="HTTPSampler.contentEncoding">UTF-8</stringProp>
+  <stringProp name="HTTPSampler.connect_timeout">${__P(connect.timeout,5000)}</stringProp>
+  <stringProp name="HTTPSampler.response_timeout">${__P(timeout,30000)}</stringProp>
+</ConfigTestElement><hashTree/>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Cabeceras comunes" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Content-Type</stringProp>
+      <stringProp name="Header.value">application/json</stringProp>
+    </elementProp>
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Accept</stringProp>
+      <stringProp name="Header.value">application/json</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="Cuentas de prueba (users.csv)" enabled="true">
+  <stringProp name="filename">${__P(data,data)}/users.csv</stringProp>
+  <stringProp name="fileEncoding">UTF-8</stringProp>
+  <stringProp name="variableNames">email,password,totpSecret,token</stringProp>
+  <boolProp name="ignoreFirstLine">false</boolProp>
+  <stringProp name="delimiter">,</stringProp>
+  <boolProp name="quotedData">false</boolProp>
+  <boolProp name="recycle">true</boolProp>
+  <boolProp name="stopThread">false</boolProp>
+  <stringProp name="shareMode">shareMode.all</stringProp>
+</CSVDataSet><hashTree/>
+<CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="Pares origen-destino (pairs.csv)" enabled="true">
+  <stringProp name="filename">${__P(data,data)}/pairs.csv</stringProp>
+  <stringProp name="fileEncoding">UTF-8</stringProp>
+  <stringProp name="variableNames">originPlaceId,destinationPlaceId</stringProp>
+  <boolProp name="ignoreFirstLine">false</boolProp>
+  <stringProp name="delimiter">,</stringProp>
+  <boolProp name="quotedData">false</boolProp>
+  <boolProp name="recycle">true</boolProp>
+  <boolProp name="stopThread">false</boolProp>
+  <stringProp name="shareMode">shareMode.all</stringProp>
+</CSVDataSet><hashTree/>
+<CSVDataSet guiclass="TestBeanGUI" testclass="CSVDataSet" testname="Rutas (routes.csv)" enabled="true">
+  <stringProp name="filename">${__P(data,data)}/routes.csv</stringProp>
+  <stringProp name="fileEncoding">UTF-8</stringProp>
+  <stringProp name="variableNames">routeId</stringProp>
+  <boolProp name="ignoreFirstLine">false</boolProp>
+  <stringProp name="delimiter">,</stringProp>
+  <boolProp name="quotedData">false</boolProp>
+  <boolProp name="recycle">true</boolProp>
+  <boolProp name="stopThread">false</boolProp>
+  <stringProp name="shareMode">shareMode.all</stringProp>
+</CSVDataSet><hashTree/>
+<CounterConfig guiclass="CounterConfigGui" testclass="CounterConfig" testname="Secuencia global (seq)" enabled="true">
+  <stringProp name="CounterConfig.start">1</stringProp>
+  <stringProp name="CounterConfig.end"></stringProp>
+  <stringProp name="CounterConfig.incr">1</stringProp>
+  <stringProp name="CounterConfig.name">seq</stringProp>
+  <stringProp name="CounterConfig.format"></stringProp>
+  <boolProp name="CounterConfig.per_user">false</boolProp>
+</CounterConfig><hashTree/>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="E1 / E5 - Login concurrente" enabled="true">
+  <stringProp name="TestPlan.comments">Escenario 1 (carga) y 5 (saturacion progresiva): POST /api/auth/login con segundo factor. Propiedades: login.users, login.rampup, login.loops.</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">${__P(login.loops,5)}</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(login.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(login.rampup,10)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">false</boolProp>
+  <stringProp name="ThreadGroup.duration"></stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/auth/login" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/auth/login</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;email&quot;:&quot;${email}&quot;,&quot;password&quot;:&quot;${password}&quot;,&quot;totpCode&quot;:&quot;${totpCode}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<BeanShellPreProcessor guiclass="TestBeanGUI" testclass="BeanShellPreProcessor" testname="Calcular codigo TOTP" enabled="true">
+  <stringProp name="filename"></stringProp>
+  <stringProp name="parameters"></stringProp>
+  <boolProp name="resetInterpreter">false</boolProp>
+  <stringProp name="script">// Codigo TOTP (RFC 6238: SHA1, 6 digitos, 30 s) a partir del secreto del CSV.
+// El backend exige el segundo factor en cada login; sin esto todo login daria 401.
+// Va en BeanShell y no en un JSR223 con Groovy: el Groovy 3 que trae JMeter 5.6.3
+// no puede leer las clases de Java 25 (&quot;Unsupported class file major version 69&quot;).
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+String secret = vars.get(&quot;totpSecret&quot;).toUpperCase().replace(&quot;=&quot;, &quot;&quot;).replace(&quot; &quot;, &quot;&quot;);
+String alphabet = &quot;ABCDEFGHIJKLMNOPQRSTUVWXYZ234567&quot;;
+StringBuffer bits = new StringBuffer();
+for (int i = 0; i &lt; secret.length(); i++) {
+    String b = Integer.toBinaryString(alphabet.indexOf(secret.charAt(i)));
+    while (b.length() &lt; 5) { b = &quot;0&quot; + b; }
+    bits.append(b);
+}
+int n = bits.length() / 8;
+byte[] key = new byte[n];
+for (int i = 0; i &lt; n; i++) {
+    key[i] = (byte) Integer.parseInt(bits.substring(i * 8, i * 8 + 8), 2);
+}
+long counter = System.currentTimeMillis() / 30000L;
+byte[] msg = java.nio.ByteBuffer.allocate(8).putLong(counter).array();
+Mac mac = Mac.getInstance(&quot;HmacSHA1&quot;);
+mac.init(new SecretKeySpec(key, &quot;HmacSHA1&quot;));
+byte[] h = mac.doFinal(msg);
+int o = h[h.length - 1] &amp; 0xf;
+int bin = ((h[o] &amp; 0x7f) &lt;&lt; 24) | ((h[o + 1] &amp; 0xff) &lt;&lt; 16) | ((h[o + 2] &amp; 0xff) &lt;&lt; 8) | (h[o + 3] &amp; 0xff);
+String code = String.valueOf(bin % 1000000);
+while (code.length() &lt; 6) { code = &quot;0&quot; + code; }
+vars.put(&quot;totpCode&quot;, code);</stringProp>
+</BeanShellPreProcessor><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El login entrega token" enabled="true">
+  <stringProp name="JSON_PATH">$.token</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+</hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="E2 / E6 - Consultas" enabled="true">
+  <stringProp name="TestPlan.comments">Escenario 2 (consulta masiva) y 6 (sobrecarga de consultas). Propiedades: q.users, q.rampup, q.loops, q.auth (false = solo endpoints publicos, para PROD).</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">${__P(q.loops,10)}</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(q.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(q.rampup,15)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">false</boolProp>
+  <stringProp name="ThreadGroup.duration"></stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Q GET /api/routes" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El catalogo trae rutas" enabled="true">
+  <stringProp name="JSON_PATH">$[0].id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Q GET /api/routes/{id}" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes/${routeId}</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El detalle trae nombre" enabled="true">
+  <stringProp name="JSON_PATH">$.name</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Q GET /api/places" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/places</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+<IfController guiclass="IfControllerPanel" testclass="IfController" testname="Solo con cuentas de prueba (no en PROD)" enabled="true">
+  <stringProp name="IfController.condition">${__P(q.auth,true)}</stringProp>
+  <boolProp name="IfController.evaluateAll">false</boolProp>
+  <boolProp name="IfController.useExpression">true</boolProp>
+</IfController>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Q GET /api/routes/search" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes/search?originPlaceId=${originPlaceId}&amp;destinationPlaceId=${destinationPlaceId}</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="La busqueda sugiere una ruta" enabled="true">
+  <stringProp name="JSON_PATH">$.route.id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="Q GET /api/users/me/history" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/users/me/history</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+</hashTree>
+</hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="E3 - Registro concurrente" enabled="true">
+  <stringProp name="TestPlan.comments">Escenario 3: POST /api/auth/register con un correo unico por hilo, y un segundo intento con el mismo correo que debe dar 409 (ausencia de duplicados). Propiedades: r.users, r.rampup, r.loops, run.</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">${__P(r.loops,1)}</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(r.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(r.rampup,10)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">false</boolProp>
+  <stringProp name="ThreadGroup.duration"></stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/auth/register" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/auth/register</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;name&quot;:&quot;Registro ${__threadNum}&quot;,&quot;email&quot;:&quot;registro.${__P(run,local)}.${seq}@example.com&quot;,&quot;password&quot;:&quot;Aa1${__RandomString(12,abcdefghijkmnpqrstuvwxyz23456789,)}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 201" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">201</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El registro devuelve id" enabled="true">
+  <stringProp name="JSON_PATH">$.id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="POST /api/auth/register (mismo correo: espera 409)" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/auth/register</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;name&quot;:&quot;Registro ${__threadNum}&quot;,&quot;email&quot;:&quot;registro.${__P(run,local)}.${seq}@example.com&quot;,&quot;password&quot;:&quot;Aa1${__RandomString(12,abcdefghijkmnpqrstuvwxyz23456789,)}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 409" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">409</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+</hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="E4 - Flujo completo del negocio" enabled="true">
+  <stringProp name="TestPlan.comments">Escenario 4: login, consulta (busqueda de ruta), registro (comentario), actualizacion (editar el comentario) y consulta final (mis comentarios). Propiedades: f.users, f.rampup, f.loops.</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">${__P(f.loops,5)}</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(f.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(f.rampup,10)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">false</boolProp>
+  <stringProp name="ThreadGroup.duration"></stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="F1 Login" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/auth/login</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;email&quot;:&quot;${email}&quot;,&quot;password&quot;:&quot;${password}&quot;,&quot;totpCode&quot;:&quot;${totpCode}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<BeanShellPreProcessor guiclass="TestBeanGUI" testclass="BeanShellPreProcessor" testname="Calcular codigo TOTP" enabled="true">
+  <stringProp name="filename"></stringProp>
+  <stringProp name="parameters"></stringProp>
+  <boolProp name="resetInterpreter">false</boolProp>
+  <stringProp name="script">// Codigo TOTP (RFC 6238: SHA1, 6 digitos, 30 s) a partir del secreto del CSV.
+// El backend exige el segundo factor en cada login; sin esto todo login daria 401.
+// Va en BeanShell y no en un JSR223 con Groovy: el Groovy 3 que trae JMeter 5.6.3
+// no puede leer las clases de Java 25 (&quot;Unsupported class file major version 69&quot;).
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+String secret = vars.get(&quot;totpSecret&quot;).toUpperCase().replace(&quot;=&quot;, &quot;&quot;).replace(&quot; &quot;, &quot;&quot;);
+String alphabet = &quot;ABCDEFGHIJKLMNOPQRSTUVWXYZ234567&quot;;
+StringBuffer bits = new StringBuffer();
+for (int i = 0; i &lt; secret.length(); i++) {
+    String b = Integer.toBinaryString(alphabet.indexOf(secret.charAt(i)));
+    while (b.length() &lt; 5) { b = &quot;0&quot; + b; }
+    bits.append(b);
+}
+int n = bits.length() / 8;
+byte[] key = new byte[n];
+for (int i = 0; i &lt; n; i++) {
+    key[i] = (byte) Integer.parseInt(bits.substring(i * 8, i * 8 + 8), 2);
+}
+long counter = System.currentTimeMillis() / 30000L;
+byte[] msg = java.nio.ByteBuffer.allocate(8).putLong(counter).array();
+Mac mac = Mac.getInstance(&quot;HmacSHA1&quot;);
+mac.init(new SecretKeySpec(key, &quot;HmacSHA1&quot;));
+byte[] h = mac.doFinal(msg);
+int o = h[h.length - 1] &amp; 0xf;
+int bin = ((h[o] &amp; 0x7f) &lt;&lt; 24) | ((h[o + 1] &amp; 0xff) &lt;&lt; 16) | ((h[o + 2] &amp; 0xff) &lt;&lt; 8) | (h[o + 3] &amp; 0xff);
+String code = String.valueOf(bin % 1000000);
+while (code.length() &lt; 6) { code = &quot;0&quot; + code; }
+vars.put(&quot;totpCode&quot;, code);</stringProp>
+</BeanShellPreProcessor><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El login entrega token" enabled="true">
+  <stringProp name="JSON_PATH">$.token</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extraer flowToken" enabled="true">
+  <stringProp name="JSONPostProcessor.referenceNames">flowToken</stringProp>
+  <stringProp name="JSONPostProcessor.jsonPathExprs">$.token</stringProp>
+  <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+  <stringProp name="JSONPostProcessor.defaultValues">NO_ENCONTRADO</stringProp>
+</JSONPostProcessor><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="F2 Consulta: GET /api/routes/search" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes/search?originPlaceId=${originPlaceId}&amp;destinationPlaceId=${destinationPlaceId}</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${flowToken}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="La busqueda sugiere una ruta" enabled="true">
+  <stringProp name="JSON_PATH">$.route.id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="F3 Registro: POST /api/comments" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/comments</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;text&quot;:&quot;Flujo creado numero ${seq}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${flowToken}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 201" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">201</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extraer flowCommentId" enabled="true">
+  <stringProp name="JSONPostProcessor.referenceNames">flowCommentId</stringProp>
+  <stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+  <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+  <stringProp name="JSONPostProcessor.defaultValues">NO_ENCONTRADO</stringProp>
+</JSONPostProcessor><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="F4 Actualizacion: PUT /api/comments/{id}" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/comments/${flowCommentId}</stringProp>
+  <stringProp name="HTTPSampler.method">PUT</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;text&quot;:&quot;Flujo editado numero ${seq}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${flowToken}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="F5 Consulta final: GET /api/comments/me" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/comments/me</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${flowToken}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="El comentario editado persiste" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="t">Flujo editado numero ${seq}</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_data</stringProp>
+  <boolProp name="Assertion.assume_success">false</boolProp>
+  <intProp name="Assertion.test_type">16</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+</hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="E7 - Sobrecarga CRUD" enabled="true">
+  <stringProp name="TestPlan.comments">Escenario 7: crear, actualizar y eliminar comentarios en simultaneo. Propiedades: c.users, c.rampup, c.loops.</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">${__P(c.loops,20)}</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(c.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(c.rampup,20)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">false</boolProp>
+  <stringProp name="ThreadGroup.duration"></stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="C1 Crear: POST /api/comments" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/comments</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;text&quot;:&quot;Carga creada numero ${seq}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 201" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">201</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPostProcessor guiclass="JSONPostProcessorGui" testclass="JSONPostProcessor" testname="Extraer commentId" enabled="true">
+  <stringProp name="JSONPostProcessor.referenceNames">commentId</stringProp>
+  <stringProp name="JSONPostProcessor.jsonPathExprs">$.id</stringProp>
+  <stringProp name="JSONPostProcessor.match_numbers">1</stringProp>
+  <stringProp name="JSONPostProcessor.defaultValues">NO_ENCONTRADO</stringProp>
+</JSONPostProcessor><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="C2 Actualizar: PUT /api/comments/{id}" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/comments/${commentId}</stringProp>
+  <stringProp name="HTTPSampler.method">PUT</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;text&quot;:&quot;Carga editada numero ${seq}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="C3 Eliminar: DELETE /api/comments/{id}" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/comments/${commentId}</stringProp>
+  <stringProp name="HTTPSampler.method">DELETE</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 204" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">204</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+</hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="E8 - Resistencia continua" enabled="true">
+  <stringProp name="TestPlan.comments">Escenario 8: carga constante durante e8.duration segundos. Cada vuelta hace las consultas y, una de cada diez, un login; pausa de e8.think ms entre vueltas. Propiedades: e8.users, e8.rampup, e8.duration, e8.think.</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">-1</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(e8.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(e8.rampup,20)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">true</boolProp>
+  <stringProp name="ThreadGroup.duration">${__P(e8.duration,600)}</stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<IfController guiclass="IfControllerPanel" testclass="IfController" testname="Login en 1 de cada 10 vueltas" enabled="true">
+  <stringProp name="IfController.condition">${__jexl3(vars.getIteration() % 10 == 1)}</stringProp>
+  <boolProp name="IfController.evaluateAll">false</boolProp>
+  <boolProp name="IfController.useExpression">true</boolProp>
+</IfController>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="E8 POST /api/auth/login" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/auth/login</stringProp>
+  <stringProp name="HTTPSampler.method">POST</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <boolProp name="HTTPSampler.postBodyRaw">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments">
+    <collectionProp name="Arguments.arguments">
+      <elementProp name="" elementType="HTTPArgument">
+        <boolProp name="HTTPArgument.always_encode">false</boolProp>
+        <stringProp name="Argument.value">{&quot;email&quot;:&quot;${email}&quot;,&quot;password&quot;:&quot;${password}&quot;,&quot;totpCode&quot;:&quot;${totpCode}&quot;}</stringProp>
+        <stringProp name="Argument.metadata">=</stringProp>
+      </elementProp>
+    </collectionProp>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<BeanShellPreProcessor guiclass="TestBeanGUI" testclass="BeanShellPreProcessor" testname="Calcular codigo TOTP" enabled="true">
+  <stringProp name="filename"></stringProp>
+  <stringProp name="parameters"></stringProp>
+  <boolProp name="resetInterpreter">false</boolProp>
+  <stringProp name="script">// Codigo TOTP (RFC 6238: SHA1, 6 digitos, 30 s) a partir del secreto del CSV.
+// El backend exige el segundo factor en cada login; sin esto todo login daria 401.
+// Va en BeanShell y no en un JSR223 con Groovy: el Groovy 3 que trae JMeter 5.6.3
+// no puede leer las clases de Java 25 (&quot;Unsupported class file major version 69&quot;).
+import javax.crypto.Mac;
+import javax.crypto.spec.SecretKeySpec;
+
+String secret = vars.get(&quot;totpSecret&quot;).toUpperCase().replace(&quot;=&quot;, &quot;&quot;).replace(&quot; &quot;, &quot;&quot;);
+String alphabet = &quot;ABCDEFGHIJKLMNOPQRSTUVWXYZ234567&quot;;
+StringBuffer bits = new StringBuffer();
+for (int i = 0; i &lt; secret.length(); i++) {
+    String b = Integer.toBinaryString(alphabet.indexOf(secret.charAt(i)));
+    while (b.length() &lt; 5) { b = &quot;0&quot; + b; }
+    bits.append(b);
+}
+int n = bits.length() / 8;
+byte[] key = new byte[n];
+for (int i = 0; i &lt; n; i++) {
+    key[i] = (byte) Integer.parseInt(bits.substring(i * 8, i * 8 + 8), 2);
+}
+long counter = System.currentTimeMillis() / 30000L;
+byte[] msg = java.nio.ByteBuffer.allocate(8).putLong(counter).array();
+Mac mac = Mac.getInstance(&quot;HmacSHA1&quot;);
+mac.init(new SecretKeySpec(key, &quot;HmacSHA1&quot;));
+byte[] h = mac.doFinal(msg);
+int o = h[h.length - 1] &amp; 0xf;
+int bin = ((h[o] &amp; 0x7f) &lt;&lt; 24) | ((h[o + 1] &amp; 0xff) &lt;&lt; 16) | ((h[o + 2] &amp; 0xff) &lt;&lt; 8) | (h[o + 3] &amp; 0xff);
+String code = String.valueOf(bin % 1000000);
+while (code.length() &lt; 6) { code = &quot;0&quot; + code; }
+vars.put(&quot;totpCode&quot;, code);</stringProp>
+</BeanShellPreProcessor><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El login entrega token" enabled="true">
+  <stringProp name="JSON_PATH">$.token</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="E8 GET /api/routes" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El catalogo trae rutas" enabled="true">
+  <stringProp name="JSON_PATH">$[0].id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="E8 GET /api/routes/{id}" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes/${routeId}</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El detalle trae nombre" enabled="true">
+  <stringProp name="JSON_PATH">$.name</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="E8 GET /api/places" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/places</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+<IfController guiclass="IfControllerPanel" testclass="IfController" testname="Solo con cuentas de prueba (no en PROD)" enabled="true">
+  <stringProp name="IfController.condition">${__P(e8.auth,true)}</stringProp>
+  <boolProp name="IfController.evaluateAll">false</boolProp>
+  <boolProp name="IfController.useExpression">true</boolProp>
+</IfController>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="E8 GET /api/routes/search" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes/search?originPlaceId=${originPlaceId}&amp;destinationPlaceId=${destinationPlaceId}</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="La busqueda sugiere una ruta" enabled="true">
+  <stringProp name="JSON_PATH">$.route.id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="E8 GET /api/users/me/history" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/users/me/history</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<HeaderManager guiclass="HeaderPanel" testclass="HeaderManager" testname="Authorization" enabled="true">
+  <collectionProp name="HeaderManager.headers">
+    <elementProp name="" elementType="Header">
+      <stringProp name="Header.name">Authorization</stringProp>
+      <stringProp name="Header.value">Bearer ${token}</stringProp>
+    </elementProp>
+  </collectionProp>
+</HeaderManager><hashTree/>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+</hashTree>
+</hashTree>
+<TestAction guiclass="TestActionGui" testclass="TestAction" testname="Pausa" enabled="true">
+  <intProp name="ActionProcessor.action">1</intProp>
+  <intProp name="ActionProcessor.target">0</intProp>
+  <stringProp name="ActionProcessor.duration">${__P(e8.think,1000)}</stringProp>
+</TestAction><hashTree/>
+</hashTree>
+</hashTree>
+</hashTree>
+</jmeterTestPlan>

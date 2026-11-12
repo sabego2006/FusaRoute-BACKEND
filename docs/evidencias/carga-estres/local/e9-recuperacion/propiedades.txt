@@ -1,0 +1,1 @@
+-Jq.users=30 -Jq.rampup=5 -Jq.loops=5 -Jlogin.users=10 -Jlogin.rampup=5 -Jlogin.loops=2
