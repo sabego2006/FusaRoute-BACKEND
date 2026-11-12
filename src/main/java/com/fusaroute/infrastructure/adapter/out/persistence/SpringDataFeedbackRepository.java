@@ -1,6 +1,7 @@
 package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.FeedbackStatus;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
@@ -63,4 +64,16 @@ public interface SpringDataFeedbackRepository extends JpaRepository<FeedbackJpaE
      * y lee la segunda en su mismo orden.
      */
     List<FeedbackJpaEntity> findByStatusOrderByCreatedAtDesc(FeedbackStatus status);
+
+    /**
+     * Una pagina del feed compartido: todos los comentarios, del mas reciente al mas
+     * antiguo, con el id como desempate para que el orden sea total y una fila no
+     * salte de pagina entre dos peticiones. Devuelve {@code List} y no {@code Page}:
+     * el total lo da {@code count()} del propio repositorio, y asi el conteo es una
+     * consulta explicita del puerto y no un efecto lateral de Spring Data.
+     *
+     * Sin indice propio a proposito: ordena toda la tabla, que en este proyecto tiene
+     * cientos de filas (mismo razonamiento que {@link #findAllPendingFirst()}).
+     */
+    List<FeedbackJpaEntity> findAllByOrderByCreatedAtDescIdDesc(Pageable pageable);
 }

@@ -13,6 +13,7 @@ import com.fusaroute.domain.exception.InvalidCoordinateException;
 import com.fusaroute.domain.exception.InvalidCredentialsException;
 import com.fusaroute.domain.exception.InvalidFavoriteDestinationException;
 import com.fusaroute.domain.exception.InvalidRideException;
+import com.fusaroute.domain.exception.InvalidFeedbackPageException;
 import com.fusaroute.domain.exception.InvalidFeedbackReplyException;
 import com.fusaroute.domain.exception.InvalidMonitoringQueryException;
 import com.fusaroute.domain.exception.InvalidProfileException;
@@ -98,7 +99,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             FeedbackLengthException.class,
             FeedbackContainsUrlException.class,
             FeedbackForbiddenWordException.class,
-            InvalidFeedbackReplyException.class})
+            InvalidFeedbackReplyException.class,
+            InvalidFeedbackPageException.class})
     public ProblemDetail handleInvalidFeedback(RuntimeException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
     }

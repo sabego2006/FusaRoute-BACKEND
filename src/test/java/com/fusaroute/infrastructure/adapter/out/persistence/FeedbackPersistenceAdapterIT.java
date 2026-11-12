@@ -1,6 +1,7 @@
 package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.Feedback;
+import com.fusaroute.domain.model.FeedbackPage;
 import com.fusaroute.domain.model.FeedbackStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
@@ -318,6 +319,92 @@ class FeedbackPersistenceAdapterIT {
     void sin_comentarios_los_dos_listados_del_administrador_son_vacios() {
         assertThat(adapter.findAllPendingFirst()).isEmpty();
         assertThat(adapter.findAllByStatus(FeedbackStatus.PENDING)).isEmpty();
+    }
+
+    // --- Feed compartido ---------------------------------------------------------
+
+    @Test
+    void el_feed_trae_los_comentarios_de_todos_del_mas_reciente_al_mas_antiguo() {
+        Long otro = insertaUsuario("Beto", "beto.feed@x.co");
+        adapter.save(nuevo(userId, "El comentario mas viejo del feed", ESCRITO.minusSeconds(7200)));
+        adapter.save(nuevo(otro, "El comentario del medio del feed", ESCRITO.minusSeconds(3600)));
+        Feedback reciente = adapter.save(nuevo(userId, "El comentario mas reciente del feed", ESCRITO));
+        sincronizaConLaBase();
+
+        // Respondido y pendiente conviven en el mismo orden: aqui NO hay "pendientes primero".
+        adapter.save(reciente.answeredWith("Ya lo revisamos", ESCRITO.plusSeconds(60)));
+        sincronizaConLaBase();
+
+        assertThat(adapter.findAllPage(0, 20))
+                .extracting(Feedback::getText)
+                .containsExactly(
+                        "El comentario mas reciente del feed",
+                        "El comentario del medio del feed",
+                        "El comentario mas viejo del feed");
+    }
+
+    /**
+     * Con el mismo {@code created_at} el orden lo decide el id descendente. Sin el
+     * desempate, Postgres puede devolver las filas empatadas en cualquier orden y un
+     * comentario saltaria de pagina entre dos peticiones.
+     */
+    @Test
+    void a_igual_fecha_el_feed_desempata_por_id_descendente() {
+        Feedback primero = adapter.save(nuevo(userId, "Guardado primero con la misma fecha", ESCRITO));
+        Feedback segundo = adapter.save(nuevo(userId, "Guardado segundo con la misma fecha", ESCRITO));
+        Feedback tercero = adapter.save(nuevo(userId, "Guardado tercero con la misma fecha", ESCRITO));
+        sincronizaConLaBase();
+
+        assertThat(adapter.findAllPage(0, 20))
+                .extracting(Feedback::getId)
+                .containsExactly(tercero.getId(), segundo.getId(), primero.getId());
+    }
+
+    @Test
+    void el_feed_pagina_sin_repetir_ni_saltar_comentarios() {
+        for (int i = 0; i < 5; i++) {
+            adapter.save(nuevo(userId, "Comentario numero " + i + " del feed", ESCRITO.plusSeconds(i)));
+        }
+        sincronizaConLaBase();
+
+        assertThat(adapter.findAllPage(0, 2)).extracting(Feedback::getText)
+                .containsExactly("Comentario numero 4 del feed", "Comentario numero 3 del feed");
+        assertThat(adapter.findAllPage(1, 2)).extracting(Feedback::getText)
+                .containsExactly("Comentario numero 2 del feed", "Comentario numero 1 del feed");
+        assertThat(adapter.findAllPage(2, 2)).extracting(Feedback::getText)
+                .containsExactly("Comentario numero 0 del feed");
+        // Mas alla del final: vacia, no un error.
+        assertThat(adapter.findAllPage(3, 2)).isEmpty();
+    }
+
+    @Test
+    void el_total_cuenta_los_comentarios_de_todos_los_usuarios() {
+        Long otro = insertaUsuario("Beto", "beto.total@x.co");
+        adapter.save(nuevo(userId, "Comentario escrito por Ana", ESCRITO));
+        adapter.save(nuevo(otro, "Comentario escrito por Beto", ESCRITO));
+        sincronizaConLaBase();
+
+        assertThat(adapter.countAll()).isEqualTo(2);
+    }
+
+    @Test
+    void has_more_es_verdadero_hasta_la_ultima_pagina_y_falso_en_el_borde_exacto() {
+        for (int i = 0; i < 4; i++) {
+            adapter.save(nuevo(userId, "Comentario numero " + i + " del feed", ESCRITO.plusSeconds(i)));
+        }
+        sincronizaConLaBase();
+
+        long total = adapter.countAll();
+        // 4 comentarios en paginas de 2: la 0 tiene siguiente; la 1 llena el total justo y no.
+        assertThat(new FeedbackPage(adapter.findAllPage(0, 2), 0, 2, total).hasMore()).isTrue();
+        assertThat(new FeedbackPage(adapter.findAllPage(1, 2), 1, 2, total).hasMore()).isFalse();
+        assertThat(new FeedbackPage(adapter.findAllPage(2, 2), 2, 2, total).hasMore()).isFalse();
+    }
+
+    @Test
+    void sin_comentarios_el_feed_esta_vacio_y_el_total_es_cero() {
+        assertThat(adapter.findAllPage(0, 20)).isEmpty();
+        assertThat(adapter.countAll()).isZero();
     }
 
     // --- Conteos ----------------------------------------------------------------

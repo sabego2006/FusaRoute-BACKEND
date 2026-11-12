@@ -8,6 +8,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Captor;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.data.domain.PageRequest;
 
 import java.time.Instant;
 import java.util.List;
@@ -57,6 +58,26 @@ class FeedbackPersistenceAdapterTest {
     private static FeedbackJpaEntity filaRespondida() {
         return new FeedbackJpaEntity(6L, 7L, "Ana", "Comentario respondido de Ana",
                 FeedbackStatus.ANSWERED, "Ya lo revisamos", RESPONDIDO, ESCRITO, RESPONDIDO);
+    }
+
+    @Test
+    void la_pagina_del_feed_pide_el_orden_al_repositorio_con_el_pageable_y_traduce_las_filas() {
+        when(repository.findAllByOrderByCreatedAtDescIdDesc(PageRequest.of(2, 10)))
+                .thenReturn(List.of(filaRespondida(), filaPendiente()));
+
+        List<Feedback> pagina = adapter().findAllPage(2, 10);
+
+        verify(repository).findAllByOrderByCreatedAtDescIdDesc(PageRequest.of(2, 10));
+        assertThat(pagina).extracting(Feedback::getId).containsExactly(6L, 5L);
+        assertThat(pagina.get(0).getStatus()).isEqualTo(FeedbackStatus.ANSWERED);
+        assertThat(pagina.get(0).getReply()).isEqualTo("Ya lo revisamos");
+    }
+
+    @Test
+    void el_total_del_feed_es_el_conteo_de_todas_las_filas() {
+        when(repository.count()).thenReturn(42L);
+
+        assertThat(adapter().countAll()).isEqualTo(42L);
     }
 
     @Test

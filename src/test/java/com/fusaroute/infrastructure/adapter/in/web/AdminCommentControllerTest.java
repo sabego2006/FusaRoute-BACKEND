@@ -90,7 +90,16 @@ class AdminCommentControllerTest {
      * que pase por las razones equivocadas.
      */
     private static RequestPostProcessor tokenCon(String... authorities) {
-        return jwt().authorities(java.util.Arrays.stream(authorities)
+        return tokenDe("1", authorities);
+    }
+
+    /**
+     * Igual que {@link #tokenCon} pero con el id de usuario del {@code sub}. El
+     * controlador lo lee para calcular {@code mine}, asi que tiene que ser numerico:
+     * el que pone {@code jwt()} por defecto no lo es.
+     */
+    private static RequestPostProcessor tokenDe(String subject, String... authorities) {
+        return jwt().jwt(j -> j.subject(subject)).authorities(java.util.Arrays.stream(authorities)
                 .map(SimpleGrantedAuthority::new)
                 .map(GrantedAuthority.class::cast)
                 .toList());
@@ -99,6 +108,11 @@ class AdminCommentControllerTest {
     /** Token de administrador: scope full + rol ADMIN, las dos cosas. */
     private static RequestPostProcessor admin() {
         return tokenCon("SCOPE_full", "ROLE_ADMIN");
+    }
+
+    /** Administrador con un id de usuario concreto, para probar {@code mine}. */
+    private static RequestPostProcessor adminDe(String subject) {
+        return tokenDe(subject, "SCOPE_full", "ROLE_ADMIN");
     }
 
     /** Token de usuario normal: autenticado, pero sin rol de administrador. */
@@ -259,6 +273,48 @@ class AdminCommentControllerTest {
                 // Respondido => el autor ya no puede editarlo. El panel y la pantalla
                 // del usuario leen el mismo campo.
                 .andExpect(jsonPath("$.editable").value(false));
+    }
+
+    @Test
+    void la_respuesta_del_administrador_incluye_mine_false_en_el_comentario_de_otro() throws Exception {
+        when(replyToFeedback.reply(anyLong(), any())).thenReturn(respondido(5L)); // autor: usuario 8
+
+        mockMvc.perform(put("/api/admin/comments/5/reply")
+                        .with(adminDe("1"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reply\":\"Ya agregamos el barrio al recorrido\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mine").value(false))
+                .andExpect(jsonPath("$.editable").value(false));
+    }
+
+    /**
+     * Un administrador tambien deja comentarios: al responder el suyo, {@code mine} es
+     * true (y {@code editable} sigue false, porque respondido bloquea).
+     */
+    @Test
+    void al_responder_su_propio_comentario_el_administrador_ve_mine_true() throws Exception {
+        when(replyToFeedback.reply(anyLong(), any())).thenReturn(respondido(5L)); // autor: usuario 8
+
+        mockMvc.perform(put("/api/admin/comments/5/reply")
+                        .with(adminDe("8"))
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"reply\":\"Respuesta a mi propio comentario\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.mine").value(true))
+                .andExpect(jsonPath("$.editable").value(false));
+    }
+
+    @Test
+    void el_listado_del_administrador_marca_mine_solo_en_sus_propios_comentarios() throws Exception {
+        when(listAllFeedback.allFeedbackPendingFirst())
+                .thenReturn(List.of(pendiente(1L), respondido(2L))); // autores: 7 y 8
+
+        mockMvc.perform(get("/api/admin/comments").with(adminDe("7")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].mine").value(true))
+                .andExpect(jsonPath("$[0].editable").value(true))
+                .andExpect(jsonPath("$[1].mine").value(false));
     }
 
     @Test

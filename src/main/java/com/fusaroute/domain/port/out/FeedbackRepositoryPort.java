@@ -41,6 +41,16 @@ public interface FeedbackRepositoryPort {
     /** Solo los comentarios del estado pedido, del mas reciente al mas antiguo. */
     List<Feedback> findAllByStatus(FeedbackStatus status);
 
+    /**
+     * Una pagina de TODOS los comentarios, del mas reciente al mas antiguo y, a igual
+     * fecha, del id mayor al menor. {@code page} es base 0. Los parametros ya llegan
+     * validados y recortados por el caso de uso.
+     */
+    List<Feedback> findAllPage(int page, int size);
+
+    /** Total de comentarios, sin filtrar. Acompana a {@link #findAllPage}. */
+    long countAll();
+
     void delete(Long feedbackId);
 
     /** Metrica 4 del panel de RF-13: comentarios en estado pendiente. */
