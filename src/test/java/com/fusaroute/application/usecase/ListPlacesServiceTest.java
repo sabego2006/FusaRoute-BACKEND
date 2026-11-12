@@ -67,6 +67,14 @@ class ListPlacesServiceTest {
     }
 
     @Test
+    void no_cuenta_las_rutas_inactivas() {
+        List<Place> places = List.of(place(1, "Sobre la ruta", LAT, -74.38));
+        List<Route> routes = List.of(route(10, RouteStatus.ACTIVA, RECTA), route(11, RouteStatus.INACTIVA, RECTA));
+
+        assertThat(service(places, routes).listPlaces()).extracting(PlaceSummary::routeCount).containsExactly(1);
+    }
+
+    @Test
     void cuenta_las_rutas_activas_con_trazado_a_menos_de_800_m_en_linea_recta() {
         List<Place> places = List.of(
                 place(1, "Sobre la ruta", LAT, -74.38),

@@ -42,6 +42,15 @@ class ListActiveRoutesServiceTest {
     }
 
     @Test
+    void excluye_las_rutas_inactivas() {
+        when(routeRepository.findAll()).thenReturn(List.of(
+                route(1, "Activa", RouteStatus.ACTIVA, fare(2600, "2026-02-05")),
+                route(2, "Inactiva", RouteStatus.INACTIVA, fare(2600, "2026-02-05"))));
+
+        assertThat(service().listActive()).extracting(Route::name).containsExactly("Activa");
+    }
+
+    @Test
     void excluye_las_rutas_suspendidas() {
         when(routeRepository.findAll()).thenReturn(List.of(
                 route(1, "Activa", RouteStatus.ACTIVA, fare(2600, "2026-02-05")),

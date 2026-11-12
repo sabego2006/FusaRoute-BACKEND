@@ -12,7 +12,7 @@ public interface SpringDataRideHistoryRepository extends JpaRepository<RideHisto
     /** Lee en el orden de ix_ride_history_user_boarded y trae nombre y letrero de la ruta. */
     @Query(value = """
             SELECT h.id AS id, h.user_id AS userId, h.route_id AS routeId,
-                   r.name AS routeName, r.sign_file AS signFile,
+                   r.name AS routeName, r.sign_file AS signFile, r.status AS routeStatus,
                    h.destination_label AS destinationLabel, h.destination_place_id AS destinationPlaceId,
                    h.destination_lat AS destinationLat, h.destination_lng AS destinationLng,
                    h.origin_label AS originLabel, h.boarded_at AS boardedAt

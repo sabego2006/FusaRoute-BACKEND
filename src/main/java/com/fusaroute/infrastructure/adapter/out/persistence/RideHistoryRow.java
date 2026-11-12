@@ -15,6 +15,8 @@ public interface RideHistoryRow {
 
     String getSignFile();
 
+    String getRouteStatus();
+
     String getDestinationLabel();
 
     Long getDestinationPlaceId();

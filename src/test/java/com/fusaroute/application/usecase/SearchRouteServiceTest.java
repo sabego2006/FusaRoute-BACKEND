@@ -195,6 +195,22 @@ class SearchRouteServiceTest {
     }
 
     @Test
+    void offline_ignora_rutas_inactivas() {
+        routes.add(route(10, "Inactiva", RouteType.URBANA, RouteStatus.INACTIVA, pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRouteOffline(at(OESTE), at(ESTE)))
+                .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
+    void online_ignora_rutas_inactivas() {
+        routes.add(route(10, "Inactiva", RouteType.URBANA, RouteStatus.INACTIVA, pathEastward()));
+
+        assertThatThrownBy(() -> service().findBestRoute(at(OESTE), at(ESTE)))
+                .isInstanceOf(NoRouteAvailableException.class);
+    }
+
+    @Test
     void ignora_rutas_suspendidas() {
         routes.add(route(10, "Suspendida", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
 
