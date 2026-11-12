@@ -18,6 +18,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,6 +36,20 @@ import java.util.Optional;
 class AdminRoutePersistenceAdapter implements AdminRouteRepositoryPort {
 
     private static final ObjectMapper JSON = new ObjectMapper();
+
+    private static final String NEIGHBORHOODS_SELECT =
+            "SELECT route_id, neighborhood_name FROM route_neighborhoods";
+    private static final String NEIGHBORHOODS_ORDER = " ORDER BY route_id, order_index";
+    private static final String NEIGHBORHOODS_ALL = NEIGHBORHOODS_SELECT + NEIGHBORHOODS_ORDER;
+    private static final String NEIGHBORHOODS_ONE = NEIGHBORHOODS_SELECT + " WHERE route_id = ?" + NEIGHBORHOODS_ORDER;
+    private static final String FARES_SELECT =
+            "SELECT route_id, amount, reference_point, order_index, valid_from FROM fares";
+    private static final String FARES_ALL = FARES_SELECT;
+    private static final String FARES_ONE = FARES_SELECT + " WHERE route_id = ?";
+    private static final String ROUTES_SELECT =
+            "SELECT id, name, route_type, status, sign_file, path_geojson::text AS path, updated_at FROM routes";
+    private static final String ROUTES_ALL = ROUTES_SELECT + " ORDER BY name";
+    private static final String ROUTES_ONE = ROUTES_SELECT + " WHERE id = ? ORDER BY name";
 
     private final JdbcTemplate jdbc;
 
@@ -140,38 +155,37 @@ class AdminRoutePersistenceAdapter implements AdminRouteRepositoryPort {
         if (!draft.hasPath()) {
             return null;
         }
+        // LinkedHashMap y no Map.of: el orden "type" primero es estable y legible en la base.
+        Map<String, Object> geometry = new LinkedHashMap<>();
+        geometry.put("type", "LineString");
+        geometry.put("coordinates", draft.pathPositions());
         try {
-            return JSON.writeValueAsString(Map.of("type", "LineString", "coordinates", draft.pathPositions()));
+            return JSON.writeValueAsString(geometry);
         } catch (JsonProcessingException e) {
             throw new IllegalStateException("No se pudo serializar el trazado", e);
         }
     }
 
-    /** Rutas (una, o todas si {@code id} es nulo) con barrios y todas sus filas de tarifa. */
+    /** Rutas (una, o todas si {@code id} es nulo) con barrios y todas sus filas de tarifa. SQL fijo, sin concatenar. */
     private List<AdminRoute> load(Long id) {
-        String where = id == null ? "" : " WHERE %s = ?";
         Object[] args = id == null ? new Object[0] : new Object[] {id};
 
         Map<Long, List<String>> neighborhoods = new HashMap<>();
-        jdbc.query("SELECT route_id, neighborhood_name FROM route_neighborhoods"
-                        + where.formatted("route_id") + " ORDER BY route_id, order_index",
+        jdbc.query(id == null ? NEIGHBORHOODS_ALL : NEIGHBORHOODS_ONE,
                 rs -> {
                     neighborhoods.computeIfAbsent(rs.getLong("route_id"), k -> new ArrayList<>())
                             .add(rs.getString("neighborhood_name"));
                 }, args);
 
         Map<Long, List<Fare>> fares = new HashMap<>();
-        jdbc.query("SELECT route_id, amount, reference_point, order_index, valid_from FROM fares"
-                        + where.formatted("route_id"),
+        jdbc.query(id == null ? FARES_ALL : FARES_ONE,
                 rs -> {
                     fares.computeIfAbsent(rs.getLong("route_id"), k -> new ArrayList<>())
                             .add(new Fare(rs.getString("reference_point"), rs.getBigDecimal("amount"),
                                     rs.getInt("order_index"), rs.getDate("valid_from").toLocalDate()));
                 }, args);
 
-        return jdbc.query("""
-                SELECT id, name, route_type, status, sign_file, path_geojson::text AS path, updated_at
-                  FROM routes""" + where.formatted("id") + " ORDER BY name",
+        return jdbc.query(id == null ? ROUTES_ALL : ROUTES_ONE,
                 (rs, i) -> new AdminRoute(rs.getLong("id"), rs.getString("name"),
                         RouteType.valueOf(rs.getString("route_type")), RouteStatus.valueOf(rs.getString("status")),
                         rs.getString("sign_file"), rs.getString("path"),
