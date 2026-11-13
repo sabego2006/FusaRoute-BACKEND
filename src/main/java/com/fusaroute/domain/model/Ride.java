@@ -23,7 +23,8 @@ public record Ride(Long id, Long userId, Long routeId, String routeName, String 
 
     /**
      * Viaje de una ruta disponible. {@code routeAvailable} es falso cuando la ruta esta INACTIVA
-     * (soft delete del administrador, RF-11): el viaje se conserva marcado como "ruta ya no disponible".
+     * (soft delete del administrador, RF-11) o dentro de una ventana de suspension vigente (RF-12): el
+     * viaje se conserva marcado como "ruta no disponible" y vuelve a estarlo cuando la ventana se cierra.
      */
     public Ride(Long id, Long userId, Long routeId, String routeName, String signFile,
                 String destinationLabel, Long destinationPlaceId, Coordinate destination,

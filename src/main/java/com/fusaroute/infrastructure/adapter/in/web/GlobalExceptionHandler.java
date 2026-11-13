@@ -19,10 +19,12 @@ import com.fusaroute.domain.exception.InvalidMonitoringQueryException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
 import com.fusaroute.domain.exception.InvalidRouteException;
+import com.fusaroute.domain.exception.InvalidSuspensionException;
 import com.fusaroute.domain.exception.InvalidTotpException;
 import com.fusaroute.domain.exception.NoRouteAvailableException;
 import com.fusaroute.domain.exception.RouteConflictException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
+import com.fusaroute.domain.exception.SuspensionNotFoundException;
 import com.fusaroute.domain.exception.TotpAlreadyEnabledException;
 import com.fusaroute.domain.exception.TotpEnrollmentRequiredException;
 import com.fusaroute.domain.exception.TotpNotEnabledException;
@@ -84,7 +86,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return problem;
     }
 
-    /** Nombre o letrero de ruta repetido, o restaurar una ruta que no estaba inactiva (RF-11): 409. */
+    /**
+     * Nombre o letrero de ruta repetido, o restaurar una ruta que no estaba inactiva (RF-11); suspender una
+     * ruta inactiva, con una ventana que se solapa, o levantar una suspension ya terminada o levantada (RF-12): 409.
+     */
     @ExceptionHandler(RouteConflictException.class)
     public ProblemDetail handleRouteConflict(RouteConflictException e) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
@@ -257,7 +262,28 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         if (!nearest.isEmpty()) {
             problem.setProperty("nearestRoutes", nearest);
         }
+        // RF-12: rutas que si servirian el trayecto pero estan suspendidas. La propiedad solo existe si las hay.
+        if (!e.suspendedCandidates().isEmpty()) {
+            problem.setProperty("suspendedCandidates", e.suspendedCandidates().stream()
+                    .map(s -> java.util.Map.of("routeId", s.routeId(), "routeName", s.routeName(),
+                            "endsAt", s.endsAt().toString()))
+                    .toList());
+        }
         return problem;
+    }
+
+    /** Fechas, ventana o motivo de una suspension invalidos (RF-12): misma estructura por campo que las rutas. */
+    @ExceptionHandler(InvalidSuspensionException.class)
+    public ProblemDetail handleInvalidSuspension(InvalidSuspensionException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        problem.setProperty("errors", e.getViolations());
+        return problem;
+    }
+
+    /** La suspension no existe (RF-12). */
+    @ExceptionHandler(SuspensionNotFoundException.class)
+    public ProblemDetail handleSuspensionNotFound(SuspensionNotFoundException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.NOT_FOUND, e.getMessage());
     }
 
     /** Una punta de la busqueda no se pudo resolver (P1): 400, y dice cual de las dos. */

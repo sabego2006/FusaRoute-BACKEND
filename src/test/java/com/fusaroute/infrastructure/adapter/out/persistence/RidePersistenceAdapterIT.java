@@ -28,7 +28,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import(RidePersistenceAdapter.class)
+@Import({RidePersistenceAdapter.class, SystemClockTestConfig.class})
 @Testcontainers(disabledWithoutDocker = true)
 class RidePersistenceAdapterIT {
 

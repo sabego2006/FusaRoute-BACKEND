@@ -52,7 +52,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({PlacePersistenceAdapter.class, RoutePersistenceAdapter.class})
+@Import({PlacePersistenceAdapter.class, RoutePersistenceAdapter.class, SystemClockTestConfig.class})
 @Testcontainers(disabledWithoutDocker = true)
 class SearchCoverageIT {
 

@@ -10,9 +10,11 @@ import com.fusaroute.domain.model.Place;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteSearchResult;
 import com.fusaroute.domain.model.RouteStatus;
+import com.fusaroute.domain.model.RouteSuspension;
 import com.fusaroute.domain.model.RouteType;
 import com.fusaroute.domain.model.SearchPoint;
 import com.fusaroute.domain.model.SearchOutcome;
+import com.fusaroute.domain.model.SuspendedRoute;
 import com.fusaroute.domain.model.TrafficSector;
 import com.fusaroute.domain.model.UsageEvent;
 import com.fusaroute.domain.model.UsageEventType;
@@ -70,6 +72,7 @@ class SearchRouteServiceTest {
     private final List<Place> places = new ArrayList<>(List.of(OESTE, CENTRO, ESTE, NORTE, LEJOS, MUY_LEJOS));
     private final List<Route> routes = new ArrayList<>();
     private final List<TrafficSector> sectors = new ArrayList<>();
+    private final List<RouteSuspension> suspensions = new ArrayList<>();
     private final Map<Long, List<Double>> observations = new java.util.HashMap<>();
     private final List<Object[]> recordedSpeeds = new ArrayList<>();
     private TravelTimePort travelTime;
@@ -120,7 +123,8 @@ class SearchRouteServiceTest {
         };
         TrafficSectorRepositoryPort sectorRepository = () -> sectors;
         return new SearchRouteService(routeRepository, placeRepository, travelTime, sectorRepository,
-                speedPort, new SimpleMeterRegistry(), clock, recorder);
+                speedPort, new SimpleMeterRegistry(), clock, recorder,
+                now -> suspensions.stream().filter(s -> s.isEffectiveAt(now)).toList());
     }
 
     private static Place place(long id, String slug, String name, double lat, double lng, String... aliases) {
@@ -691,5 +695,148 @@ class SearchRouteServiceTest {
         };
 
         assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).route().id()).isEqualTo(10L);
+    }
+
+    // ------------------------------------------------------------------------------------------
+    // RF-12: el "sin ruta" cuando la unica opcion esta suspendida
+    // ------------------------------------------------------------------------------------------
+
+    /** Ventana vigente en MANANA (2026-11-08T15:00Z) que termina en {@code fin}. */
+    private void suspende(long routeId, String nombre, Instant fin) {
+        suspensions.add(new RouteSuspension(1000L + routeId, routeId, nombre,
+                Instant.parse("2026-11-08T10:00:00Z"), fin, "Obras", null));
+    }
+
+    private static final Instant FIN_A = Instant.parse("2026-11-16T15:00:00Z");
+    private static final Instant FIN_B = Instant.parse("2026-11-10T15:00:00Z");
+
+    private NoRouteAvailableException sinRuta(SearchPoint origen, SearchPoint destino, boolean online) {
+        return org.junit.jupiter.api.Assertions.assertThrows(NoRouteAvailableException.class, () -> {
+            if (online) {
+                service().findBestRoute(origen, destino);
+            } else {
+                service().findBestRouteOffline(origen, destino);
+            }
+        });
+    }
+
+    @Test
+    void si_la_unica_opcion_esta_suspendida_el_sin_ruta_la_lista_con_su_fin_y_lo_dice_en_el_mensaje() {
+        routes.add(route(10, "Oeste - Este", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        suspende(10, "Oeste - Este", FIN_A);
+
+        for (boolean online : new boolean[] {true, false}) {
+            NoRouteAvailableException e = sinRuta(at(OESTE), at(ESTE), online);
+
+            assertThat(e.suspendedCandidates()).containsExactly(new SuspendedRoute(10L, "Oeste - Este", FIN_A));
+            // 2026-11-16T15:00Z son las 10:00 en Bogota.
+            assertThat(e.getMessage())
+                    .startsWith("No hay rutas disponibles que conecten Oeste con Este")
+                    .contains("La ruta Oeste - Este está suspendida hasta el 16 de noviembre a las 10:00");
+        }
+    }
+
+    @Test
+    void si_hay_otra_ruta_activa_se_ofrece_esa_y_no_hay_sin_ruta() {
+        routes.add(route(10, "Suspendida", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        suspende(10, "Suspendida", FIN_A);
+        routes.add(urban(11, "Activa", pathEastward()));
+
+        assertThat(service().findBestRouteOffline(at(OESTE), at(ESTE)).route().id()).isEqualTo(11L);
+    }
+
+    @Test
+    void sin_candidatas_suspendidas_el_sin_ruta_es_el_de_siempre() {
+        // La suspendida va en sentido contrario: nunca habria servido OESTE -> ESTE.
+        routes.add(route(10, "Este - Oeste", RouteType.URBANA, RouteStatus.SUSPENDIDA, reversed(pathEastward())));
+        suspende(10, "Este - Oeste", FIN_A);
+
+        NoRouteAvailableException e = sinRuta(at(OESTE), at(ESTE), false);
+
+        assertThat(e.suspendedCandidates()).isEmpty();
+        assertThat(e.getMessage()).isEqualTo("No hay rutas disponibles que conecten Oeste con Este");
+    }
+
+    @Test
+    void sin_ninguna_suspension_el_sin_ruta_no_trae_suspendidas() {
+        NoRouteAvailableException e = sinRuta(at(OESTE), at(ESTE), true);
+
+        assertThat(e.suspendedCandidates()).isEmpty();
+    }
+
+    @Test
+    void una_suspendida_que_solo_sirve_con_caminata_larga_tambien_es_candidata() {
+        // LEJOS esta a ~1.100 m del trazado: pasa el umbral ampliado de 1.500 m, no el de 800 m.
+        routes.add(route(10, "Oeste - Este", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        suspende(10, "Oeste - Este", FIN_A);
+
+        assertThat(sinRuta(at(OESTE), at(LEJOS), false).suspendedCandidates()).hasSize(1);
+        // Y una a 5,5 km no lo es ni con caminata ampliada.
+        assertThat(sinRuta(at(OESTE), at(MUY_LEJOS), false).suspendedCandidates()).isEmpty();
+    }
+
+    @Test
+    void una_suspendida_sin_trazado_es_candidata_por_nombre() {
+        routes.add(route(20, "Sin trazado", RouteType.URBANA, RouteStatus.SUSPENDIDA, List.of(),
+                "Barrio Oeste", "Algo", "Este"));
+        suspende(20, "Sin trazado", FIN_A);
+
+        assertThat(sinRuta(at(OESTE), at(ESTE), true).suspendedCandidates())
+                .containsExactly(new SuspendedRoute(20L, "Sin trazado", FIN_A));
+    }
+
+    @Test
+    void varias_suspendidas_salen_ordenadas_por_fin_y_el_mensaje_las_enumera() {
+        routes.add(route(10, "Ruta A", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        routes.add(route(11, "Ruta B", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        suspende(10, "Ruta A", FIN_A);
+        suspende(11, "Ruta B", FIN_B);
+
+        NoRouteAvailableException e = sinRuta(at(OESTE), at(ESTE), false);
+
+        assertThat(e.suspendedCandidates()).extracting(SuspendedRoute::routeName).containsExactly("Ruta B", "Ruta A");
+        assertThat(e.getMessage()).contains("Las rutas Ruta B (hasta el 10 de noviembre a las 10:00), "
+                + "Ruta A (hasta el 16 de noviembre a las 10:00) están suspendidas.");
+    }
+
+    @Test
+    void una_ruta_inactiva_con_ventana_vigente_no_se_reporta_como_suspendida() {
+        routes.add(route(10, "Borrada", RouteType.URBANA, RouteStatus.INACTIVA, pathEastward()));
+        suspende(10, "Borrada", FIN_A);
+
+        assertThat(sinRuta(at(OESTE), at(ESTE), false).suspendedCandidates()).isEmpty();
+    }
+
+    @Test
+    void una_ventana_que_ya_termino_no_se_reporta_aunque_la_ruta_aun_figure_suspendida() {
+        // El adaptador ya la habria devuelto a ACTIVA; aqui se prueba que el predicado del puerto manda.
+        routes.add(route(10, "Oeste - Este", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        suspende(10, "Oeste - Este", Instant.parse("2026-11-08T15:00:00Z")); // termina justo ahora
+
+        assertThat(sinRuta(at(OESTE), at(ESTE), false).suspendedCandidates()).isEmpty();
+    }
+
+    @Test
+    void si_falla_la_consulta_de_suspensiones_el_404_sale_igual_y_no_un_500() {
+        routes.add(route(10, "Oeste - Este", RouteType.URBANA, RouteStatus.SUSPENDIDA, pathEastward()));
+        RouteRepositoryPort repository = new RouteRepositoryPort() {
+            @Override
+            public List<Route> findAll() {
+                return routes;
+            }
+
+            @Override
+            public Optional<Route> findById(Long id) {
+                return Optional.empty();
+            }
+        };
+        SearchRouteService roto = new SearchRouteService(repository, placeRepository, travelTime, () -> sectors,
+                speedPort, new SimpleMeterRegistry(), clock, recorder, now -> {
+                    throw new IllegalStateException("base caida");
+                });
+
+        assertThatThrownBy(() -> roto.findBestRouteOffline(at(OESTE), at(ESTE)))
+                .isInstanceOfSatisfying(NoRouteAvailableException.class,
+                        e -> assertThat(e.suspendedCandidates()).isEmpty());
     }
 }

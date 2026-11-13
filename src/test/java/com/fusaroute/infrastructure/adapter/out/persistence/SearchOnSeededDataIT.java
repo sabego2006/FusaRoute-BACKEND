@@ -39,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 @Import({PlacePersistenceAdapter.class, RoutePersistenceAdapter.class, TrafficSectorPersistenceAdapter.class,
-        RouteSpeedPersistenceAdapter.class})
+        RouteSpeedPersistenceAdapter.class, SystemClockTestConfig.class})
 @Testcontainers(disabledWithoutDocker = true)
 class SearchOnSeededDataIT {
 

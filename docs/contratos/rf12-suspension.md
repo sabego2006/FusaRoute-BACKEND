@@ -31,7 +31,7 @@ Respuestas: `201 SuspensionResponse` · `400` (lista por campo en `errors`: `[{f
 
 ### `GET /api/admin/suspensions?state=active|upcoming|past|all`
 
-Por defecto `all`. Orden: vigentes, próximas, pasadas (dentro de cada grupo, por `startsAt`). `past` incluye las terminadas y las levantadas. Un `state` desconocido responde `400`.
+Por defecto `all`; el valor no distingue mayúsculas. Orden: vigentes (la que termina antes, primero), próximas (la que empieza antes, primero) y pasadas (la más reciente primero). `past` incluye las terminadas y las levantadas. Un `state` desconocido responde `400` con `errors: [{field: "state", …}]`.
 
 `200 SuspensionResponse[]`
 
@@ -77,12 +77,12 @@ Reactivar a mano: fija `liftedAt = ahora`. Responde `200 SuspensionResponse` (ya
 - **Forma:** `[{ "routeId": number, "routeName": string, "endsAt": ISO-8601 UTC }]`. Una entrada por ruta, ordenadas por `endsAt` (la que vuelve antes, primero). `endsAt` es el fin de la ventana vigente.
 - **Cuándo aparece:** solo si hay candidatas suspendidas. Si no había candidatas, el cuerpo es el de siempre y la propiedad **no existe** (no viene vacía).
 - **Qué es «candidata»:** la misma regla de la búsqueda — con trazado, que `matchBetween` encuentre abordaje antes que bajada a ≤ 1.500 m; sin trazado, que origen y destino estén en ese orden en sus barrios.
-- **`detail`:** el texto de siempre más una oración, p. ej. `No hay rutas disponibles que conecten Centro con Terminal. La ruta Centro - Galería - Terminal está suspendida hasta el 23 de noviembre a las 1:00 a. m.` (hora de Bogotá; varias rutas se enumeran).
+- **`detail`:** el texto de siempre más una oración, p. ej. `No hay rutas disponibles que conecten Centro con Terminal. La ruta Centro - Galería - Terminal está suspendida hasta el 22 de noviembre a las 20:00.` (hora de Bogotá, 24 h; con varias rutas: `Las rutas A (hasta el … a las …), B (hasta el … a las …) están suspendidas.`).
 
 ```json
 {
   "type": "about:blank", "title": "Not Found", "status": 404,
-  "detail": "No hay rutas disponibles que conecten Centro con Terminal. La ruta Centro - Galería - Terminal está suspendida hasta el 22 de noviembre a las 8:00 p. m.",
+  "detail": "No hay rutas disponibles que conecten Centro con Terminal. La ruta Centro - Galería - Terminal está suspendida hasta el 22 de noviembre a las 20:00.",
   "nearestRoutes": { "...": "como hoy" },
   "suspendedCandidates": [
     { "routeId": 12, "routeName": "Centro - Galería - Terminal", "endsAt": "2026-11-23T01:00:00Z" }
