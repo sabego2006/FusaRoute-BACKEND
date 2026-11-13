@@ -69,6 +69,31 @@ class RidePersistenceAdapterTest {
     }
 
     @Test
+    void un_viaje_de_una_ruta_inactiva_se_conserva_marcado_como_no_disponible() {
+        RideHistoryRow activa = fila("ACTIVA");
+        RideHistoryRow inactiva = fila("INACTIVA");
+        when(repository.findRecentByUser(7L, 10)).thenReturn(List.of(activa, inactiva));
+
+        assertThat(adapter().findRecentByUser(7L, 10)).extracting(Ride::routeAvailable)
+                .containsExactly(true, false);
+    }
+
+    private static RideHistoryRow fila(String estadoRuta) {
+        RideHistoryRow fila = mock(RideHistoryRow.class);
+        when(fila.getId()).thenReturn(5L);
+        when(fila.getUserId()).thenReturn(7L);
+        when(fila.getRouteId()).thenReturn(14L);
+        when(fila.getRouteName()).thenReturn("Centro - Terminal");
+        when(fila.getRouteStatus()).thenReturn(estadoRuta);
+        when(fila.getDestinationLabel()).thenReturn("Terminal");
+        when(fila.getDestinationLat()).thenReturn(4.34);
+        when(fila.getDestinationLng()).thenReturn(-74.37);
+        when(fila.getOriginLabel()).thenReturn("Indio");
+        when(fila.getBoardedAt()).thenReturn(AHORA);
+        return fila;
+    }
+
+    @Test
     void lee_las_filas_y_las_traduce_al_dominio() {
         RideHistoryRow fila = mock(RideHistoryRow.class);
         when(fila.getId()).thenReturn(5L);

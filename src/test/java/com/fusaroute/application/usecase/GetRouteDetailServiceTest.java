@@ -63,6 +63,13 @@ class GetRouteDetailServiceTest {
     }
 
     @Test
+    void ruta_inactiva_se_trata_como_inexistente() {
+        when(routeRepository.findById(7L)).thenReturn(Optional.of(route(RouteStatus.INACTIVA)));
+
+        assertThatThrownBy(() -> service().getById(7L)).isInstanceOf(RouteNotFoundException.class);
+    }
+
+    @Test
     void ruta_suspendida_se_trata_como_inexistente() {
         when(routeRepository.findById(7L)).thenReturn(Optional.of(route(RouteStatus.SUSPENDIDA)));
 

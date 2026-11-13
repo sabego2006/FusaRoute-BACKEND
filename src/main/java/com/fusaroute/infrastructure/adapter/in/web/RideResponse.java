@@ -12,7 +12,7 @@ import java.time.ZoneId;
 public record RideResponse(Long id, Long routeId, String routeName, String signFile,
                            String destinationLabel, Long destinationPlaceId,
                            double destinationLat, double destinationLng,
-                           String originLabel, OffsetDateTime boardedAt) {
+                           String originLabel, OffsetDateTime boardedAt, boolean routeAvailable) {
 
     private static final ZoneId BOGOTA = ZoneId.of("America/Bogota");
 
@@ -20,6 +20,6 @@ public record RideResponse(Long id, Long routeId, String routeName, String signF
         return new RideResponse(ride.id(), ride.routeId(), ride.routeName(), ride.signFile(),
                 ride.destinationLabel(), ride.destinationPlaceId(),
                 ride.destination().latitude(), ride.destination().longitude(),
-                ride.originLabel(), ride.boardedAt().atZone(BOGOTA).toOffsetDateTime());
+                ride.originLabel(), ride.boardedAt().atZone(BOGOTA).toOffsetDateTime(), ride.routeAvailable());
     }
 }

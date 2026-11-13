@@ -18,8 +18,10 @@ import com.fusaroute.domain.exception.InvalidFeedbackReplyException;
 import com.fusaroute.domain.exception.InvalidMonitoringQueryException;
 import com.fusaroute.domain.exception.InvalidProfileException;
 import com.fusaroute.domain.exception.InvalidRegistrationException;
+import com.fusaroute.domain.exception.InvalidRouteException;
 import com.fusaroute.domain.exception.InvalidTotpException;
 import com.fusaroute.domain.exception.NoRouteAvailableException;
+import com.fusaroute.domain.exception.RouteConflictException;
 import com.fusaroute.domain.exception.RouteNotFoundException;
 import com.fusaroute.domain.exception.TotpAlreadyEnabledException;
 import com.fusaroute.domain.exception.TotpEnrollmentRequiredException;
@@ -72,6 +74,20 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
         problem.setProperty("errors", e.getViolations());
         return problem;
+    }
+
+    /** Validacion de negocio al crear o modificar una ruta (RF-11): misma estructura por campo que el registro. */
+    @ExceptionHandler(InvalidRouteException.class)
+    public ProblemDetail handleInvalidRoute(InvalidRouteException e) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, e.getMessage());
+        problem.setProperty("errors", e.getViolations());
+        return problem;
+    }
+
+    /** Nombre o letrero de ruta repetido, o restaurar una ruta que no estaba inactiva (RF-11): 409. */
+    @ExceptionHandler(RouteConflictException.class)
+    public ProblemDetail handleRouteConflict(RouteConflictException e) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, e.getMessage());
     }
 
     /**

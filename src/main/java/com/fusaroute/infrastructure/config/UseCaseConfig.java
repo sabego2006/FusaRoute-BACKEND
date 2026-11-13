@@ -8,6 +8,7 @@ import com.fusaroute.application.usecase.FavoriteDestinationService;
 import com.fusaroute.application.usecase.FeedbackService;
 import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
+import com.fusaroute.application.usecase.AdminRouteService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
 import com.fusaroute.application.usecase.GetTotpStatusService;
@@ -42,6 +43,7 @@ import com.fusaroute.domain.port.out.PasswordHasherPort;
 import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
+import com.fusaroute.domain.port.out.AdminRouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
 import com.fusaroute.domain.port.out.SearchHistoryRepositoryPort;
@@ -128,6 +130,12 @@ public class UseCaseConfig {
     public SearchHistoryService searchHistoryService(SearchHistoryRepositoryPort searchHistoryRepository,
                                                      Clock clock) {
         return new SearchHistoryService(searchHistoryRepository, clock);
+    }
+
+    /** Clase concreta: implementa los seis casos de uso del CRUD de rutas del administrador (RF-11). */
+    @Bean
+    public AdminRouteService adminRouteService(AdminRouteRepositoryPort adminRouteRepository, Clock clock) {
+        return new AdminRouteService(adminRouteRepository, clock);
     }
 
     /** Clase concreta por la misma razon: implementa "Ya me subi" y el historial de viajes. */

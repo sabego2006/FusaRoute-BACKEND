@@ -16,10 +16,21 @@ import java.time.Instant;
  */
 public record Ride(Long id, Long userId, Long routeId, String routeName, String signFile,
                    String destinationLabel, Long destinationPlaceId, Coordinate destination,
-                   String originLabel, Instant boardedAt) {
+                   String originLabel, Instant boardedAt, boolean routeAvailable) {
 
     public static final int MAX_PER_USER = 10;
     public static final int MAX_LABEL_LENGTH = 120;
+
+    /**
+     * Viaje de una ruta disponible. {@code routeAvailable} es falso cuando la ruta esta INACTIVA
+     * (soft delete del administrador, RF-11): el viaje se conserva marcado como "ruta ya no disponible".
+     */
+    public Ride(Long id, Long userId, Long routeId, String routeName, String signFile,
+                String destinationLabel, Long destinationPlaceId, Coordinate destination,
+                String originLabel, Instant boardedAt) {
+        this(id, userId, routeId, routeName, signFile, destinationLabel, destinationPlaceId, destination,
+                originLabel, boardedAt, true);
+    }
 
     public Ride {
         if (userId == null) {

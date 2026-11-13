@@ -77,6 +77,19 @@ class RideControllerTest {
     }
 
     @Test
+    void el_historial_marca_los_viajes_de_una_ruta_inactiva_como_no_disponibles() throws Exception {
+        Ride deRutaInactiva = new Ride(2L, 1L, 14L, "Centro - Galeria - Terminal", null, "Terminal", null,
+                new Coordinate(4.3459, -74.3779), "Indio", SUBIDA, false);
+        when(getRideHistory.ridesOf(1L)).thenReturn(List.of(viaje(), deRutaInactiva));
+
+        mockMvc.perform(get("/api/users/me/rides")
+                        .with(jwt().jwt(j -> j.subject("1").claim("scope", "full"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].routeAvailable").value(true))
+                .andExpect(jsonPath("$[1].routeAvailable").value(false));
+    }
+
+    @Test
     void ruta_inexistente_responde_404() throws Exception {
         when(recordRide.record(any())).thenThrow(new RouteNotFoundException());
 

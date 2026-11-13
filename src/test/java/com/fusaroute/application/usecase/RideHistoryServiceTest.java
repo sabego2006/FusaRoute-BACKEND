@@ -105,6 +105,15 @@ class RideHistoryServiceTest {
     }
 
     @Test
+    void ruta_inactiva_es_404() {
+        when(routes.findById(14L)).thenReturn(Optional.of(ruta(RouteStatus.INACTIVA)));
+
+        assertThatThrownBy(() -> service().record(comando(31L, 4.3, -74.3)))
+                .isInstanceOf(RouteNotFoundException.class);
+        verify(rides, never()).saveKeepingLatest(any(), anyInt());
+    }
+
+    @Test
     void ruta_suspendida_es_404() {
         when(routes.findById(14L)).thenReturn(Optional.of(ruta(RouteStatus.SUSPENDIDA)));
 

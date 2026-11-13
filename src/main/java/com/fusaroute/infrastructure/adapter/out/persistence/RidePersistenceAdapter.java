@@ -43,6 +43,6 @@ public class RidePersistenceAdapter implements RideRepositoryPort {
         return new Ride(row.getId(), row.getUserId(), row.getRouteId(), row.getRouteName(), row.getSignFile(),
                 row.getDestinationLabel(), row.getDestinationPlaceId(),
                 new Coordinate(row.getDestinationLat(), row.getDestinationLng()),
-                row.getOriginLabel(), row.getBoardedAt());
+                row.getOriginLabel(), row.getBoardedAt(), !"INACTIVA".equals(row.getRouteStatus()));
     }
 }
