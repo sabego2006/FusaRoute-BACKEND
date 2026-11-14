@@ -2,12 +2,16 @@ package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteStatus;
+import com.fusaroute.domain.port.out.RouteNamePort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Clock;
+import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -26,7 +30,7 @@ import java.util.Set;
  * Una INACTIVA sigue INACTIVA, aunque tenga una ventana vigente.
  */
 @Component
-public class RoutePersistenceAdapter implements RouteRepositoryPort {
+public class RoutePersistenceAdapter implements RouteRepositoryPort, RouteNamePort {
 
     private final SpringDataRouteRepository repository;
     private final SpringDataRouteSuspensionRepository suspensions;
@@ -56,6 +60,17 @@ public class RoutePersistenceAdapter implements RouteRepositoryPort {
         return repository.findById(id)
                 .map(RoutePersistenceMapper::toDomain)
                 .map(route -> presented(route, suspended));
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public Map<Long, String> findNamesByIds(Collection<Long> ids) {
+        Map<Long, String> names = new HashMap<>();
+        if (ids.isEmpty()) {
+            return names;
+        }
+        repository.findNamesByIds(ids).forEach(row -> names.put(row.getId(), row.getName()));
+        return names;
     }
 
     private Set<Long> suspendedNow() {

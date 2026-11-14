@@ -3,6 +3,7 @@ package com.fusaroute.infrastructure.adapter.out.persistence;
 import com.fusaroute.domain.exception.SuspensionNotFoundException;
 import com.fusaroute.domain.model.RouteSuspension;
 import com.fusaroute.domain.port.out.ActiveSuspensionsPort;
+import com.fusaroute.domain.port.out.EffectiveSuspensionCountPort;
 import com.fusaroute.domain.port.out.RouteSuspensionRepositoryPort;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
@@ -17,7 +18,8 @@ import java.util.Optional;
  * sola consulta ({@link SpringDataRouteSuspensionRepository#EFFECTIVE}).
  */
 @Component
-public class RouteSuspensionPersistenceAdapter implements RouteSuspensionRepositoryPort, ActiveSuspensionsPort {
+public class RouteSuspensionPersistenceAdapter implements RouteSuspensionRepositoryPort, ActiveSuspensionsPort,
+        EffectiveSuspensionCountPort {
 
     private final SpringDataRouteSuspensionRepository repository;
 
@@ -63,6 +65,12 @@ public class RouteSuspensionPersistenceAdapter implements RouteSuspensionReposit
     @Transactional(readOnly = true)
     public List<RouteSuspension> findEffectiveAt(Instant now) {
         return repository.findEffectiveAt(now).stream().map(RouteSuspensionPersistenceAdapter::toDomain).toList();
+    }
+
+    @Override
+    @Transactional(readOnly = true)
+    public long countEffectiveAt(Instant now) {
+        return repository.countEffectiveAt(now);
     }
 
     private RouteSuspension reload(Long id) {

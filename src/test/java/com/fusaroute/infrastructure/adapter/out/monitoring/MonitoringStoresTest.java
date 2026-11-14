@@ -49,6 +49,13 @@ class MonitoringStoresTest {
         }
 
         @Override
+        public <T> T queryForObject(String sql, Class<T> requiredType, Object... args) {
+            this.sql = sql;
+            this.args = args;
+            return requiredType.cast(42L);
+        }
+
+        @Override
         public int update(String sql, Object... args) {
             this.sql = sql;
             this.args = args;
@@ -254,5 +261,36 @@ class MonitoringStoresTest {
 
         assertThat(jdbc.sql).isEqualTo("DELETE FROM public.search_events WHERE ts < ?");
         assertThat(jdbc.args).containsExactly(Timestamp.from(AHORA));
+    }
+
+    // --- panel de metricas (SCRUM-26) -------------------------------------------------
+
+    @Test
+    void el_conteo_de_busquedas_solo_cuenta_search_y_manda_el_rango_semiabierto() {
+        Grabadora jdbc = new Grabadora();
+        Instant hasta = AHORA.plusSeconds(86_400);
+
+        long total = new JdbcUsageEventStore(jdbc, new MonitoringTables("public")).countSearchesBetween(AHORA, hasta);
+
+        assertThat(total).isEqualTo(42L);
+        assertThat(jdbc.sql).isEqualTo("SELECT count(*) FROM public.search_events"
+                + " WHERE event_type = 'SEARCH' AND ts >= ? AND ts < ?");
+        assertThat(jdbc.args).containsExactly(Timestamp.from(AHORA), Timestamp.from(hasta));
+    }
+
+    @Test
+    void el_ranking_agrupa_en_la_base_solo_busquedas_con_ruta_y_manda_el_inicio_de_la_ventana() throws Exception {
+        Grabadora jdbc = new Grabadora();
+
+        new JdbcUsageEventStore(jdbc, new MonitoringTables("public")).countSearchesByRoute(AHORA);
+
+        assertThat(jdbc.sql).isEqualTo("SELECT route_id, count(*) AS searches FROM public.search_events"
+                + " WHERE event_type = 'SEARCH' AND route_id IS NOT NULL AND ts >= ? GROUP BY route_id");
+        assertThat(jdbc.args).containsExactly(Timestamp.from(AHORA));
+
+        ResultSet fila = mock(ResultSet.class);
+        when(fila.getLong("route_id")).thenReturn(7L);
+        when(fila.getLong("searches")).thenReturn(19L);
+        assertThat(jdbc.mapper.mapRow(fila, 0)).isEqualTo(new com.fusaroute.domain.model.RouteSearchCount(7L, 19L));
     }
 }

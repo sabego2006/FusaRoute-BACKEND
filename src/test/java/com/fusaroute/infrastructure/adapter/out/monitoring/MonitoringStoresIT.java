@@ -292,4 +292,42 @@ class MonitoringStoresIT {
         assertThatThrownBy(() -> new MonitoringDataPurger(logs, events, Clock.systemUTC(), 0))
                 .isInstanceOf(IllegalArgumentException.class);
     }
+
+    // --- panel de metricas (SCRUM-26) -------------------------------------------------
+
+    private static UsageEvent evento(Instant ts, UsageEventType tipo, Long ruta, SearchOutcome resultado) {
+        return UsageEvent.of(ts, tipo, "Centro", "Terminal", ruta, resultado, null, 100, false);
+    }
+
+    @Test
+    void cuenta_las_busquedas_del_rango_con_borde_inferior_inclusivo_y_superior_exclusivo() {
+        Instant desde = Instant.parse("2026-11-08T05:00:00Z"); // 00:00 en Bogota
+        Instant hasta = Instant.parse("2026-11-09T05:00:00Z");
+        events.insertBatch(List.of(
+                evento(desde.minusMillis(1), UsageEventType.SEARCH, 7L, SearchOutcome.FOUND),
+                evento(desde, UsageEventType.SEARCH, 7L, SearchOutcome.FOUND),
+                evento(hasta.minusMillis(1), UsageEventType.SEARCH, null, SearchOutcome.NOT_FOUND),
+                evento(hasta, UsageEventType.SEARCH, 7L, SearchOutcome.FOUND),
+                evento(desde.plusSeconds(60), UsageEventType.BOARDED, 7L, SearchOutcome.FOUND)));
+
+        // Entran: la del borde inferior y la sin ruta. No: la anterior, la del borde superior ni el BOARDED.
+        assertThat(events.countSearchesBetween(desde, hasta)).isEqualTo(2);
+        assertThat(events.countSearchesBetween(hasta.plusSeconds(1), hasta.plusSeconds(2))).isZero();
+    }
+
+    @Test
+    void agrupa_por_ruta_solo_busquedas_con_ruta_dentro_de_la_ventana() {
+        Instant desde = AHORA.minusSeconds(30L * 86_400);
+        events.insertBatch(List.of(
+                evento(AHORA, UsageEventType.SEARCH, 7L, SearchOutcome.FOUND),
+                evento(AHORA.minusSeconds(5), UsageEventType.SEARCH, 7L, SearchOutcome.LONG_WALK),
+                evento(AHORA.minusSeconds(9), UsageEventType.SEARCH, 8L, SearchOutcome.FOUND),
+                evento(AHORA, UsageEventType.SEARCH, null, SearchOutcome.NOT_FOUND),
+                evento(AHORA, UsageEventType.BOARDED, 8L, SearchOutcome.FOUND),
+                evento(desde.minusSeconds(1), UsageEventType.SEARCH, 8L, SearchOutcome.FOUND)));
+
+        assertThat(events.countSearchesByRoute(desde))
+                .containsExactlyInAnyOrder(new com.fusaroute.domain.model.RouteSearchCount(7L, 2),
+                        new com.fusaroute.domain.model.RouteSearchCount(8L, 1));
+    }
 }

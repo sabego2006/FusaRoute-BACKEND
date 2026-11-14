@@ -43,6 +43,10 @@ public interface SpringDataRouteSuspensionRepository extends JpaRepository<Route
     @Query(value = "SELECT DISTINCT s.route_id FROM route_suspensions s WHERE" + EFFECTIVE, nativeQuery = true)
     List<Long> findEffectiveRouteIdsAt(@Param("now") Instant now);
 
+    /** Metrica 5 del panel de RF-13 (SCRUM-26): cuenta con el mismo predicado {@link #EFFECTIVE}. */
+    @Query(value = "SELECT count(*) FROM route_suspensions s WHERE" + EFFECTIVE, nativeQuery = true)
+    long countEffectiveAt(@Param("now") Instant now);
+
     /** El {@code lifted_at IS NULL} evita pisar la fecha de una suspension que otro ya levanto. */
     @Modifying(flushAutomatically = true, clearAutomatically = true)
     @Query(value = "UPDATE route_suspensions SET lifted_at = :at WHERE id = :id AND lifted_at IS NULL",

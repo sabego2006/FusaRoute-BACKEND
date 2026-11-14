@@ -34,6 +34,8 @@ public final class MonitoringTables {
     private final String insertEvent;
     private final String deleteEvents;
     private final String[] selectEvents;
+    private final String countSearches;
+    private final String countSearchesByRoute;
 
     public MonitoringTables(String schema) {
         if (schema == null || !IDENTIFIER.matcher(schema).matches()) {
@@ -61,6 +63,12 @@ public final class MonitoringTables {
         for (int variant = 0; variant < 2; variant++) {
             selectEvents[variant] = select(EVENTS_COLUMNS, events, false, (variant & 1) != 0);
         }
+
+        // Panel de RF-13 (SCRUM-26): agregados en la base, sin traer filas. event_type va como literal fijo.
+        this.countSearches = "SELECT count(*) FROM " + events
+                + " WHERE event_type = 'SEARCH' AND ts >= ? AND ts < ?";
+        this.countSearchesByRoute = "SELECT route_id, count(*) AS searches FROM " + events
+                + " WHERE event_type = 'SEARCH' AND route_id IS NOT NULL AND ts >= ? GROUP BY route_id";
     }
 
     private static String select(String columns, String table, boolean byLevel, boolean bySince) {
@@ -103,5 +111,13 @@ public final class MonitoringTables {
 
     String selectEvents(boolean bySince) {
         return selectEvents[bySince ? 1 : 0];
+    }
+
+    String countSearches() {
+        return countSearches;
+    }
+
+    String countSearchesByRoute() {
+        return countSearchesByRoute;
     }
 }
