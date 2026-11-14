@@ -4,6 +4,7 @@ import com.fusaroute.domain.exception.EmailAlreadyRegisteredException;
 import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.User;
 import com.fusaroute.domain.port.out.SecretCipherPort;
+import com.fusaroute.domain.port.out.UserCountPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Component;
@@ -19,7 +20,7 @@ import java.util.Optional;
  * (hoy, AES-GCM) vive detras de {@link SecretCipherPort}.
  */
 @Component
-public class UserPersistenceAdapter implements UserRepositoryPort {
+public class UserPersistenceAdapter implements UserRepositoryPort, UserCountPort {
 
     private final SpringDataUserRepository repository;
     private final SecretCipherPort cipher;
@@ -27,6 +28,11 @@ public class UserPersistenceAdapter implements UserRepositoryPort {
     public UserPersistenceAdapter(SpringDataUserRepository repository, SecretCipherPort cipher) {
         this.repository = repository;
         this.cipher = cipher;
+    }
+
+    @Override
+    public long countAll() {
+        return repository.count();
     }
 
     @Override

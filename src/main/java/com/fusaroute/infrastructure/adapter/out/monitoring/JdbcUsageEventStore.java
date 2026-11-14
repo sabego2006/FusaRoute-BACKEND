@@ -1,10 +1,12 @@
 package com.fusaroute.infrastructure.adapter.out.monitoring;
 
 import com.fusaroute.domain.model.EtaSource;
+import com.fusaroute.domain.model.RouteSearchCount;
 import com.fusaroute.domain.model.SearchOutcome;
 import com.fusaroute.domain.model.UsageEvent;
 import com.fusaroute.domain.model.UsageEventType;
 import com.fusaroute.domain.port.out.UsageEventQueryPort;
+import com.fusaroute.domain.port.out.UsageStatsPort;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
@@ -16,7 +18,7 @@ import java.util.List;
 
 /** Acceso a {@code search_events}; mismo pool y mismas razones que {@link JdbcAppLogStore}. */
 @Component
-class JdbcUsageEventStore implements UsageEventQueryPort {
+class JdbcUsageEventStore implements UsageEventQueryPort, UsageStatsPort {
 
     /** Ancho de origin_label y destination_label en la V24. */
     static final int MAX_LABEL = 120;
@@ -86,6 +88,20 @@ class JdbcUsageEventStore implements UsageEventQueryPort {
                     latencyMs,
                     rs.getBoolean("congestion"));
         }, args.toArray());
+    }
+
+    @Override
+    public long countSearchesBetween(Instant fromInclusive, Instant toExclusive) {
+        Long total = jdbc.queryForObject(tables.countSearches(), Long.class,
+                Timestamp.from(fromInclusive), Timestamp.from(toExclusive));
+        return total == null ? 0 : total;
+    }
+
+    @Override
+    public List<RouteSearchCount> countSearchesByRoute(Instant since) {
+        return jdbc.query(tables.countSearchesByRoute(),
+                (rs, i) -> new RouteSearchCount(rs.getLong("route_id"), rs.getLong("searches")),
+                Timestamp.from(since));
     }
 
     /** Borra lo anterior a {@code cutoff}; devuelve cuantas filas. */

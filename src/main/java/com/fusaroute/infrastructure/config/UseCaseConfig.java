@@ -6,6 +6,7 @@ import com.fusaroute.application.usecase.ConfirmTotpService;
 import com.fusaroute.application.usecase.EnrollTotpService;
 import com.fusaroute.application.usecase.FavoriteDestinationService;
 import com.fusaroute.application.usecase.FeedbackService;
+import com.fusaroute.application.usecase.GetAdminMetricsService;
 import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
 import com.fusaroute.application.usecase.GetUserNotificationsService;
@@ -26,6 +27,8 @@ import com.fusaroute.application.usecase.UpdateProfileService;
 import com.fusaroute.domain.port.in.ChangePasswordUseCase;
 import com.fusaroute.domain.port.in.ConfirmTotpUseCase;
 import com.fusaroute.domain.port.in.EnrollTotpUseCase;
+import com.fusaroute.domain.port.in.CountPendingFeedbackUseCase;
+import com.fusaroute.domain.port.in.GetAdminMetricsUseCase;
 import com.fusaroute.domain.port.in.GetCongestionWarningUseCase;
 import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
@@ -40,6 +43,7 @@ import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
 import com.fusaroute.domain.port.out.ActiveSuspensionsPort;
+import com.fusaroute.domain.port.out.EffectiveSuspensionCountPort;
 import com.fusaroute.domain.port.out.FavoriteDestinationRepositoryPort;
 import com.fusaroute.domain.port.out.FeedbackRepositoryPort;
 import com.fusaroute.domain.port.out.ForbiddenWordsPort;
@@ -48,6 +52,7 @@ import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.AdminRouteRepositoryPort;
+import com.fusaroute.domain.port.out.RouteNamePort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
 import com.fusaroute.domain.port.out.RouteSuspensionRepositoryPort;
@@ -58,6 +63,8 @@ import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 import com.fusaroute.domain.port.out.UsageEventRecorderPort;
+import com.fusaroute.domain.port.out.UsageStatsPort;
+import com.fusaroute.domain.port.out.UserCountPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import io.micrometer.core.instrument.MeterRegistry;
 import org.springframework.beans.factory.annotation.Value;
@@ -125,6 +132,18 @@ public class UseCaseConfig {
     public RouteSuspensionService routeSuspensionService(RouteSuspensionRepositoryPort suspensionRepository,
                                                          AdminRouteRepositoryPort adminRouteRepository, Clock clock) {
         return new RouteSuspensionService(suspensionRepository, adminRouteRepository, clock);
+    }
+
+    /**
+     * Panel de metricas de RF-13 (SCRUM-26). "Pendientes" entra por {@link CountPendingFeedbackUseCase}, el
+     * mismo caso de uso que {@code FeedbackService} ya expone, no por el repositorio.
+     */
+    @Bean
+    public GetAdminMetricsUseCase getAdminMetricsUseCase(UserCountPort userCount, UsageStatsPort usageStats,
+                                                         CountPendingFeedbackUseCase pendingFeedback,
+                                                         EffectiveSuspensionCountPort suspensionCount,
+                                                         RouteNamePort routeNames, Clock clock) {
+        return new GetAdminMetricsService(userCount, usageStats, pendingFeedback, suspensionCount, routeNames, clock);
     }
 
     /** Avisos in-app de rutas suspendidas, calculados al leer (RF-12, SCRUM-25). */
