@@ -71,4 +71,4 @@ Los tests no dependen de la hora real: el caso de uso recibe un `Clock` fijo y l
 
 ## Dependencia
 
-Usa `route_suspensions` (V28) de SCRUM-25 (PR #95). Mientras ese PR no esté mergeado, este PR parte de su rama `feature/SCRUM-25-suspension-de-rutas-admin` y su diff incluye los commits de A5.
+Usa `route_suspensions` (V28) de SCRUM-25. Ese PR (#95) ya está mergeado en `main`; este PR parte de su último commit y no agrega migraciones.
