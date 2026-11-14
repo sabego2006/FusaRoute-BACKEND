@@ -10,7 +10,9 @@ import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import java.time.Clock;
 import java.time.Instant;
+import java.time.ZoneOffset;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -33,11 +35,14 @@ class RidePersistenceAdapterTest {
     @Mock
     private SpringDataRideHistoryRepository repository;
 
+    @Mock
+    private SpringDataRouteSuspensionRepository suspensiones;
+
     @Captor
     private ArgumentCaptor<RideHistoryJpaEntity> entidad;
 
     private RidePersistenceAdapter adapter() {
-        return new RidePersistenceAdapter(repository);
+        return new RidePersistenceAdapter(repository, suspensiones, Clock.fixed(AHORA, ZoneOffset.UTC));
     }
 
     private static RideHistoryJpaEntity conId(RideHistoryJpaEntity entity, long id) {
@@ -76,6 +81,24 @@ class RidePersistenceAdapterTest {
 
         assertThat(adapter().findRecentByUser(7L, 10)).extracting(Ride::routeAvailable)
                 .containsExactly(true, false);
+    }
+
+    @Test
+    void un_viaje_de_una_ruta_con_ventana_de_suspension_vigente_sale_como_no_disponible() {
+        RideHistoryRow activa = fila("ACTIVA");
+        when(repository.findRecentByUser(7L, 10)).thenReturn(List.of(activa));
+        when(suspensiones.findEffectiveRouteIdsAt(AHORA)).thenReturn(List.of(14L));
+
+        assertThat(adapter().findRecentByUser(7L, 10)).extracting(Ride::routeAvailable).containsExactly(false);
+    }
+
+    @Test
+    void la_suspension_de_otra_ruta_no_marca_el_viaje() {
+        RideHistoryRow activa = fila("ACTIVA");
+        when(repository.findRecentByUser(7L, 10)).thenReturn(List.of(activa));
+        when(suspensiones.findEffectiveRouteIdsAt(AHORA)).thenReturn(List.of(99L));
+
+        assertThat(adapter().findRecentByUser(7L, 10)).extracting(Ride::routeAvailable).containsExactly(true);
     }
 
     private static RideHistoryRow fila(String estadoRuta) {

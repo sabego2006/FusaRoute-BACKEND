@@ -12,13 +12,17 @@ import com.fusaroute.domain.model.ResolvedPoint;
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteMatch;
 import com.fusaroute.domain.model.RouteSearchResult;
+import com.fusaroute.domain.model.RouteStatus;
+import com.fusaroute.domain.model.RouteSuspension;
 import com.fusaroute.domain.model.RouteType;
 import com.fusaroute.domain.model.SearchOutcome;
 import com.fusaroute.domain.model.SearchPoint;
+import com.fusaroute.domain.model.SuspendedRoute;
 import com.fusaroute.domain.model.TrafficSector;
 import com.fusaroute.domain.model.UsageEvent;
 import com.fusaroute.domain.model.UsageEventType;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
+import com.fusaroute.domain.port.out.ActiveSuspensionsPort;
 import com.fusaroute.domain.port.out.PlaceRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
@@ -37,6 +41,7 @@ import java.time.LocalDate;
 import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -87,6 +92,7 @@ public class SearchRouteService implements SearchRouteUseCase {
     private final Clock clock;
 
     private final UsageEventRecorderPort usageEvents;
+    private final ActiveSuspensionsPort suspensions;
 
     /** Sin registro de eventos de uso: para pruebas que no miden el uso. */
     public SearchRouteService(RouteRepositoryPort routeRepository, PlaceRepositoryPort placeRepository,
@@ -96,10 +102,20 @@ public class SearchRouteService implements SearchRouteUseCase {
                 meterRegistry, clock, event -> { });
     }
 
+    /** Sin suspensiones: para pruebas que no las miden. */
     public SearchRouteService(RouteRepositoryPort routeRepository, PlaceRepositoryPort placeRepository,
                               TravelTimePort travelTimePort, TrafficSectorRepositoryPort trafficSectorRepository,
                               RouteSpeedPort routeSpeedPort, MeterRegistry meterRegistry, Clock clock,
                               UsageEventRecorderPort usageEvents) {
+        this(routeRepository, placeRepository, travelTimePort, trafficSectorRepository, routeSpeedPort,
+                meterRegistry, clock, usageEvents, now -> List.of());
+    }
+
+    public SearchRouteService(RouteRepositoryPort routeRepository, PlaceRepositoryPort placeRepository,
+                              TravelTimePort travelTimePort, TrafficSectorRepositoryPort trafficSectorRepository,
+                              RouteSpeedPort routeSpeedPort, MeterRegistry meterRegistry, Clock clock,
+                              UsageEventRecorderPort usageEvents, ActiveSuspensionsPort suspensions) {
+        this.suspensions = suspensions;
         this.routeRepository = routeRepository;
         this.placeRepository = placeRepository;
         this.travelTimePort = travelTimePort;
@@ -354,11 +370,16 @@ public class SearchRouteService implements SearchRouteUseCase {
         }
         return routes.stream()
                 .filter(route -> !route.hasPath())
-                .filter(route -> firstIndex(route, originTerms).isPresent() && lastIndex(route, destinationTerms).isPresent()
-                        && firstIndex(route, originTerms).getAsInt() < lastIndex(route, destinationTerms).getAsInt())
+                .filter(route -> servesByName(route, originTerms, destinationTerms))
                 .findFirst()
                 .map(route -> new RouteSearchResult(route.withCurrentFares(LocalDate.now(clock)), null, null, null, null,
                         EtaSource.ESTIMATED, false, List.of(), origin, destination));
+    }
+
+    /** El origen va antes que el destino en los lugares de la ruta, por nombre. */
+    private static boolean servesByName(Route route, List<String> originTerms, List<String> destinationTerms) {
+        return firstIndex(route, originTerms).isPresent() && lastIndex(route, destinationTerms).isPresent()
+                && firstIndex(route, originTerms).getAsInt() < lastIndex(route, destinationTerms).getAsInt();
     }
 
     private static List<String> termsOf(ResolvedPoint point) {
@@ -431,7 +452,49 @@ public class SearchRouteService implements SearchRouteUseCase {
             return unresolved("destination", destination);
         }
         return new NoRouteAvailableException(origin.label(), destination.label(),
-                nearest(routes, origin), nearest(routes, destination));
+                nearest(routes, origin), nearest(routes, destination),
+                suspendedCandidates(origin, destination), clock.getZone());
+    }
+
+    /**
+     * Rutas que habrian servido el trayecto pero estan efectivamente suspendidas (RF-12). Solo se llama
+     * cuando ninguna ruta activa sirvio, asi que si la lista no esta vacia, "la unica opcion estaba suspendida".
+     * "Candidata" usa la misma regla que la busqueda: con trazado, abordaje antes que bajada a no mas de
+     * 1.500 m; sin trazado, origen antes que destino por nombre.
+     *
+     * <p>Es un dato de cortesia: si falla, el 404 sale igual que antes en vez de convertirse en un 500.
+     */
+    private List<SuspendedRoute> suspendedCandidates(ResolvedPoint origin, ResolvedPoint destination) {
+        try {
+            Map<Long, Instant> endsByRoute = new LinkedHashMap<>();
+            suspensions.findEffectiveAt(clock.instant()).stream()
+                    .sorted(Comparator.comparing(RouteSuspension::endsAt))
+                    .forEach(s -> endsByRoute.putIfAbsent(s.routeId(), s.endsAt()));
+            if (endsByRoute.isEmpty()) {
+                return List.of();
+            }
+            return routeRepository.findAll().stream()
+                    .filter(route -> route.status() == RouteStatus.SUSPENDIDA && endsByRoute.containsKey(route.id()))
+                    .filter(route -> couldServe(route, origin, destination))
+                    .map(route -> new SuspendedRoute(route.id(), route.name(), endsByRoute.get(route.id())))
+                    .sorted(Comparator.comparing(SuspendedRoute::endsAt).thenComparing(SuspendedRoute::routeId))
+                    .toList();
+        } catch (RuntimeException e) {
+            log.warn("No se pudieron consultar las rutas suspendidas: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    private static boolean couldServe(Route route, ResolvedPoint origin, ResolvedPoint destination) {
+        if (route.hasPath()) {
+            return origin.hasCoordinate() && destination.hasCoordinate()
+                    && route.matchBetween(origin.coordinate(), destination.coordinate(),
+                            BoardingPoint.LONG_WALK_DISTANCE_METERS).isPresent();
+        }
+        List<String> originTerms = termsOf(origin);
+        List<String> destinationTerms = termsOf(destination);
+        return !originTerms.isEmpty() && !destinationTerms.isEmpty()
+                && servesByName(route, originTerms, destinationTerms);
     }
 
     private static RuntimeException unresolved(String side, ResolvedPoint point) {

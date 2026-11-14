@@ -107,6 +107,15 @@ public record Route(Long id, String name, String signFile, RouteType type, Route
         return status == RouteStatus.ACTIVA;
     }
 
+    /**
+     * Copia con otro estado. La usa el adaptador de persistencia para presentar como SUSPENDIDA una ruta
+     * ACTIVA que esta dentro de una ventana de suspension (RF-12): {@code routes.status} no cambia en la
+     * base, asi que el estado "efectivo" se decide al leer.
+     */
+    public Route withStatus(RouteStatus newStatus) {
+        return new Route(id, name, signFile, type, newStatus, neighborhoods, fares, path);
+    }
+
     /** Si la ruta tiene trazado utilizable (al menos dos puntos). Sin el solo se puede buscar por nombre. */
     public boolean hasPath() {
         return path.size() >= 2;

@@ -8,6 +8,8 @@ import com.fusaroute.application.usecase.FavoriteDestinationService;
 import com.fusaroute.application.usecase.FeedbackService;
 import com.fusaroute.application.usecase.GetCongestionWarningService;
 import com.fusaroute.application.usecase.GetProfileService;
+import com.fusaroute.application.usecase.GetUserNotificationsService;
+import com.fusaroute.application.usecase.RouteSuspensionService;
 import com.fusaroute.application.usecase.AdminRouteService;
 import com.fusaroute.application.usecase.GetRouteDetailService;
 import com.fusaroute.application.usecase.GetRouteFareService;
@@ -29,6 +31,7 @@ import com.fusaroute.domain.port.in.GetProfileUseCase;
 import com.fusaroute.domain.port.in.GetRouteDetailUseCase;
 import com.fusaroute.domain.port.in.GetRouteFareUseCase;
 import com.fusaroute.domain.port.in.GetTotpStatusUseCase;
+import com.fusaroute.domain.port.in.GetUserNotificationsUseCase;
 import com.fusaroute.domain.port.in.ListActiveRoutesUseCase;
 import com.fusaroute.domain.port.in.ListPlacesUseCase;
 import com.fusaroute.domain.port.in.LoginUseCase;
@@ -36,6 +39,7 @@ import com.fusaroute.domain.port.in.RegenerateRecoveryCodesUseCase;
 import com.fusaroute.domain.port.in.RegisterUserUseCase;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
 import com.fusaroute.domain.port.in.UpdateProfileUseCase;
+import com.fusaroute.domain.port.out.ActiveSuspensionsPort;
 import com.fusaroute.domain.port.out.FavoriteDestinationRepositoryPort;
 import com.fusaroute.domain.port.out.FeedbackRepositoryPort;
 import com.fusaroute.domain.port.out.ForbiddenWordsPort;
@@ -46,6 +50,7 @@ import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.AdminRouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import com.fusaroute.domain.port.out.RouteSpeedPort;
+import com.fusaroute.domain.port.out.RouteSuspensionRepositoryPort;
 import com.fusaroute.domain.port.out.SearchHistoryRepositoryPort;
 import com.fusaroute.domain.port.out.RideRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
@@ -109,9 +114,28 @@ public class UseCaseConfig {
                                                   TrafficSectorRepositoryPort trafficSectorRepository,
                                                   RouteSpeedPort routeSpeedPort,
                                                   MeterRegistry meterRegistry, Clock clock,
-                                                  UsageEventRecorderPort usageEventRecorder) {
+                                                  UsageEventRecorderPort usageEventRecorder,
+                                                  ActiveSuspensionsPort activeSuspensions) {
         return new SearchRouteService(routeRepository, placeRepository, travelTimePort,
-                trafficSectorRepository, routeSpeedPort, meterRegistry, clock, usageEventRecorder);
+                trafficSectorRepository, routeSpeedPort, meterRegistry, clock, usageEventRecorder, activeSuspensions);
+    }
+
+    /** Clase concreta: implementa crear, listar y reactivar suspensiones de ruta (RF-12, SCRUM-25). */
+    @Bean
+    public RouteSuspensionService routeSuspensionService(RouteSuspensionRepositoryPort suspensionRepository,
+                                                         AdminRouteRepositoryPort adminRouteRepository, Clock clock) {
+        return new RouteSuspensionService(suspensionRepository, adminRouteRepository, clock);
+    }
+
+    /** Avisos in-app de rutas suspendidas, calculados al leer (RF-12, SCRUM-25). */
+    @Bean
+    public GetUserNotificationsUseCase getUserNotificationsUseCase(ActiveSuspensionsPort activeSuspensions,
+                                                                   RouteRepositoryPort routeRepository,
+                                                                   FavoriteDestinationRepositoryPort favorites,
+                                                                   PlaceRepositoryPort placeRepository,
+                                                                   RideRepositoryPort rideRepository, Clock clock) {
+        return new GetUserNotificationsService(activeSuspensions, routeRepository, favorites, placeRepository,
+                rideRepository, clock);
     }
 
     @Bean
