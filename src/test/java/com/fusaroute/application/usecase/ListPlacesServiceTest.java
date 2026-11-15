@@ -94,4 +94,85 @@ class ListPlacesServiceTest {
                         org.assertj.core.groups.Tuple.tuple("A 600 m", 2),
                         org.assertj.core.groups.Tuple.tuple("Sobre la ruta", 2));
     }
+
+    // --- SCRUM-192: el conteo se reutiliza solo mientras el catalogo sea el mismo ---
+
+    /** Puerto de rutas al que se le puede cambiar la lista, como hace el catalogo cuando el admin escribe. */
+    private static final class RutasCambiantes implements RouteRepositoryPort {
+        private List<Route> actual;
+
+        RutasCambiantes(List<Route> inicial) {
+            this.actual = inicial;
+        }
+
+        @Override
+        public List<Route> findAll() {
+            return actual;
+        }
+
+        @Override
+        public Optional<Route> findById(Long id) {
+            return Optional.empty();
+        }
+    }
+
+    private static PlaceRepositoryPort lugares(List<Place> places) {
+        return new PlaceRepositoryPort() {
+            @Override
+            public List<Place> findAll() {
+                return places;
+            }
+
+            @Override
+            public Optional<Place> findById(Long id) {
+                return Optional.empty();
+            }
+        };
+    }
+
+    @Test
+    void con_el_mismo_catalogo_reutiliza_el_resultado() {
+        ListPlacesService service = service(List.of(place(1, "Sobre la ruta", LAT, -74.38)),
+                List.of(route(10, RouteStatus.ACTIVA, RECTA)));
+
+        assertThat(service.listPlaces()).isSameAs(service.listPlaces());
+    }
+
+    @Test
+    void suspender_una_ruta_cambia_el_conteo_en_la_siguiente_consulta() {
+        RutasCambiantes rutas = new RutasCambiantes(List.of(route(10, RouteStatus.ACTIVA, RECTA)));
+        ListPlacesService service = new ListPlacesService(lugares(List.of(place(1, "Sobre la ruta", LAT, -74.38))), rutas);
+        assertThat(service.listPlaces()).extracting(PlaceSummary::routeCount).containsExactly(1);
+
+        rutas.actual = List.of(route(10, RouteStatus.SUSPENDIDA, RECTA));
+        assertThat(service.listPlaces()).extracting(PlaceSummary::routeCount).containsExactly(0);
+
+        rutas.actual = List.of(route(10, RouteStatus.ACTIVA, RECTA));
+        assertThat(service.listPlaces()).extracting(PlaceSummary::routeCount).containsExactly(1);
+    }
+
+    @Test
+    void modificar_el_trazado_de_una_ruta_cambia_el_conteo_en_la_siguiente_consulta() {
+        RutasCambiantes rutas = new RutasCambiantes(List.of(route(10, RouteStatus.ACTIVA, RECTA)));
+        ListPlacesService service = new ListPlacesService(lugares(List.of(place(1, "Sobre la ruta", LAT, -74.38))), rutas);
+        assertThat(service.listPlaces()).extracting(PlaceSummary::routeCount).containsExactly(1);
+
+        // La ruta ahora pasa a mas de 5 km del lugar.
+        rutas.actual = List.of(route(10, RouteStatus.ACTIVA,
+                List.of(new Coordinate(LAT + 0.05, -74.40), new Coordinate(LAT + 0.05, -74.34))));
+
+        assertThat(service.listPlaces()).extracting(PlaceSummary::routeCount).containsExactly(0);
+    }
+
+    @Test
+    void una_lista_igual_pero_nueva_se_recalcula() {
+        // Solo la MISMA instancia garantiza el mismo contenido; dos listas iguales se tratan como distintas.
+        RutasCambiantes rutas = new RutasCambiantes(List.of(route(10, RouteStatus.ACTIVA, RECTA)));
+        ListPlacesService service = new ListPlacesService(lugares(List.of(place(1, "Sobre la ruta", LAT, -74.38))), rutas);
+        List<PlaceSummary> antes = service.listPlaces();
+
+        rutas.actual = List.of(route(10, RouteStatus.ACTIVA, RECTA));
+
+        assertThat(service.listPlaces()).isNotSameAs(antes).isEqualTo(antes);
+    }
 }
