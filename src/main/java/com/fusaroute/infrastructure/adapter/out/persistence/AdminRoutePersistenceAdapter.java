@@ -52,9 +52,11 @@ class AdminRoutePersistenceAdapter implements AdminRouteRepositoryPort {
     private static final String ROUTES_ONE = ROUTES_SELECT + " WHERE id = ? ORDER BY name";
 
     private final JdbcTemplate jdbc;
+    private final CachedRouteCatalog catalog;
 
-    AdminRoutePersistenceAdapter(JdbcTemplate jdbc) {
+    AdminRoutePersistenceAdapter(JdbcTemplate jdbc, CachedRouteCatalog catalog) {
         this.jdbc = jdbc;
+        this.catalog = catalog;
     }
 
     @Override
@@ -90,6 +92,7 @@ class AdminRoutePersistenceAdapter implements AdminRouteRepositoryPort {
     @Override
     @Transactional
     public AdminRoute create(RouteDraft draft, List<Fare> fares) {
+        catalog.invalidateAfterCommit();
         Long id;
         try {
             id = jdbc.queryForObject("""
@@ -107,6 +110,7 @@ class AdminRoutePersistenceAdapter implements AdminRouteRepositoryPort {
     @Override
     @Transactional
     public AdminRoute update(Long id, RouteDraft draft, FareChange fareChange) {
+        catalog.invalidateAfterCommit();
         try {
             jdbc.update("""
                     UPDATE routes SET name = ?, route_type = ?, path_geojson = ?::jsonb, sign_file = ?,
@@ -131,6 +135,7 @@ class AdminRoutePersistenceAdapter implements AdminRouteRepositoryPort {
     @Override
     @Transactional
     public void setStatus(Long id, RouteStatus status) {
+        catalog.invalidateAfterCommit();
         jdbc.update("UPDATE routes SET status = ?, updated_at = now() WHERE id = ?", status.name(), id);
     }
 

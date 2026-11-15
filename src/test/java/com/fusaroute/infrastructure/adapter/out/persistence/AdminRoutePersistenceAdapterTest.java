@@ -39,6 +39,7 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -56,8 +57,11 @@ class AdminRoutePersistenceAdapterTest {
     @Mock
     private JdbcTemplate jdbc;
 
+    @Mock
+    private CachedRouteCatalog catalog;
+
     private AdminRoutePersistenceAdapter adapter() {
-        return new AdminRoutePersistenceAdapter(jdbc);
+        return new AdminRoutePersistenceAdapter(jdbc, catalog);
     }
 
     private static RouteDraft borrador(boolean conTrazado) {
@@ -142,6 +146,34 @@ class AdminRoutePersistenceAdapterTest {
         assertThat(adapter().existsBySignFile("CENTRO", 5L)).isFalse();
         verify(jdbc).queryForObject(anyString(), eq(Integer.class), eq("Centro"), eq(-1L));
         verify(jdbc).queryForObject(anyString(), eq(Integer.class), eq("CENTRO"), eq(5L));
+    }
+
+    @Test
+    void leer_no_invalida_el_catalogo_en_memoria() throws SQLException {
+        stubLectura();
+
+        adapter().findAll();
+        adapter().findById(8L);
+        adapter().existsByName("Centro - Terminal", null);
+
+        verify(catalog, never()).invalidateAfterCommit();
+    }
+
+    @Test
+    void cada_escritura_invalida_el_catalogo_en_memoria_al_confirmar() throws SQLException {
+        stubLectura();
+        when(jdbc.queryForObject(contains("INSERT INTO routes"), eq(Long.class), any(), any(), any(), any())).thenReturn(8L);
+
+        adapter().create(borrador(false), List.of());
+        verify(catalog, times(1)).invalidateAfterCommit();
+
+        adapter().update(8L, borrador(false), new FareChange(false, List.of(), List.of()));
+        verify(catalog, times(2)).invalidateAfterCommit();
+
+        // Desactivar y reactivar (RF-11) pasan las dos por setStatus.
+        adapter().setStatus(8L, RouteStatus.INACTIVA);
+        adapter().setStatus(8L, RouteStatus.ACTIVA);
+        verify(catalog, times(4)).invalidateAfterCommit();
     }
 
     @Test

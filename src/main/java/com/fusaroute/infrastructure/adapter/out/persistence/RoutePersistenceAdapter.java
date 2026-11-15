@@ -53,6 +53,15 @@ public class RoutePersistenceAdapter implements RouteRepositoryPort, RouteNamePo
                 .toList();
     }
 
+    /**
+     * Las rutas tal como estan en la base, SIN aplicar la suspension: es lo que {@link CachedRouteCatalog}
+     * guarda en memoria. La suspension depende del reloj y se aplica en cada lectura, no al cargar.
+     */
+    @Transactional(readOnly = true)
+    public List<Route> loadAll() {
+        return repository.findAll().stream().map(RoutePersistenceMapper::toDomain).toList();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Optional<Route> findById(Long id) {
@@ -73,11 +82,13 @@ public class RoutePersistenceAdapter implements RouteRepositoryPort, RouteNamePo
         return names;
     }
 
-    private Set<Long> suspendedNow() {
+    /** Ids de las rutas efectivamente suspendidas en este instante (RF-12). */
+    @Transactional(readOnly = true)
+    public Set<Long> suspendedNow() {
         return Set.copyOf(suspensions.findEffectiveRouteIdsAt(clock.instant()));
     }
 
-    private static Route presented(Route route, Set<Long> suspended) {
+    static Route presented(Route route, Set<Long> suspended) {
         return route.status() == RouteStatus.ACTIVA && suspended.contains(route.id())
                 ? route.withStatus(RouteStatus.SUSPENDIDA)
                 : route;
