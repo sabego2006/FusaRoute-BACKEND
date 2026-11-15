@@ -22,14 +22,19 @@ public class RouteSuspensionPersistenceAdapter implements RouteSuspensionReposit
         EffectiveSuspensionCountPort {
 
     private final SpringDataRouteSuspensionRepository repository;
+    private final CachedRouteCatalog catalog;
 
-    public RouteSuspensionPersistenceAdapter(SpringDataRouteSuspensionRepository repository) {
+    public RouteSuspensionPersistenceAdapter(SpringDataRouteSuspensionRepository repository,
+                                             CachedRouteCatalog catalog) {
         this.repository = repository;
+        this.catalog = catalog;
     }
 
     @Override
     @Transactional
     public RouteSuspension save(RouteSuspension suspension, Long createdBy) {
+        // El catalogo en memoria guarda las ventanas sin levantar: una nueva tiene que entrar ya.
+        catalog.invalidateAfterCommit();
         RouteSuspensionJpaEntity saved = repository.saveAndFlush(new RouteSuspensionJpaEntity(
                 suspension.routeId(), suspension.startsAt(), suspension.endsAt(), suspension.reason(), createdBy));
         return reload(saved.getId());
@@ -57,6 +62,7 @@ public class RouteSuspensionPersistenceAdapter implements RouteSuspensionReposit
     @Override
     @Transactional
     public RouteSuspension markLifted(Long id, Instant at) {
+        catalog.invalidateAfterCommit();
         repository.lift(id, at);
         return reload(id);
     }

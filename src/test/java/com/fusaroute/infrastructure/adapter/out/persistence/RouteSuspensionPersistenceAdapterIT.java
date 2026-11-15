@@ -33,7 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
-@Import({RouteSuspensionPersistenceAdapter.class, RoutePersistenceAdapter.class, RidePersistenceAdapter.class,
+@Import({RouteSuspensionPersistenceAdapter.class, RoutePersistenceAdapter.class, CachedRouteCatalog.class,
+        RidePersistenceAdapter.class,
         SystemClockTestConfig.class})
 @Testcontainers(disabledWithoutDocker = true)
 class RouteSuspensionPersistenceAdapterIT {

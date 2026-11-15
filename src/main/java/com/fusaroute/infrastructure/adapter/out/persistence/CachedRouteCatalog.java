@@ -1,6 +1,7 @@
 package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.Route;
+import com.fusaroute.domain.model.RouteSuspension;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import org.springframework.context.annotation.Primary;
 import org.springframework.stereotype.Component;
@@ -8,11 +9,13 @@ import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.Clock;
+import java.time.Instant;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
@@ -30,8 +33,10 @@ import java.util.concurrent.atomic.AtomicLong;
  *       la siguiente lectura despues del commit vuelve a la base.</li>
  *   <li>La invalidacion sube un numero de version. Una lectura que empezo ANTES del commit y termina
  *       despues no puede guardar su foto vieja: solo se guarda si la version no cambio mientras leia.</li>
- *   <li>La suspension no se cachea como resultado sino como regla: se evalua contra el reloj en cada
- *       lectura, asi que una ruta desaparece en {@code startsAt} y vuelve sola en {@code endsAt}.</li>
+ *   <li>De la suspension no se guarda el resultado ("esta ruta esta suspendida") sino las ventanas sin
+ *       levantar. Cada lectura las evalua contra el reloj con {@link RouteSuspension#isEffectiveAt}, la
+ *       misma regla de la consulta SQL: la ruta desaparece en {@code startsAt} y vuelve sola en
+ *       {@code endsAt}, sin releer la base.</li>
  *   <li>{@link #TTL_MILLIS} es solo una red de seguridad para cambios hechos por fuera de la aplicacion
  *       (un UPDATE a mano en la base): la aplicacion nunca depende de el.</li>
  * </ul>
@@ -64,7 +69,7 @@ public class CachedRouteCatalog implements RouteRepositoryPort {
     @Override
     public List<Route> findAll() {
         Snapshot current = current();
-        Set<Long> suspended = loader.suspendedNow();
+        Set<Long> suspended = current.suspendedAt(clock.instant());
         Presented last = current.presented;
         if (last != null && last.suspended.equals(suspended)) {
             return last.routes;
@@ -78,11 +83,12 @@ public class CachedRouteCatalog implements RouteRepositoryPort {
 
     @Override
     public Optional<Route> findById(Long id) {
-        Route route = current().byId.get(id);
+        Snapshot current = current();
+        Route route = current.byId.get(id);
         if (route == null) {
             return Optional.empty();
         }
-        return Optional.of(RoutePersistenceAdapter.presented(route, loader.suspendedNow()));
+        return Optional.of(RoutePersistenceAdapter.presented(route, current.suspendedAt(clock.instant())));
     }
 
     /** Descarta la foto ya: la siguiente lectura va a la base. */
@@ -121,7 +127,8 @@ public class CachedRouteCatalog implements RouteRepositoryPort {
                 return existing;
             }
             long versionBeforeRead = version.get();
-            Snapshot loaded = new Snapshot(loader.loadAll(), versionBeforeRead, clock.millis());
+            Snapshot loaded = new Snapshot(loader.loadAll(), loader.loadOpenSuspensions(),
+                    versionBeforeRead, clock.millis());
             if (version.get() == versionBeforeRead) {
                 snapshot = loaded;
             }
@@ -138,17 +145,27 @@ public class CachedRouteCatalog implements RouteRepositoryPort {
     private static final class Snapshot {
         private final List<Route> routes;
         private final Map<Long, Route> byId;
+        private final List<RouteSuspension> openSuspensions;
         private final long version;
         private final long loadedAt;
         private volatile Presented presented;
 
-        Snapshot(List<Route> routes, long version, long loadedAt) {
+        Snapshot(List<Route> routes, List<RouteSuspension> openSuspensions, long version, long loadedAt) {
             this.routes = List.copyOf(routes);
+            this.openSuspensions = List.copyOf(openSuspensions);
             Map<Long, Route> index = new HashMap<>();
             this.routes.forEach(route -> index.put(route.id(), route));
             this.byId = Map.copyOf(index);
             this.version = version;
             this.loadedAt = loadedAt;
+        }
+
+        Set<Long> suspendedAt(Instant now) {
+            if (openSuspensions.isEmpty()) {
+                return Set.of();
+            }
+            return openSuspensions.stream().filter(suspension -> suspension.isEffectiveAt(now))
+                    .map(RouteSuspension::routeId).collect(Collectors.toUnmodifiableSet());
         }
     }
 

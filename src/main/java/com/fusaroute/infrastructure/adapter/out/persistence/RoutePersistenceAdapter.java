@@ -2,6 +2,7 @@ package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteStatus;
+import com.fusaroute.domain.model.RouteSuspension;
 import com.fusaroute.domain.port.out.RouteNamePort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import org.springframework.stereotype.Component;
@@ -82,9 +83,19 @@ public class RoutePersistenceAdapter implements RouteRepositoryPort, RouteNamePo
         return names;
     }
 
-    /** Ids de las rutas efectivamente suspendidas en este instante (RF-12). */
+    /**
+     * Las suspensiones sin levantar, vigentes o por venir. {@link CachedRouteCatalog} las guarda y decide
+     * contra el reloj cuales aplican en cada lectura; las ya levantadas no pueden volver a aplicar.
+     */
     @Transactional(readOnly = true)
-    public Set<Long> suspendedNow() {
+    public List<RouteSuspension> loadOpenSuspensions() {
+        return suspensions.findAllWithRoute().stream()
+                .map(RouteSuspensionPersistenceAdapter::toDomain)
+                .filter(suspension -> suspension.liftedAt() == null)
+                .toList();
+    }
+
+    private Set<Long> suspendedNow() {
         return Set.copyOf(suspensions.findEffectiveRouteIdsAt(clock.instant()));
     }
 
