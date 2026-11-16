@@ -1,0 +1,5 @@
+# 2026-11-16 16:33:02 -0500 · plan m-qr · etiqueta main-c050-frio
+# commit del repo: 4569c8c
+perf/jmeter/run-t04.sh m-qr main-c050-frio
+# que por dentro ejecuta:
+/c/Users/Santiago/dev/FusaRoute/.tools/apache-jmeter-5.6.3/bin/jmeter.bat -n -t C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/fusaroute.jmx -Jhost=localhost -Jport=18080 -Jprotocol=http -Jdata=C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261116-163258-m-qr-main-c050-frio/data -Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1 -l C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261116-163258-m-qr-main-c050-frio/resultado.jtl -j C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261116-163258-m-qr-main-c050-frio/jmeter.log

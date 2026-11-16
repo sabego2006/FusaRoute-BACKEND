@@ -1,0 +1,5 @@
+hora,contenedor,cpu,memoria
+16:39:21,fusaroute-t04-backend-1,0.17%,263.7MiB / 512MiB
+16:39:28,fusaroute-t04-backend-1,0.15%,264.2MiB / 512MiB
+16:39:35,fusaroute-t04-backend-1,13.26%,264.4MiB / 512MiB
+16:39:41,fusaroute-t04-backend-1,51.51%,272.3MiB / 512MiB
