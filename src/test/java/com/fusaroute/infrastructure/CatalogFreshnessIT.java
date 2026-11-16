@@ -37,17 +37,20 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  * Cada paso primero lee (deja el catalogo cargado en memoria), despues escribe y vuelve a leer: si la
  * invalidacion fallara, la segunda lectura devolveria lo viejo y la prueba se cae.
  *
- * <p>La ruta de prueba se traza lejos del casco urbano para que ninguna ruta de la semilla le compita en la
- * busqueda: asi "la busqueda la devuelve" y "la busqueda ya no la devuelve" no dependen de los datos sembrados.
+ * <p>La ruta de prueba se traza lejos del casco urbano, y cada prueba en una latitud distinta (a mas de 5 km
+ * de la anterior), para que ni las rutas de la semilla ni las de otras pruebas le compitan en la busqueda:
+ * asi "la busqueda la devuelve" y "la busqueda ya no la devuelve" solo dependen de esta ruta.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Testcontainers(disabledWithoutDocker = true)
 class CatalogFreshnessIT {
 
-    private static final String SEARCH = "/api/routes/search?originLat=4.5&originLng=-74.599"
-            + "&destinationLat=4.5&destinationLng=-74.581";
-    private static final String SEARCH_OFFLINE = SEARCH.replace("/search?", "/search/offline?");
+    private static final java.util.concurrent.atomic.AtomicInteger TRAZADOS = new java.util.concurrent.atomic.AtomicInteger();
+
+    private double lat;
+    private String search;
+    private String searchOffline;
 
     @Container
     static PostgreSQLContainer<?> postgres = new PostgreSQLContainer<>("postgres:15-alpine");
@@ -83,6 +86,10 @@ class CatalogFreshnessIT {
     @BeforeEach
     void creaElAdministradorYLaRutaDePrueba() throws Exception {
         String sufijo = Long.toString(System.nanoTime(), 36);
+        lat = 4.50 + 0.05 * TRAZADOS.getAndIncrement();
+        search = "/api/routes/search?originLat=" + lat + "&originLng=-74.599&destinationLat=" + lat
+                + "&destinationLng=-74.581";
+        searchOffline = search.replace("/search?", "/search/offline?");
         adminId = jdbc.queryForObject("""
                 INSERT INTO users (name, email, password_hash, role, active)
                 VALUES ('Admin', ?, '$2a$12$hash', 'ADMIN', TRUE) RETURNING id
@@ -104,14 +111,14 @@ class CatalogFreshnessIT {
                 .authorities(new SimpleGrantedAuthority("SCOPE_full"), new SimpleGrantedAuthority("ROLE_ADMIN"));
     }
 
-    private static String cuerpo(String nombre) {
+    private String cuerpo(String nombre) {
         return """
                 {"name":"%s","type":"URBANA",
-                 "pathGeoJson":{"type":"LineString","coordinates":[[-74.60,4.50],[-74.59,4.50],[-74.58,4.50]]},
+                 "pathGeoJson":{"type":"LineString","coordinates":[[-74.60,%s],[-74.59,%s],[-74.58,%s]]},
                  "neighborhoods":["Frescura Inicio","Frescura Fin"],
                  "fares":[{"amount":2600,"referencePoint":null}],
                  "signFile":null}
-                """.formatted(nombre);
+                """.formatted(nombre, lat, lat, lat);
     }
 
     private List<String> publicNames() throws Exception {
@@ -127,10 +134,10 @@ class CatalogFreshnessIT {
         assertThat(publicNames()).contains(nombre);
         mockMvc.perform(get("/api/routes/" + routeId)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.name").value(nombre));
-        mockMvc.perform(get(SEARCH)).andExpect(status().isOk())
+        mockMvc.perform(get(search)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.route.id").value(routeId))
                 .andExpect(jsonPath("$.route.name").value(nombre));
-        mockMvc.perform(get(SEARCH_OFFLINE)).andExpect(status().isOk())
+        mockMvc.perform(get(searchOffline)).andExpect(status().isOk())
                 .andExpect(jsonPath("$.route.id").value(routeId))
                 .andExpect(jsonPath("$.route.name").value(nombre));
     }
@@ -139,8 +146,8 @@ class CatalogFreshnessIT {
     private void assertOculta() throws Exception {
         assertThat(publicNames()).doesNotContain(nombreActual);
         mockMvc.perform(get("/api/routes/" + routeId)).andExpect(status().isNotFound());
-        mockMvc.perform(get(SEARCH)).andExpect(status().isNotFound());
-        mockMvc.perform(get(SEARCH_OFFLINE)).andExpect(status().isNotFound());
+        mockMvc.perform(get(search)).andExpect(status().isNotFound());
+        mockMvc.perform(get(searchOffline)).andExpect(status().isNotFound());
     }
 
     @Test
@@ -175,7 +182,7 @@ class CatalogFreshnessIT {
 
         assertOculta();
         // La busqueda explica por que no hay ruta: la unica que servia esta suspendida.
-        mockMvc.perform(get(SEARCH_OFFLINE)).andExpect(status().isNotFound())
+        mockMvc.perform(get(searchOffline)).andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.suspendedCandidates[0].routeId").value(routeId));
 
         mockMvc.perform(delete("/api/admin/suspensions/" + json.readTree(suspension).get("id").asLong()).with(admin()))
