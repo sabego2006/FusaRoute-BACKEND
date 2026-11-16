@@ -28,7 +28,7 @@ services:
     environment:
       # Mismo valor que el Dockerfile; T04_JAVA_OPTS lo reemplaza para probar banderas de la JVM
       # sin reconstruir la imagen.
-      - JAVA_TOOL_OPTIONS=${T04_JAVA_OPTS:--XX:MaxRAMPercentage=75 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError}
+      - JAVA_TOOL_OPTIONS=${T04_JAVA_OPTS:--XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError}
     volumes:
       # Volcados de diagnostico (JFR, logs de GC) que se leen desde el anfitrion.
       - ${T04_DIAG_DIR:-./perf/jmeter/resultados-t04/_diag}:/diag

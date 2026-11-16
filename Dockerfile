@@ -27,10 +27,14 @@ COPY --from=build /build/target/fusaroute-backend-*.jar app.jar
 USER fusaroute
 
 # La instancia gratis de Render tiene 512 MB y 0,1 CPU. MaxRAMPercentage deja aire al
-# resto del proceso; SerialGC es el recolector que menos memoria y CPU consume con un
+# resto del proceso: con 75 (384 MB de heap) el heap mas la memoria nativa de la JVM (clases,
+# codigo compilado, pilas de hilos) no cabian en 512 MB y, bajo carga sostenida y sin swap, el
+# kernel mataba el proceso (SCRUM-192: exit 137 en la tercera corrida seguida de 30 lectores).
+# Con 50 (256 MB) la misma prueba termina; el catalogo en memoria ocupa una fraccion de eso.
+# SerialGC es el recolector que menos memoria y CPU consume con un
 # solo nucleo; ExitOnOutOfMemoryError hace que Render reinicie el contenedor en vez de
 # dejar una JVM zombi respondiendo a medias.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
 
 # Render inyecta PORT; application.properties lo lee con server.port=${PORT:8080}.
 EXPOSE 8080
