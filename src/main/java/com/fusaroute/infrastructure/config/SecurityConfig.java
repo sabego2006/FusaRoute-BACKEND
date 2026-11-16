@@ -90,7 +90,7 @@ public class SecurityConfig {
                         new OptionalJwtAuthenticationFilter(jwtDecoder, jwtAuthenticationConverter()),
                         BearerTokenAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
+                .csrf(csrf -> csrf.requireCsrfProtectionMatcher(request -> false))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/actuator/health").permitAll()

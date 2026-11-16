@@ -19,6 +19,7 @@ import java.util.Base64;
 public class BCryptPasswordHasher implements PasswordHasherPort {
 
     private static final int COST = 12;
+    private static final SecureRandom RANDOM = new SecureRandom();
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(COST);
 
@@ -31,7 +32,7 @@ public class BCryptPasswordHasher implements PasswordHasherPort {
 
     private static String randomFiller() {
         byte[] bytes = new byte[32];
-        new SecureRandom().nextBytes(bytes);
+        RANDOM.nextBytes(bytes);
         return Base64.getEncoder().encodeToString(bytes);
     }
 

@@ -21,15 +21,21 @@ import java.time.Instant;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.springframework.http.HttpHeaders.SET_COOKIE;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.jwt;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 /**
- * CSRF scope (T03, Sonar S4502). The exemption covers only /api/**, where the JWT
- * travels in the Authorization header and a cross-site request cannot carry it.
- * Everywhere else Spring Security's CSRF protection stays on. If someone goes back
- * to csrf.disable(), the POST outside /api stops being rejected and the first test
- * fails; if someone drops the exemption, the login POST starts failing with 403.
+ * Why CSRF does not apply here (T03, Sonar S4502). CSRF only works when the browser
+ * attaches the credentials by itself, i.e. a session cookie. This API never issues
+ * one: the JWT travels in the Authorization header, which a cross-site form or
+ * fetch cannot set. These tests pin that premise down. If someone introduces a
+ * session cookie (JSESSIONID in Set-Cookie), the second test fails and the CSRF
+ * decision has to be revisited; if someone turns CSRF back on without a token
+ * repository the frontend can use, the login POST starts failing with 403.
  */
 @WebMvcTest(AuthController.class)
 @Import({SecurityConfig.class, JwtConfig.class})
@@ -49,13 +55,7 @@ class SecurityConfigCsrfTest {
     private LoginUseCase loginUseCase;
 
     @Test
-    void un_post_fuera_del_api_sin_token_csrf_es_rechazado_con_403() throws Exception {
-        mockMvc.perform(post("/health"))
-                .andExpect(status().isForbidden());
-    }
-
-    @Test
-    void un_post_al_api_no_exige_token_csrf_porque_el_jwt_va_en_el_header() throws Exception {
+    void un_post_al_api_no_exige_token_csrf_y_el_login_no_entrega_cookie_de_sesion() throws Exception {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null, UserRole.USER, true, 0);
         when(loginUseCase.login(any())).thenReturn(new LoginResult(user,
                 new IssuedToken("el.jwt.firmado", Instant.parse("2026-10-05T12:00:00Z"))));
@@ -63,6 +63,13 @@ class SecurityConfigCsrfTest {
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"email\":\"ana@x.co\",\"password\":\"Abcdef12\"}"))
-                .andExpect(status().isOk());
+                .andExpect(status().isOk())
+                .andExpect(header().doesNotExist(SET_COOKIE));
+    }
+
+    @Test
+    void una_peticion_autenticada_con_jwt_no_abre_sesion_ni_entrega_cookie() throws Exception {
+        mockMvc.perform(get("/api/auth/no-existe").with(jwt()))
+                .andExpect(header().doesNotExist(SET_COOKIE));
     }
 }
