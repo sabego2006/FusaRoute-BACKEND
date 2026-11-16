@@ -31,8 +31,12 @@ import java.util.List;
  * endpoints por defecto. La regla es conservadora: se abren los publicos
  * (/health, registro, login, catalogo de rutas) y todo lo demas exige JWT.
  *
- * CSRF desactivado: la API es sin estado y se autentica con JWT en el header
- * Authorization, no con cookie de sesion.
+ * CSRF. The API under /api/** is stateless and authenticates with a JWT in the
+ * Authorization header, never with a session cookie, so a cross-site request
+ * cannot carry its credentials and CSRF does not apply there. The exemption is
+ * scoped to that prefix with ignoringRequestMatchers (Spring Security 6 reference,
+ * "Disable CSRF Protection"): protection stays on for every other path instead of
+ * being switched off globally (Sonar S4502). Only /api/** accepts non-GET requests.
  *
  * CORS. El frontend corre en un origen distinto (4200 contra 8080 en DEV).
  * Los origenes salen de una variable de entorno; nunca se usa "*".
@@ -86,7 +90,7 @@ public class SecurityConfig {
                         new OptionalJwtAuthenticationFilter(jwtDecoder, jwtAuthenticationConverter()),
                         BearerTokenAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.disable())
+                .csrf(csrf -> csrf.ignoringRequestMatchers("/api/**"))
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/actuator/health").permitAll()

@@ -4,6 +4,9 @@ import com.fusaroute.domain.port.out.PasswordHasherPort;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Component;
 
+import java.security.SecureRandom;
+import java.util.Base64;
+
 /**
  * Adaptador de hasheo con BCrypt, costo 12.
  *
@@ -19,10 +22,18 @@ public class BCryptPasswordHasher implements PasswordHasherPort {
 
     private final BCryptPasswordEncoder encoder = new BCryptPasswordEncoder(COST);
 
-    // Hash de relleno para cuando el correo no existe: hace que matches() gaste el
-    // mismo tiempo de BCrypt que con una cuenta real (mitigacion best-effort de la
-    // enumeracion de usuarios por temporizacion).
-    private final String dummyHash = encoder.encode("relleno-para-igualar-tiempos");
+    // Filler hash used when the email does not exist: makes matches() spend the same
+    // BCrypt time as with a real account (best-effort mitigation of user enumeration
+    // by timing). The filler is generated at runtime from random bytes, never from a
+    // literal: only the cost of the comparison matters, the value is irrelevant and
+    // a hard-coded one would read as a credential (Sonar S6437).
+    private final String dummyHash = encoder.encode(randomFiller());
+
+    private static String randomFiller() {
+        byte[] bytes = new byte[32];
+        new SecureRandom().nextBytes(bytes);
+        return Base64.getEncoder().encodeToString(bytes);
+    }
 
     @Override
     public String hash(String raw) {
