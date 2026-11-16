@@ -34,7 +34,11 @@ USER fusaroute
 # SerialGC es el recolector que menos memoria y CPU consume con un
 # solo nucleo; ExitOnOutOfMemoryError hace que Render reinicie el contenedor en vez de
 # dejar una JVM zombi respondiendo a medias.
-ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError"
+# TieredStopAtLevel=1 deja solo el compilador C1: con una fraccion de CPU, el compilador optimizador
+# (C2) le quita a las peticiones la CPU que tarda en devolver. Medido a 0,5 CPU (SCRUM-192): el
+# arranque baja de 135 a 78 s, la primera rafaga tras arrancar de p95 6,0 a 3,9 s y la memoria
+# residente de 325 a 266 MB. Si algun dia hay CPU de sobra y carga sostenida, se quita.
+ENV JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -XX:TieredStopAtLevel=1"
 
 # Render inyecta PORT; application.properties lo lee con server.port=${PORT:8080}.
 EXPOSE 8080
