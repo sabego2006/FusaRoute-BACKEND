@@ -19,6 +19,16 @@ services:
         limits:
           memory: 512M
           cpus: "0.1"
+    # Render no da swap. Sin esto Docker deja usar otros 512 MB de swap y la JVM, en vez de
+    # quedarse sin memoria, se arrastra paginando: colas de 30 s que en PROD no existen.
+    memswap_limit: 512M
     healthcheck:
       # Con 0,1 CPU el arranque no cabe en los 60 s del compose base.
       start_period: 600s
+    environment:
+      # Mismo valor que el Dockerfile; T04_JAVA_OPTS lo reemplaza para probar banderas de la JVM
+      # sin reconstruir la imagen.
+      - JAVA_TOOL_OPTIONS=${T04_JAVA_OPTS:--XX:MaxRAMPercentage=75 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError}
+    volumes:
+      # Volcados de diagnostico (JFR, logs de GC) que se leen desde el anfitrion.
+      - ${T04_DIAG_DIR:-./perf/jmeter/resultados-t04/_diag}:/diag

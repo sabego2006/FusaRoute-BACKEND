@@ -11,9 +11,12 @@
 #            free (docker-compose.t04.yml: 0,1 CPU y 512 MB)
 #   m-qr     25 usuarios, 5 s de rampa, 1 vuelta: /api/routes, /api/places y
 #            /api/routes/search/offline (la rafaga del QR de la sustentacion)
+#   m-base   1 usuario, 20 vueltas de las mismas 3 lecturas: el tiempo por peticion sin competencia
 #   m-prod   prod-e2 identico contra PROD. UNA sola vez, con el cambio ya desplegado.
 #
 # La etiqueta identifica el codigo medido (main, opt, opt-palanca-b...).
+#
+# LOOPS=5 acorta m-local a 5 vueltas para descartar una palanca rapido; la corrida que cuenta es la de 10.
 #
 # Variables: JMETER (ejecutable de JMeter), HOST PORT PROTOCOL (por defecto el compose
 # fusaroute-t04 en http://localhost:18080), CONTAINER (para docker stats).
@@ -29,7 +32,8 @@ PROTOCOL="${PROTOCOL:-http}"
 CONTAINER="${CONTAINER:-fusaroute-t04-backend-1}"
 
 case "$PLAN" in
-  m-local) PROPS="-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false" ;;
+  m-local) PROPS="-Jq.users=30 -Jq.rampup=15 -Jq.loops=${LOOPS:-10} -Jq.auth=false" ;;
+  m-base)  PROPS="-Jq.users=1 -Jq.rampup=1 -Jq.loops=20 -Jq.auth=false" ;;
   m-qr)    PROPS="-Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1" ;;
   # Solo GET publicos, 30 usuarios como tope y sin busqueda (analisis.md, recomendacion 7).
   m-prod)  HOST=fusaroute-backend.onrender.com; PORT=443; PROTOCOL=https

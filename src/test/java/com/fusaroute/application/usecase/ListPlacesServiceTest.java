@@ -175,4 +175,34 @@ class ListPlacesServiceTest {
 
         assertThat(service.listPlaces()).isNotSameAs(antes).isEqualTo(antes);
     }
+
+    @Test
+    void peticiones_simultaneas_con_el_catalogo_recien_cambiado_calculan_una_sola_vez() throws Exception {
+        // La rafaga del QR: treinta lectores a la vez sobre un catalogo que nadie ha calculado todavia.
+        ListPlacesService service = service(List.of(place(1, "Sobre la ruta", LAT, -74.38)),
+                List.of(route(10, RouteStatus.ACTIVA, RECTA)));
+        List<PlaceSummary> esperado = service.listPlaces();
+
+        ListPlacesService frio = service(List.of(place(1, "Sobre la ruta", LAT, -74.38)),
+                List.of(route(10, RouteStatus.ACTIVA, RECTA)));
+        java.util.concurrent.ExecutorService pool = java.util.concurrent.Executors.newFixedThreadPool(30);
+        try {
+            java.util.concurrent.CountDownLatch salida = new java.util.concurrent.CountDownLatch(1);
+            List<java.util.concurrent.Future<List<PlaceSummary>>> respuestas = new java.util.ArrayList<>();
+            for (int i = 0; i < 30; i++) {
+                respuestas.add(pool.submit(() -> {
+                    salida.await();
+                    return frio.listPlaces();
+                }));
+            }
+            salida.countDown();
+            List<PlaceSummary> primera = respuestas.get(0).get();
+            for (java.util.concurrent.Future<List<PlaceSummary>> respuesta : respuestas) {
+                // Todas reciben EL MISMO resultado: se calculo una vez y las demas lo reutilizaron.
+                assertThat(respuesta.get()).isSameAs(primera).isEqualTo(esperado);
+            }
+        } finally {
+            pool.shutdownNow();
+        }
+    }
 }

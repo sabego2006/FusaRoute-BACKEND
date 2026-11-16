@@ -41,13 +41,26 @@ public class ListPlacesService implements ListPlacesUseCase {
         List<Route> allRoutes = routeRepository.findAll();
         List<Place> places = placeRepository.findAll();
         Memo last = memo;
-        // Identidad a proposito, no equals: comparar dos catalogos completos costaria lo que se quiere ahorrar.
-        if (last != null && last.routes == allRoutes && last.places == places) {
+        if (isFor(last, allRoutes, places)) {
             return last.summaries;
         }
-        List<PlaceSummary> summaries = summarize(allRoutes, places);
-        memo = new Memo(allRoutes, places, summaries);
-        return summaries;
+        // Uno solo calcula y los demas esperan su resultado. Sin esto, treinta peticiones que llegan
+        // juntas con el catalogo recien cambiado (o recien arrancado) harian treinta veces el mismo
+        // calculo a la vez, que es justo el atasco medido en PROD.
+        synchronized (this) {
+            last = memo;
+            if (isFor(last, allRoutes, places)) {
+                return last.summaries;
+            }
+            List<PlaceSummary> summaries = summarize(allRoutes, places);
+            memo = new Memo(allRoutes, places, summaries);
+            return summaries;
+        }
+    }
+
+    /** Identidad a proposito, no equals: comparar dos catalogos completos costaria lo que se quiere ahorrar. */
+    private static boolean isFor(Memo candidate, List<Route> routes, List<Place> places) {
+        return candidate != null && candidate.routes == routes && candidate.places == places;
     }
 
     private static List<PlaceSummary> summarize(List<Route> allRoutes, List<Place> places) {

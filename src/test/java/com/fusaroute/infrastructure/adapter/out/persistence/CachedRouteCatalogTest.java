@@ -316,4 +316,15 @@ class CachedRouteCatalogTest {
         clock.set(T0.plusMillis(CachedRouteCatalog.TTL_MILLIS));
         assertThat(unica().name()).isEqualTo("Corregido con un UPDATE a mano");
     }
+
+    @Test
+    void si_al_vencer_el_tiempo_de_vida_nada_cambio_conserva_la_misma_lista() {
+        // Quien calculo algo sobre la lista (los lugares con servicio) no tiene que rehacerlo cada 10 minutos.
+        List<Route> antes = catalog.findAll();
+
+        clock.set(T0.plusMillis(CachedRouteCatalog.TTL_MILLIS));
+
+        assertThat(catalog.findAll()).isSameAs(antes);
+        verify(routeRepo, times(2)).findAll();
+    }
 }

@@ -127,7 +127,13 @@ public class CachedRouteCatalog implements RouteRepositoryPort {
                 return existing;
             }
             long versionBeforeRead = version.get();
-            Snapshot loaded = new Snapshot(loader.loadAll(), loader.loadOpenSuspensions(),
+            List<Route> routes = loader.loadAll();
+            // Si la relectura (por tiempo de vida) trae exactamente lo mismo, se conserva la lista anterior:
+            // quien guarda algo calculado sobre ella (los lugares con servicio) no tiene que rehacerlo.
+            if (existing != null && existing.routes.equals(routes)) {
+                routes = existing.routes;
+            }
+            Snapshot loaded = new Snapshot(routes, loader.loadOpenSuspensions(),
                     versionBeforeRead, clock.millis());
             if (version.get() == versionBeforeRead) {
                 snapshot = loaded;
@@ -151,6 +157,7 @@ public class CachedRouteCatalog implements RouteRepositoryPort {
         private volatile Presented presented;
 
         Snapshot(List<Route> routes, List<RouteSuspension> openSuspensions, long version, long loadedAt) {
+            // List.copyOf devuelve la misma instancia si ya es inmutable: la identidad se conserva.
             this.routes = List.copyOf(routes);
             this.openSuspensions = List.copyOf(openSuspensions);
             Map<Long, Route> index = new HashMap<>();
