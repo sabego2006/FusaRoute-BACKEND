@@ -31,12 +31,16 @@ import java.util.List;
  * endpoints por defecto. La regla es conservadora: se abren los publicos
  * (/health, registro, login, catalogo de rutas) y todo lo demas exige JWT.
  *
- * CSRF. The API under /api/** is stateless and authenticates with a JWT in the
- * Authorization header, never with a session cookie, so a cross-site request
- * cannot carry its credentials and CSRF does not apply there. The exemption is
- * scoped to that prefix with ignoringRequestMatchers (Spring Security 6 reference,
- * "Disable CSRF Protection"): protection stays on for every other path instead of
- * being switched off globally (Sonar S4502). Only /api/** accepts non-GET requests.
+ * CSRF. Disabled on purpose: the API is stateless (no session cookie, see
+ * SessionCreationPolicy.STATELESS) and authenticates with a Bearer JWT in the
+ * Authorization header, which a cross-site form or fetch cannot attach, so there
+ * is nothing for CSRF to protect. Spring Security's reference documents this
+ * exact case ("Disable CSRF Protection"). Sonar rule S4502 still raises on the
+ * analyzer SonarCloud runs today; its authors exempted this stateless resource
+ * server shape in SONARJAVA-6615 (2026-11-12, unreleased), so the finding is
+ * accepted with the justification in docs/calidad/sonarqube.md. The two code
+ * alternatives (ignoringRequestMatchers, requireCsrfProtectionMatcher) were tried
+ * in SCRUM-193 and measured as still flagged: do not reintroduce them.
  *
  * CORS. El frontend corre en un origen distinto (4200 contra 8080 en DEV).
  * Los origenes salen de una variable de entorno; nunca se usa "*".
@@ -90,7 +94,9 @@ public class SecurityConfig {
                         new OptionalJwtAuthenticationFilter(jwtDecoder, jwtAuthenticationConverter()),
                         BearerTokenAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
-                .csrf(csrf -> csrf.requireCsrfProtectionMatcher(request -> false))
+                // See the class Javadoc ("CSRF"): stateless Bearer API, finding S4502
+                // accepted and documented in docs/calidad/sonarqube.md.
+                .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .requestMatchers("/health", "/actuator/health").permitAll()
