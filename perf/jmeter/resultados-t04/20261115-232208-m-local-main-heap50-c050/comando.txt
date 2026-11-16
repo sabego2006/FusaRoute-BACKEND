@@ -1,0 +1,5 @@
+# 2026-11-15 23:22:09 -0500 · plan m-local · etiqueta main-heap50-c050
+# commit del repo: e9679cd
+perf/jmeter/run-t04.sh m-local main-heap50-c050
+# que por dentro ejecuta:
+/c/Users/Santiago/dev/FusaRoute/.tools/apache-jmeter-5.6.3/bin/jmeter.bat -n -t C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/fusaroute.jmx -Jhost=localhost -Jport=18080 -Jprotocol=http -Jdata=C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-232208-m-local-main-heap50-c050/data -Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false -l C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-232208-m-local-main-heap50-c050/resultado.jtl -j C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-232208-m-local-main-heap50-c050/jmeter.log

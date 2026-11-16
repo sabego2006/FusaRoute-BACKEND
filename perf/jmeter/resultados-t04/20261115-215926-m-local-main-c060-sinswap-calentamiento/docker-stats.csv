@@ -1,0 +1,20 @@
+hora,contenedor,cpu,memoria
+21:59:31,fusaroute-t04-backend-1,0.18%,312.9MiB / 512MiB
+21:59:39,fusaroute-t04-backend-1,0.21%,313MiB / 512MiB
+21:59:46,fusaroute-t04-backend-1,58.99%,319.1MiB / 512MiB
+21:59:52,fusaroute-t04-backend-1,63.31%,326.9MiB / 512MiB
+22:00:00,fusaroute-t04-backend-1,60.12%,329.6MiB / 512MiB
+22:00:06,fusaroute-t04-backend-1,58.12%,332.2MiB / 512MiB
+22:00:13,fusaroute-t04-backend-1,59.16%,336.6MiB / 512MiB
+22:00:20,fusaroute-t04-backend-1,60.15%,341.3MiB / 512MiB
+22:00:27,fusaroute-t04-backend-1,67.57%,341.2MiB / 512MiB
+22:00:34,fusaroute-t04-backend-1,58.82%,347.9MiB / 512MiB
+22:00:41,fusaroute-t04-backend-1,58.71%,347.6MiB / 512MiB
+22:00:49,fusaroute-t04-backend-1,64.08%,349.7MiB / 512MiB
+22:00:56,fusaroute-t04-backend-1,62.04%,353.3MiB / 512MiB
+22:01:03,fusaroute-t04-backend-1,57.19%,356.2MiB / 512MiB
+22:01:11,fusaroute-t04-backend-1,59.23%,360MiB / 512MiB
+22:01:19,fusaroute-t04-backend-1,58.43%,362.2MiB / 512MiB
+22:01:25,fusaroute-t04-backend-1,58.13%,365.3MiB / 512MiB
+22:01:32,fusaroute-t04-backend-1,58.70%,367.3MiB / 512MiB
+22:01:40,fusaroute-t04-backend-1,59.45%,368.8MiB / 512MiB

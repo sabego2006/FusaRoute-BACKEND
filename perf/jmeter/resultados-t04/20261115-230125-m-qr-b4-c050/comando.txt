@@ -1,0 +1,5 @@
+# 2026-11-15 23:01:26 -0500 · plan m-qr · etiqueta b4-c050
+# commit del repo: b5b59f1
+perf/jmeter/run-t04.sh m-qr b4-c050
+# que por dentro ejecuta:
+/c/Users/Santiago/dev/FusaRoute/.tools/apache-jmeter-5.6.3/bin/jmeter.bat -n -t C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/fusaroute.jmx -Jhost=localhost -Jport=18080 -Jprotocol=http -Jdata=C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-230125-m-qr-b4-c050/data -Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1 -l C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-230125-m-qr-b4-c050/resultado.jtl -j C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-230125-m-qr-b4-c050/jmeter.log
