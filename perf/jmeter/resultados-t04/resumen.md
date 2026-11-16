@@ -1365,3 +1365,241 @@ Contenedores (muestreo de `docker stats` cada 5 s):
 | Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
 |---|---:|---:|---:|---:|---:|
 | fusaroute-t04-backend-1 | 288.1 | 296.5 | 296.5 | 26.42 | 4 |
+
+## 20261116-164713-m-qr-opt-c1-frio
+
+Propiedades: `-Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1`. Hilos simultáneos máximos observados: 25. Duración: 6 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| QR GET /api/routes | 25 | 541 | 336 | 1452 | 1638 | 1638 | 0 | 0 | 5 |
+| QR GET /api/places | 25 | 420 | 302 | 898 | 1501 | 1501 | 0 | 0 | 5 |
+| QR GET /api/routes/search/offline | 25 | 1995 | 1899 | 3902 | 3986 | 3986 | 0 | 0 | 5 |
+| **TOTAL** | 75 | 985 | 412 | 3887 | 3986 | 3986 | 0 | 0 | 13.3 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 214.3 | 222.3 | 222.3 | 20.72 | 4 |
+
+## 20261116-164740-m-local-opt-c1-frio
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 17. Duración: 20 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 230 | 196 | 402 | 596 | 999 | 0 | 0 | 15.4 |
+| Q GET /api/routes/{id} | 300 | 237 | 199 | 494 | 699 | 998 | 0 | 0 | 15.5 |
+| Q GET /api/places | 300 | 239 | 201 | 496 | 599 | 703 | 0 | 0 | 15.5 |
+| **TOTAL** | 900 | 235 | 199 | 492 | 609 | 999 | 0 | 0 | 46.1 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 222.2 | 227 | 227 | 52.81 | 6 |
+
+## 20261116-164819-m-local-opt-c1
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 11. Duración: 17 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 136 | 99 | 285 | 316 | 800 | 0 | 0 | 18.2 |
+| Q GET /api/routes/{id} | 300 | 126 | 99 | 202 | 299 | 800 | 0 | 0 | 18.3 |
+| Q GET /api/places | 300 | 122 | 103 | 205 | 299 | 301 | 0 | 0 | 18.4 |
+| **TOTAL** | 900 | 128 | 101 | 206 | 301 | 800 | 0 | 0 | 54.2 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 226.6 | 239.2 | 239.2 | 49.15 | 5 |
+
+## 20261116-164855-m-local-opt-c1
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 4. Duración: 15 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 22 | 9 | 88 | 94 | 106 | 0 | 0 | 20.7 |
+| Q GET /api/routes/{id} | 300 | 16 | 8 | 85 | 97 | 102 | 0 | 0 | 20.9 |
+| Q GET /api/places | 300 | 19 | 8 | 89 | 97 | 99 | 0 | 0 | 20.9 |
+| **TOTAL** | 900 | 19 | 8 | 89 | 97 | 106 | 0 | 0 | 62 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 239.2 | 239.1 | 242 | 30.36 | 5 |
+
+## 20261116-164928-m-qr-opt-c1
+
+Propiedades: `-Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1`. Hilos simultáneos máximos observados: 4. Duración: 4 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| QR GET /api/routes | 25 | 22 | 13 | 105 | 105 | 105 | 0 | 0 | 5.6 |
+| QR GET /api/places | 25 | 13 | 9 | 13 | 96 | 96 | 0 | 0 | 5.9 |
+| QR GET /api/routes/search/offline | 25 | 46 | 17 | 169 | 188 | 188 | 0 | 0 | 5.9 |
+| **TOTAL** | 75 | 27 | 13 | 167 | 188 | 188 | 0 | 0 | 16.7 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 239.1 | 239.7 | 239.7 | 0.24 | 4 |
+
+## 20261116-165350-m-qr-final-frio
+
+Propiedades: `-Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1`. Hilos simultáneos máximos observados: 25. Duración: 6 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| QR GET /api/routes | 25 | 487 | 333 | 1222 | 1420 | 1420 | 0 | 0 | 4.8 |
+| QR GET /api/places | 25 | 653 | 498 | 1605 | 1899 | 1899 | 0 | 0 | 4.6 |
+| QR GET /api/routes/search/offline | 25 | 2608 | 2495 | 4892 | 4893 | 4893 | 0 | 0 | 4.5 |
+| **TOTAL** | 75 | 1249 | 602 | 4795 | 4893 | 4893 | 0 | 0 | 11.8 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 224.2 | 232.3 | 232.3 | 47.59 | 4 |
+
+## 20261116-165417-m-local-final-frio
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 18. Duración: 20 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 256 | 201 | 496 | 599 | 900 | 0 | 0 | 15.2 |
+| Q GET /api/routes/{id} | 300 | 238 | 200 | 495 | 599 | 803 | 0 | 0 | 15.4 |
+| Q GET /api/places | 300 | 252 | 202 | 502 | 693 | 799 | 0 | 0 | 15.5 |
+| **TOTAL** | 900 | 249 | 201 | 498 | 606 | 900 | 0 | 0 | 45.5 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 232.1 | 236.5 | 239.1 | 49.04 | 6 |
+
+## 20261116-165457-m-local-final
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 10. Duración: 16 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 134 | 98 | 288 | 392 | 893 | 0 | 0 | 18.6 |
+| Q GET /api/routes/{id} | 300 | 121 | 99 | 202 | 301 | 997 | 0 | 0 | 18.8 |
+| Q GET /api/places | 300 | 122 | 100 | 202 | 299 | 818 | 0 | 0 | 18.8 |
+| **TOTAL** | 900 | 126 | 100 | 204 | 312 | 997 | 0 | 0 | 55.7 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 236.1 | 249.1 | 249.1 | 50.26 | 5 |
+
+## 20261116-165532-m-local-final
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 4. Duración: 14 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 17 | 8 | 79 | 93 | 97 | 0 | 0 | 20.8 |
+| Q GET /api/routes/{id} | 300 | 15 | 7 | 75 | 90 | 96 | 0 | 0 | 21 |
+| Q GET /api/places | 300 | 15 | 8 | 81 | 94 | 108 | 0 | 0 | 21.1 |
+| **TOTAL** | 900 | 16 | 8 | 79 | 94 | 108 | 0 | 0 | 62.2 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 249.3 | 249.7 | 250.3 | 31.95 | 5 |
+
+## 20261116-165606-m-local-final
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 3. Duración: 15 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 11 | 8 | 23 | 62 | 73 | 0 | 0 | 20.4 |
+| Q GET /api/routes/{id} | 300 | 9 | 7 | 16 | 55 | 73 | 0 | 0 | 20.6 |
+| Q GET /api/places | 300 | 11 | 7 | 33 | 74 | 83 | 0 | 0 | 20.6 |
+| **TOTAL** | 900 | 10 | 7 | 22 | 63 | 83 | 0 | 0 | 61.1 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 249.4 | 249.3 | 250 | 27.83 | 5 |
+
+## 20261116-165640-m-local-final
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 3. Duración: 15 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 12 | 8 | 32 | 71 | 111 | 0 | 0 | 20.5 |
+| Q GET /api/routes/{id} | 300 | 10 | 7 | 26 | 78 | 81 | 0 | 0 | 20.8 |
+| Q GET /api/places | 300 | 11 | 8 | 34 | 78 | 83 | 0 | 0 | 20.8 |
+| **TOTAL** | 900 | 11 | 8 | 32 | 78 | 111 | 0 | 0 | 61.3 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 249.8 | 249.9 | 250 | 34.59 | 5 |
+
+## 20261116-165714-m-local-final
+
+Propiedades: `-Jq.users=30 -Jq.rampup=15 -Jq.loops=10 -Jq.auth=false`. Hilos simultáneos máximos observados: 4. Duración: 14 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 300 | 12 | 8 | 30 | 83 | 93 | 0 | 0 | 21.2 |
+| Q GET /api/routes/{id} | 300 | 11 | 7 | 32 | 78 | 85 | 0 | 0 | 21.4 |
+| Q GET /api/places | 300 | 12 | 8 | 43 | 78 | 91 | 0 | 0 | 21.5 |
+| **TOTAL** | 900 | 11 | 7 | 33 | 81 | 93 | 0 | 0 | 63.5 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 249.5 | 249.8 | 249.9 | 26.62 | 5 |
+
+## 20261116-165749-m-qr-final
+
+Propiedades: `-Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1`. Hilos simultáneos máximos observados: 4. Duración: 5 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| QR GET /api/routes | 25 | 24 | 13 | 105 | 105 | 105 | 0 | 0 | 5.5 |
+| QR GET /api/places | 25 | 13 | 8 | 15 | 95 | 95 | 0 | 0 | 5.8 |
+| QR GET /api/routes/search/offline | 25 | 48 | 17 | 213 | 213 | 213 | 0 | 0 | 5.8 |
+| **TOTAL** | 75 | 28 | 14 | 105 | 213 | 213 | 0 | 0 | 16.5 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 249.9 | 250.3 | 250.3 | 11.5 | 4 |
+
+## 20261116-165813-m-base-final
+
+Propiedades: `-Jq.users=1 -Jq.rampup=1 -Jq.loops=20 -Jq.auth=false`. Hilos simultáneos máximos observados: 1. Duración: 1 s.
+
+| Petición | Muestras | Promedio | p50 | p95 | p99 | Máx | Errores | % error | Pet./s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Q GET /api/routes | 20 | 13 | 9 | 17 | 73 | 73 | 0 | 0 | 23.7 |
+| Q GET /api/routes/{id} | 20 | 8 | 7 | 11 | 13 | 13 | 0 | 0 | 29.1 |
+| Q GET /api/places | 20 | 9 | 8 | 13 | 15 | 15 | 0 | 0 | 29.7 |
+| **TOTAL** | 60 | 10 | 8 | 15 | 73 | 73 | 0 | 0 | 69.8 |
+
+Contenedores (muestreo de `docker stats` cada 5 s):
+
+| Contenedor | Memoria al inicio (MiB) | Memoria al final (MiB) | Memoria máxima (MiB) | CPU máxima (%) | Muestras |
+|---|---:|---:|---:|---:|---:|
+| fusaroute-t04-backend-1 | 250.3 | 250.5 | 250.5 | 15.75 | 3 |
