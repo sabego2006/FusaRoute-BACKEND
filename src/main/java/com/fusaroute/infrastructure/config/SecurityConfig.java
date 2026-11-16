@@ -31,8 +31,16 @@ import java.util.List;
  * endpoints por defecto. La regla es conservadora: se abren los publicos
  * (/health, registro, login, catalogo de rutas) y todo lo demas exige JWT.
  *
- * CSRF desactivado: la API es sin estado y se autentica con JWT en el header
- * Authorization, no con cookie de sesion.
+ * CSRF. Disabled on purpose: the API is stateless (no session cookie, see
+ * SessionCreationPolicy.STATELESS) and authenticates with a Bearer JWT in the
+ * Authorization header, which a cross-site form or fetch cannot attach, so there
+ * is nothing for CSRF to protect. Spring Security's reference documents this
+ * exact case ("Disable CSRF Protection"). Sonar rule S4502 still raises on the
+ * analyzer SonarCloud runs today; its authors exempted this stateless resource
+ * server shape in SONARJAVA-6615 (2026-11-12, unreleased), so the finding is
+ * accepted with the justification in docs/calidad/sonarqube.md. The two code
+ * alternatives (ignoringRequestMatchers, requireCsrfProtectionMatcher) were tried
+ * in SCRUM-193 and measured as still flagged: do not reintroduce them.
  *
  * CORS. El frontend corre en un origen distinto (4200 contra 8080 en DEV).
  * Los origenes salen de una variable de entorno; nunca se usa "*".
@@ -86,6 +94,8 @@ public class SecurityConfig {
                         new OptionalJwtAuthenticationFilter(jwtDecoder, jwtAuthenticationConverter()),
                         BearerTokenAuthenticationFilter.class)
                 .cors(cors -> cors.configurationSource(corsConfigurationSource()))
+                // See the class Javadoc ("CSRF"): stateless Bearer API, finding S4502
+                // accepted and documented in docs/calidad/sonarqube.md.
                 .csrf(csrf -> csrf.disable())
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
