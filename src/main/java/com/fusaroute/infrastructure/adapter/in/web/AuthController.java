@@ -48,7 +48,7 @@ public class AuthController {
     @PostMapping("/login")
     public LoginResponse login(@RequestBody LoginRequest request) {
         LoginResult result = loginUseCase.login(
-                new LoginCommand(request.email(), request.password(), request.totpCode()));
+                new LoginCommand(request.email(), request.password(), request.totpCode(), request.trustToken()));
         return LoginResponse.from(result);
     }
 }

@@ -61,6 +61,7 @@ import com.fusaroute.domain.port.out.RideRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
 import com.fusaroute.domain.port.out.TrafficSectorRepositoryPort;
+import com.fusaroute.domain.port.out.TrustTokenPort;
 import com.fusaroute.domain.port.out.TravelTimePort;
 import com.fusaroute.domain.port.out.UsageEventRecorderPort;
 import com.fusaroute.domain.port.out.UsageStatsPort;
@@ -72,6 +73,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import java.time.Clock;
+import java.time.Duration;
 import java.time.ZoneId;
 
 /**
@@ -244,9 +246,11 @@ public class UseCaseConfig {
                                      TotpPort totp,
                                      RecoveryCodePort recoveryCodes,
                                      RecoveryCodeRepositoryPort recoveryCodeRepository,
-                                     Clock clock) {
+                                     Clock clock,
+                                     TrustTokenPort trustTokenPort,
+                                     @Value("${fusaroute.totp.trust-days:15}") long trustDays) {
         return new LoginService(userRepository, passwordHasher, tokenIssuer, totp,
-                recoveryCodes, recoveryCodeRepository, clock);
+                recoveryCodes, recoveryCodeRepository, clock, trustTokenPort, Duration.ofDays(trustDays));
     }
 
     @Bean

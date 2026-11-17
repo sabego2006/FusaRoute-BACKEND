@@ -17,12 +17,12 @@ import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
+import com.fusaroute.domain.port.out.TrustTokenPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -53,6 +53,9 @@ class LoginServiceTest {
     /** Instante fijo para que los asserts de tiempo (SCRUM-155) sean deterministas. */
     private static final Instant FIXED_NOW = Instant.parse("2026-10-29T12:00:00Z");
 
+    /** Vigencia del dispositivo de confianza en los tests: 15 dias fijos (decision del 17-nov-2026, SCRUM-196). */
+    private static final Duration TRUST_VALIDITY = Duration.ofDays(15);
+
     @Mock
     private UserRepositoryPort userRepository;
 
@@ -74,7 +77,9 @@ class LoginServiceTest {
     @Mock
     private Clock clock;
 
-    @InjectMocks
+    @Mock
+    private TrustTokenPort trustTokenPort;
+
     private LoginService service;
 
     /**
@@ -82,10 +87,17 @@ class LoginServiceTest {
      * valor fijo por defecto con {@code lenient()} para no exigirle a cada uno
      * que lo estubee (strict stubs marcaria como "no usado" a los tests que
      * nunca llegan a bloquear la cuenta).
+     *
+     * El servicio se construye a mano (no con {@code @InjectMocks}) porque
+     * {@code trustTokenValidity} es un {@link Duration} real, no un mock: con
+     * inyeccion por constructor, Mockito le pasaria null y cualquier test que
+     * verifique el valor exacto fallaria en silencio.
      */
     @BeforeEach
-    void stubClockByDefault() {
+    void setUp() {
         lenient().when(clock.instant()).thenReturn(FIXED_NOW);
+        service = new LoginService(userRepository, passwordHasher, tokenIssuer, totp,
+                recoveryCodes, recoveryCodeRepository, clock, trustTokenPort, TRUST_VALIDITY);
     }
 
     /** Usuario sin TOTP activo (fuerza el bootstrap de enrolamiento). */
@@ -106,16 +118,23 @@ class LoginServiceTest {
                 User.MAX_FAILED_ATTEMPTS, true, TOTP_SECRET, until);
     }
 
+    /** Administrador con TOTP activo: jamas se le omite el codigo ni se le emite confianza. */
+    private static User adminWithTotp() {
+        return new User(9L, "Admin", Email.of("admin@x.co"), HASH, null, UserRole.ADMIN, true,
+                0, true, TOTP_SECRET, null);
+    }
+
     // --- Validaciones basicas de credenciales (SCRUM-13 + SCRUM-36). -------------
 
     @Test
-    void credenciales_correctas_con_totp_valido_emiten_token_de_siete_dias() {
+    void credenciales_correctas_con_totp_valido_emiten_token_de_siete_dias_y_de_confianza() {
         User user = userWithTotp(true, 0);
         IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-10-04T00:00:00Z"));
         when(userRepository.findByEmail(new Email("ana@x.co"))).thenReturn(Optional.of(user));
         when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
         when(totp.verifyCode(TOTP_SECRET, "123456")).thenReturn(true);
         when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
+        when(trustTokenPort.issue(any(), eq(TRUST_VALIDITY))).thenReturn("trust.jwt");
 
         LoginResult result = service.login(new LoginCommand("  Ana@X.CO ", "Abcdef12", "123456"));
 
@@ -124,6 +143,7 @@ class LoginServiceTest {
         assertThat(result.user().getId()).isEqualTo(user.getId());
         assertThat(result.user().getLastLoginAt()).isEqualTo(FIXED_NOW);
         assertThat(result.token()).isSameAs(token);
+        assertThat(result.trustToken()).isEqualTo("trust.jwt");
     }
 
     @Test
@@ -442,7 +462,7 @@ class LoginServiceTest {
     }
 
     @Test
-    void codigo_de_respaldo_valido_consume_el_respaldo_y_emite_token_full() {
+    void codigo_de_respaldo_valido_consume_el_respaldo_y_emite_token_full_pero_no_de_confianza() {
         User user = userWithTotp(true, 0);
         IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-10-04T00:00:00Z"));
         RecoveryCode active = new RecoveryCode(42L, 7L, CODE_HASH, false);
@@ -456,7 +476,10 @@ class LoginServiceTest {
         LoginResult result = service.login(new LoginCommand("ana@x.co", "Abcdef12", "ABCD2345FG"));
 
         assertThat(result.token()).isSameAs(token);
+        // Decision del 17-nov-2026, SCRUM-196: un codigo de respaldo NUNCA inicia la confianza.
+        assertThat(result.trustToken()).isNull();
         verify(recoveryCodeRepository).markUsed(active);
+        verify(trustTokenPort, never()).issue(any(), any());
     }
 
     @Test
@@ -472,6 +495,81 @@ class LoginServiceTest {
                 .isInstanceOf(InvalidTotpException.class);
 
         verify(recoveryCodeRepository, never()).markUsed(any());
+    }
+
+    // --- Dispositivo de confianza del segundo factor (decision del 17-nov-2026, SCRUM-196). -
+
+    @Test
+    void usuario_con_token_de_confianza_valido_entra_sin_totp_y_no_lo_renueva() {
+        User user = userWithTotp(true, 0);
+        IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-11-17T00:00:00Z"));
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+        when(trustTokenPort.isValid("trust.viejo", user)).thenReturn(true);
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
+
+        LoginResult result = service.login(new LoginCommand("ana@x.co", "Abcdef12", null, "trust.viejo"));
+
+        assertThat(result.token()).isSameAs(token);
+        // No se renueva con el uso: saltarse el paso no emite un token nuevo.
+        assertThat(result.trustToken()).isNull();
+        verifyNoInteractions(totp);
+        verify(trustTokenPort, never()).issue(any(), any());
+    }
+
+    @Test
+    void usuario_sin_token_de_confianza_pide_totp_sin_consultar_el_puerto() {
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(userWithTotp(true, 0)));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.login(new LoginCommand("ana@x.co", "Abcdef12", null, null)))
+                .isInstanceOf(TotpRequiredException.class);
+
+        // Sin token que mandar, ni vale la pena preguntarle al puerto.
+        verifyNoInteractions(trustTokenPort);
+    }
+
+    @Test
+    void usuario_con_token_de_confianza_invalido_o_vencido_pide_totp() {
+        User user = userWithTotp(true, 0);
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(user));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+        when(trustTokenPort.isValid("trust.vencido", user)).thenReturn(false);
+
+        assertThatThrownBy(() -> service.login(new LoginCommand("ana@x.co", "Abcdef12", null, "trust.vencido")))
+                .isInstanceOf(TotpRequiredException.class);
+
+        verifyNoInteractions(totp);
+    }
+
+    @Test
+    void admin_con_token_de_confianza_copiado_igual_recibe_totp_required() {
+        User admin = adminWithTotp();
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(admin));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+
+        assertThatThrownBy(() -> service.login(new LoginCommand("admin@x.co", "Abcdef12", null, "trust.robado")))
+                .isInstanceOf(TotpRequiredException.class);
+
+        // El rol se mira ANTES de preguntarle al puerto: un ADMIN ni siquiera
+        // llega a validar el token, aunque fuera genuino.
+        verifyNoInteractions(trustTokenPort);
+    }
+
+    @Test
+    void login_de_admin_con_totp_correcto_no_emite_token_de_confianza() {
+        User admin = adminWithTotp();
+        IssuedToken token = new IssuedToken("jwt", Instant.parse("2026-11-17T00:00:00Z"));
+        when(userRepository.findByEmail(any())).thenReturn(Optional.of(admin));
+        when(passwordHasher.matches("Abcdef12", HASH)).thenReturn(true);
+        when(totp.verifyCode(TOTP_SECRET, "123456")).thenReturn(true);
+        when(tokenIssuer.issue(any(), eq(Duration.ofDays(7)))).thenReturn(token);
+
+        LoginResult result = service.login(new LoginCommand("admin@x.co", "Abcdef12", "123456"));
+
+        assertThat(result.token()).isSameAs(token);
+        assertThat(result.trustToken()).isNull();
+        verify(trustTokenPort, never()).issue(any(), any());
     }
 
     private String messageOf(LoginCommand command) {
