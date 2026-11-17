@@ -9,6 +9,7 @@ import com.fusaroute.domain.model.Email;
 import com.fusaroute.domain.model.IssuedToken;
 import com.fusaroute.domain.model.RecoveryCode;
 import com.fusaroute.domain.model.User;
+import com.fusaroute.domain.model.UserRole;
 import com.fusaroute.domain.port.in.LoginCommand;
 import com.fusaroute.domain.port.in.LoginResult;
 import com.fusaroute.domain.port.in.LoginUseCase;
@@ -17,6 +18,7 @@ import com.fusaroute.domain.port.out.RecoveryCodePort;
 import com.fusaroute.domain.port.out.RecoveryCodeRepositoryPort;
 import com.fusaroute.domain.port.out.TokenIssuerPort;
 import com.fusaroute.domain.port.out.TotpPort;
+import com.fusaroute.domain.port.out.TrustTokenPort;
 import com.fusaroute.domain.port.out.UserRepositoryPort;
 
 import java.time.Clock;
@@ -60,6 +62,16 @@ import java.util.Optional;
  * verificar la contrasena. Si la ventana ya expiro, el intento la limpia y
  * reinicia el contador antes de evaluar credenciales, como si el bloqueo nunca
  * hubiera existido.
+ *
+ * Dispositivo de confianza (decision de producto del 17-nov-2026, SCRUM-196): un USER
+ * que ya probo un codigo TOTP correcto y en vivo no lo vuelve a pedir durante
+ * {@code trustTokenValidity} (15 dias por defecto) EN EL MISMO DISPOSITIVO,
+ * identificado por el token que le entrega {@link TrustTokenPort}. Un ADMIN
+ * jamas lo usa -- ni para saltarse el paso, ni para recibir uno nuevo -- y esa
+ * decision la toma este caso de uso con el rol que ya cargo de la base, nunca
+ * con lo que diga el cliente. Solo un codigo TOTP correcto y verificado EN
+ * ESTA peticion emite un token de confianza nuevo: ni saltarse el paso con uno
+ * ya valido (no se renueva con el uso) ni un codigo de respaldo lo inician.
  */
 public class LoginService implements LoginUseCase {
 
@@ -78,6 +90,8 @@ public class LoginService implements LoginUseCase {
     private final RecoveryCodePort recoveryCodes;
     private final RecoveryCodeRepositoryPort recoveryCodeRepository;
     private final Clock clock;
+    private final TrustTokenPort trustTokenPort;
+    private final Duration trustTokenValidity;
 
     public LoginService(UserRepositoryPort userRepository,
                         PasswordHasherPort passwordHasher,
@@ -85,7 +99,9 @@ public class LoginService implements LoginUseCase {
                         TotpPort totp,
                         RecoveryCodePort recoveryCodes,
                         RecoveryCodeRepositoryPort recoveryCodeRepository,
-                        Clock clock) {
+                        Clock clock,
+                        TrustTokenPort trustTokenPort,
+                        Duration trustTokenValidity) {
         this.userRepository = userRepository;
         this.passwordHasher = passwordHasher;
         this.tokenIssuer = tokenIssuer;
@@ -93,6 +109,8 @@ public class LoginService implements LoginUseCase {
         this.recoveryCodes = recoveryCodes;
         this.recoveryCodeRepository = recoveryCodeRepository;
         this.clock = clock;
+        this.trustTokenPort = trustTokenPort;
+        this.trustTokenValidity = trustTokenValidity;
     }
 
     @Override
@@ -159,29 +177,48 @@ public class LoginService implements LoginUseCase {
             throw new TotpEnrollmentRequiredException(enrollmentToken);
         }
 
-        // 5. TOTP activo pero sin codigo: no hay nada que verificar.
-        if (isBlank(command.totpCode())) {
-            throw new TotpRequiredException();
-        }
+        // 4.5. Dispositivo de confianza. Solo se evalua cuando NO llego codigo:
+        //      si el usuario ya escribio uno, se verifica normal (abajo), sin
+        //      importar que token traiga. El rol se mira primero, de forma que
+        //      un ADMIN jamas consulte el puerto con un token ajeno copiado —
+        //      la decision es del servidor, con el usuario ya cargado de la
+        //      base, nunca de lo que diga el cliente.
+        boolean skippedByTrust = isBlank(command.totpCode())
+                && user.getRole() == UserRole.USER
+                && !isBlank(command.trustToken())
+                && trustTokenPort.isValid(command.trustToken(), user);
 
-        // 6. Codigo presente. Primero se prueba como TOTP; si no, como codigo de
-        //    respaldo (consumo en el acto). Falla el segundo factor =>
-        //    InvalidTotpException y el intento cuenta (reusa SCRUM-36). Un
-        //    atacante que ya tenga la contrasena solo puede intentar codigos
-        //    hasta el limite del contador — y si este codigo es el que lo
-        //    alcanza, el aviso pasa a ser el de bloqueo (SCRUM-155), no el de
-        //    codigo invalido.
-        String code = command.totpCode().trim();
-        boolean totpOk = totp.verifyCode(user.getTotpSecret(), code);
-        boolean recoveryOk = !totpOk && tryConsumeRecoveryCode(user.getId(), code);
+        // Si un codigo TOTP valido (nunca uno de respaldo, nunca el salto por
+        // confianza) se verifica EN ESTA peticion, se emite un token de
+        // confianza nuevo mas abajo; en cualquier otro caso no se renueva.
+        boolean totpVerifiedNow = false;
 
-        if (!totpOk && !recoveryOk) {
-            User afterFailure = user.registerFailedLogin(now);
-            userRepository.save(afterFailure);
-            if (afterFailure.isLocked(now)) {
-                throw new AccountLockedException();
+        if (!skippedByTrust) {
+            // 5. TOTP activo pero sin codigo: no hay nada que verificar.
+            if (isBlank(command.totpCode())) {
+                throw new TotpRequiredException();
             }
-            throw new InvalidTotpException();
+
+            // 6. Codigo presente. Primero se prueba como TOTP; si no, como codigo de
+            //    respaldo (consumo en el acto). Falla el segundo factor =>
+            //    InvalidTotpException y el intento cuenta (reusa SCRUM-36). Un
+            //    atacante que ya tenga la contrasena solo puede intentar codigos
+            //    hasta el limite del contador — y si este codigo es el que lo
+            //    alcanza, el aviso pasa a ser el de bloqueo (SCRUM-155), no el de
+            //    codigo invalido.
+            String code = command.totpCode().trim();
+            boolean totpOk = totp.verifyCode(user.getTotpSecret(), code);
+            boolean recoveryOk = !totpOk && tryConsumeRecoveryCode(user.getId(), code);
+
+            if (!totpOk && !recoveryOk) {
+                User afterFailure = user.registerFailedLogin(now);
+                userRepository.save(afterFailure);
+                if (afterFailure.isLocked(now)) {
+                    throw new AccountLockedException();
+                }
+                throw new InvalidTotpException();
+            }
+            totpVerifiedNow = totpOk;
         }
 
         // SCRUM-101: el ingreso exitoso se GUARDA SIEMPRE, aunque no hubiera
@@ -192,8 +229,13 @@ public class LoginService implements LoginUseCase {
         // no tendria registro de ingresos y su contador quedaria siempre en cero.
         user = user.registerSuccessfulLogin(now);
         userRepository.save(user);
+
+        String trustToken = (totpVerifiedNow && user.getRole() == UserRole.USER)
+                ? trustTokenPort.issue(user, trustTokenValidity)
+                : null;
+
         IssuedToken token = tokenIssuer.issue(user, TOKEN_VALIDITY);
-        return new LoginResult(user, token);
+        return new LoginResult(user, token, trustToken);
     }
 
     /**

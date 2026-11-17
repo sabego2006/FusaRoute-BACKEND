@@ -59,7 +59,7 @@ class AuthControllerTest {
         User user = new User(1L, "Ana", Email.of("ana@x.co"), "$2a$12$hash", null,
                 com.fusaroute.domain.model.UserRole.USER, true, 0);
         when(loginUseCase.login(any())).thenReturn(new LoginResult(user,
-                new IssuedToken("el.jwt.firmado", Instant.parse("2026-10-05T12:00:00Z"))));
+                new IssuedToken("el.jwt.firmado", Instant.parse("2026-10-05T12:00:00Z")), null));
 
         mockMvc.perform(post("/api/auth/login")
                         .contentType(MediaType.APPLICATION_JSON)

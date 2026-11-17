@@ -299,4 +299,18 @@ public class User {
         return new User(id, name, email, passwordHash, phone, role, active,
                 failedLoginAttempts, false, null, lockedUntil, lastLoginAt, previousLoginAt);
     }
+
+    /**
+     * Fuente de la huella del dispositivo de confianza del segundo factor
+     * (decision de producto del 17-nov-2026, SCRUM-196: un USER no repite el TOTP por 15
+     * dias fijos en el mismo dispositivo). El dominio decide DE QUE depende esa
+     * confianza -- la contrasena y el secreto TOTP vigentes, para que cambiar
+     * cualquiera de los dos la invalide de inmediato -- y deja COMO se
+     * convierte en una huella irreversible (un hash de un solo sentido) al
+     * adaptador de infraestructura que firma y verifica el token. Nunca se
+     * expone en claro fuera del dominio.
+     */
+    public String trustFingerprintSource() {
+        return passwordHash + "|" + totpSecret;
+    }
 }

@@ -200,7 +200,7 @@ sequenceDiagram
 |--------|------|------|-----------|-------------|
 | `GET` | `/health` | No | 200 | Estado del servicio |
 | `POST` | `/api/auth/register` | No | 201 / 400 / 409 | Registro de usuario |
-| `POST` | `/api/auth/login` | No | 200 / 401 | Inicio de sesión (JWT) |
+| `POST` | `/api/auth/login` | No | 200 / 401 / 423 | Inicio de sesión (JWT + segundo factor; 423 = cuenta bloqueada, SCRUM-155) |
 | `GET` | `/api/routes` | No | 200 | Catálogo de rutas activas |
 | `GET` | `/api/routes/{id}` | No | 200 / 404 | Detalle de una ruta |
 | `GET` | `/api/routes/{id}/fare` | No | 200 / 404 | Costo del pasaje de una ruta (RF-06) |
@@ -298,7 +298,8 @@ El correo se normaliza (trim + minúsculas) igual que en el registro.
 
 ```json
 { "token": "eyJhbGciOi...", "tokenType": "Bearer", "expiresAt": "2026-10-05T12:00:00Z",
-  "user": { "id": 1, "name": "Ana Pérez", "email": "ana@ejemplo.com", "role": "USER", "active": true } }
+  "user": { "id": 1, "name": "Ana Pérez", "email": "ana@ejemplo.com", "role": "USER", "active": true },
+  "trustToken": "eyJhbGciOi..." }
 ```
 
 El token lleva el id del usuario en `sub` y el rol en `role`. El frontend lo guarda y lo
@@ -309,8 +310,9 @@ Authorization: Bearer eyJhbGciOi...
 ```
 
 El cuerpo acepta además un `totpCode` opcional, que se exige cuando el usuario ya tiene el
-segundo factor activo (ver abajo). El mismo campo admite un código TOTP de 6 dígitos o un
-código de respaldo.
+segundo factor activo y no hay (o no es válido) un `trustToken` vigente — ver "Dispositivo de
+confianza" más abajo. El mismo campo admite un código TOTP de 6 dígitos o un código de
+respaldo.
 
 **Errores** (cuerpo `ProblemDetail`, RFC 9457):
 
@@ -323,12 +325,18 @@ código de respaldo.
 - **`401`** con `error: "TOTP_REQUIRED"`: falta el `totpCode`. El frontend muestra el paso 2.
 - **`401`** con `error: "INVALID_TOTP"`: el código no es válido ni como TOTP ni como
   respaldo. Cuenta como intento fallido (SCRUM-36).
+- **`423`** con `error: "ACCOUNT_LOCKED"`: la cuenta llegó a `User.MAX_FAILED_ATTEMPTS` (5)
+  intentos fallidos consecutivos (contraseña o TOTP, da igual) y queda bloqueada
+  `User.LOCK_DURATION` (15 minutos, SCRUM-155). Mientras dure el bloqueo, cualquier intento
+  recibe este mismo aviso sin siquiera verificar la contraseña; al expirar la ventana, el
+  contador se limpia solo y el siguiente intento se evalúa de cero.
 
 Cualquier otro endpoint (salvo `/health`, el registro, el login y el catálogo público de
 rutas) responde **`401`** sin token, o con un token inválido o vencido.
 
-Fuera de este sprint: el contador de intentos fallidos y el bloqueo temporal (SCRUM-155,
-Sprint 3), y no hay logout ni revocación: un token es válido hasta que vence.
+No hay logout ni revocación en el servidor: un token de acceso es válido hasta que vence
+(el dispositivo de confianza del segundo factor, en cambio, sí sobrevive al logout a
+propósito — ver más abajo).
 
 **Configuración:** requiere la variable `JWT_SECRET` (Base64, mínimo 32 bytes decodificados);
 sin ella, o si es débil, la aplicación no arranca. Genérala con `openssl rand -base64 32`.
@@ -354,8 +362,33 @@ Flujo completo:
 3. `POST /api/users/me/totp/confirm` con el primer código → **activa el factor y deja
    logueado**: devuelve el JWT completo de 7 días y los **10 códigos de respaldo en claro**,
    que se muestran una sola vez.
-4. En los logins siguientes, `login` sin código responde `401 TOTP_REQUIRED` y con código
-   válido responde `200`.
+4. En los logins siguientes, `login` sin código ni `trustToken` vigente responde
+   `401 TOTP_REQUIRED`; con código válido responde `200` — y, si la cuenta es `USER`, con un
+   `trustToken` nuevo (ver abajo).
+
+### Dispositivo de confianza del segundo factor (decisión de producto del 17-nov-2026, SCRUM-196)
+
+Pedir el TOTP en cada login tiene sentido para operaciones sensibles, pero no para consultar
+rutas de buseta: por eso una cuenta **USER** que ya probó un código TOTP correcto no vuelve a
+verlo pedido durante `fusaroute.totp.trust-days` (15 días por defecto) **en el mismo
+dispositivo**. Una cuenta **ADMIN** lo pide **siempre, sin excepción** — la decisión la toma
+el servidor por el rol que ya cargó de la base, nunca lo que diga el cliente.
+
+- El `trustToken` es un JWT propio (`scope=totp_trust`), firmado con la misma llave que el
+  token de acceso: sin tabla ni migración nueva. Lleva una huella (hash SHA-256, nunca el
+  valor en claro) de la contraseña y el secreto TOTP vigentes del usuario, así que **cambiar
+  cualquiera de los dos lo invalida al instante**. También se invalida solo al vencer los 15
+  días; si la cuenta se bloquea (SCRUM-155) o se desactiva, ya no puede entrar de ningún modo.
+- Solo un código TOTP **correcto y verificado en esa misma petición** emite un `trustToken`
+  nuevo: ni un código de respaldo lo inicia, ni saltarse el paso con uno ya vigente lo renueva
+  (los 15 días corren fijos desde el último código correcto, no desde el último uso).
+- `login` sin `totpCode` pero con un `trustToken` vigente de una cuenta `USER` responde `200`
+  directo, sin pasar por `TOTP_REQUIRED`.
+- Cerrar sesión **no** invalida el `trustToken`: vive en el navegador, no en el servidor, y el
+  usuario espera no repetir el TOTP en 15 días aunque cierre sesión entre medias.
+- **Riesgo residual, aceptado por el producto:** quien roba la contraseña **y** el dispositivo
+  (navegador con el `trustToken` guardado) de una cuenta `USER` puede entrar sin el código
+  durante la ventana de confianza. El TOTP de `ADMIN` nunca se debilita por esto.
 
 **Códigos de respaldo.** Diez, de un solo uso, guardados con BCrypt. Son la única salida si
 el usuario pierde el teléfono, porque la recuperación de contraseña por correo está fuera de

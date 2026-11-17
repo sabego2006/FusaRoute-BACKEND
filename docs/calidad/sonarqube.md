@@ -96,6 +96,33 @@ SonarCloud) cuando, tras intentar al menos dos correcciones en código y medirla
 del PR, resulta ser un falso positivo. La justificación vive aquí, no solo en el comentario de
 SonarCloud, y el informe de la tanda lo declara como desviación.
 
+## Cambios de seguridad revisados sin hallazgo nuevo
+
+Cuando un PR toca código de autenticación/autorización, esta sección registra que se revisó
+contra SonarCloud, aunque no haya hallazgo que aceptar — para que este documento siga
+describiendo el estado de seguridad real del código, no solo las excepciones.
+
+### SCRUM-196 — dispositivo de confianza del segundo factor (17-nov-2026)
+
+`LoginService`, `JwtTrustTokenAdapter` y `User#trustFingerprintSource()` (PR #99) agregan la
+regla "un USER no repite el TOTP por 15 días en el mismo dispositivo; un ADMIN siempre lo
+repite". El punto sensible es `JwtTrustTokenAdapter.fingerprint()`, que usa
+`MessageDigest.getInstance("SHA-256")` sobre el hash de la contraseña y el secreto TOTP
+vigentes — nunca los valores en claro — para construir la huella de invalidación del claim
+`fp`. Verificado contra la API de SonarCloud sobre el análisis real del PR #99 (no solo el
+badge del check, que es informativo por diseño mientras `sonar.qualitygate.wait=false`):
+
+```
+GET sonarcloud.io/api/hotspots/search?projectKey=sabego2006_FusaRoute-BACKEND&pullRequest=99 → 0 hotspots
+GET sonarcloud.io/api/issues/search?componentKeys=sabego2006_FusaRoute-BACKEND&pullRequest=99&types=VULNERABILITY → 0 issues
+```
+
+Cero hallazgos nuevos: ni el uso de SHA-256 (no es `java:S4790`, que marca MD5/SHA-1 para
+contraseñas, no un hash de un solo sentido sobre datos ya de alta entropía) ni el resto del
+cambio dispararon nada. No aplica el hallazgo `java:S4502` de abajo: la premisa de ese
+hallazgo (sin cookies de sesión, JWT por header) sigue intacta porque el `trustToken` también
+viaja en el cuerpo JSON, nunca en una cookie.
+
 ### java:S4502 — `SecurityConfig.java`, `csrf.disable()` (SCRUM-193, 2026-11-15)
 
 **Qué dice la regla.** "Make sure disabling Spring Security's CSRF protection is safe here."
