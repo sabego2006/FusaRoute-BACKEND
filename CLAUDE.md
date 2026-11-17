@@ -85,6 +85,8 @@ com.fusaroute
 
 **Autenticación (RF-01/02/03):** registro con nombre, correo (único, formato validado) y contraseña (mínimo 8 caracteres, 1 mayúscula, 1 número), activación inmediata sin verificación por correo. Login con JWT de validez **una semana** — vencido, el usuario reloguea (RNF-04: máximo 1 login por semana). Hasta 4 intentos fallidos con mensaje genérico; al quinto, bloqueo temporal con aviso explícito de bloqueo (no el mensaje genérico de los anteriores). Recuperación de contraseña fuera de alcance este semestre. Perfil editable (nombre, correo, teléfono, contraseña); cambiar contraseña exige la contraseña actual.
 
+**Segundo factor TOTP (SCRUM-179) y dispositivo de confianza (SCRUM-196):** el login exige un código TOTP además de la contraseña — obligatorio para toda cuenta. Una cuenta **USER** que ya verificó un código TOTP correcto no vuelve a verlo pedido durante `fusaroute.totp.trust-days` (15 días por defecto) **en el mismo dispositivo**; una cuenta **ADMIN** lo pide **siempre, sin excepción**. La decisión la toma `LoginService` por el rol que ya cargó de la base, nunca por lo que diga el cliente. El dispositivo de confianza se invalida solo al vencer los 15 días, al cambiar la contraseña, o al re-enrolar/desactivar el TOTP (huella SHA-256 de ambos, ver README). Ver "Dispositivo de confianza del segundo factor" en el `README.md` para el detalle del diseño.
+
 ## Reglas técnicas
 
 **Supabase es solo PostgreSQL.** No usar Supabase Auth, Storage ni Realtime — decisión de arquitectura vigente. La autenticación es nuestra: Spring Security + JWT, con contraseñas hasheadas con BCrypt. El backend es el único dueño de la lógica de negocio y de la seguridad.
