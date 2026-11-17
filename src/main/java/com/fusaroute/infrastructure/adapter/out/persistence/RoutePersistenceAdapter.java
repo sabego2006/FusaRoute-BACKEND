@@ -2,6 +2,7 @@ package com.fusaroute.infrastructure.adapter.out.persistence;
 
 import com.fusaroute.domain.model.Route;
 import com.fusaroute.domain.model.RouteStatus;
+import com.fusaroute.domain.model.RouteSuspension;
 import com.fusaroute.domain.port.out.RouteNamePort;
 import com.fusaroute.domain.port.out.RouteRepositoryPort;
 import org.springframework.stereotype.Component;
@@ -53,6 +54,15 @@ public class RoutePersistenceAdapter implements RouteRepositoryPort, RouteNamePo
                 .toList();
     }
 
+    /**
+     * Las rutas tal como estan en la base, SIN aplicar la suspension: es lo que {@link CachedRouteCatalog}
+     * guarda en memoria. La suspension depende del reloj y se aplica en cada lectura, no al cargar.
+     */
+    @Transactional(readOnly = true)
+    public List<Route> loadAll() {
+        return repository.findAll().stream().map(RoutePersistenceMapper::toDomain).toList();
+    }
+
     @Override
     @Transactional(readOnly = true)
     public Optional<Route> findById(Long id) {
@@ -73,11 +83,23 @@ public class RoutePersistenceAdapter implements RouteRepositoryPort, RouteNamePo
         return names;
     }
 
+    /**
+     * Las suspensiones sin levantar, vigentes o por venir. {@link CachedRouteCatalog} las guarda y decide
+     * contra el reloj cuales aplican en cada lectura; las ya levantadas no pueden volver a aplicar.
+     */
+    @Transactional(readOnly = true)
+    public List<RouteSuspension> loadOpenSuspensions() {
+        return suspensions.findAllWithRoute().stream()
+                .map(RouteSuspensionPersistenceAdapter::toDomain)
+                .filter(suspension -> suspension.liftedAt() == null)
+                .toList();
+    }
+
     private Set<Long> suspendedNow() {
         return Set.copyOf(suspensions.findEffectiveRouteIdsAt(clock.instant()));
     }
 
-    private static Route presented(Route route, Set<Long> suspended) {
+    static Route presented(Route route, Set<Long> suspended) {
         return route.status() == RouteStatus.ACTIVA && suspended.contains(route.id())
                 ? route.withStatus(RouteStatus.SUSPENDIDA)
                 : route;

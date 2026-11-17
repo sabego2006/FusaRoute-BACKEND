@@ -962,6 +962,100 @@ vars.put(&quot;totpCode&quot;, code);</stringProp>
   <stringProp name="ActionProcessor.duration">${__P(e8.think,1000)}</stringProp>
 </TestAction><hashTree/>
 </hashTree>
+<ThreadGroup guiclass="ThreadGroupGui" testclass="ThreadGroup" testname="QR - Rafaga del publico" enabled="true">
+  <stringProp name="TestPlan.comments">M-QR (SCRUM-192): lo que hace cada celular al abrir /rutas/buscar desde el QR de la sustentacion: catalogo de rutas, catalogo de lugares y una busqueda. La busqueda va por /search/offline: mismo calculo geometrico, sin gastar Google Routes. Sin cuentas. Propiedades: qr.users, qr.rampup, qr.loops.</stringProp>
+  <stringProp name="ThreadGroup.on_sample_error">continue</stringProp>
+  <elementProp name="ThreadGroup.main_controller" elementType="LoopController" guiclass="LoopControlPanel" testclass="LoopController">
+    <stringProp name="LoopController.loops">${__P(qr.loops,1)}</stringProp>
+    <boolProp name="LoopController.continue_forever">false</boolProp>
+  </elementProp>
+  <stringProp name="ThreadGroup.num_threads">${__P(qr.users,0)}</stringProp>
+  <stringProp name="ThreadGroup.ramp_time">${__P(qr.rampup,5)}</stringProp>
+  <boolProp name="ThreadGroup.same_user_on_next_iteration">true</boolProp>
+  <boolProp name="ThreadGroup.scheduler">false</boolProp>
+  <stringProp name="ThreadGroup.duration"></stringProp>
+  <stringProp name="ThreadGroup.delay"></stringProp>
+</ThreadGroup>
+<hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="QR GET /api/routes" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El catalogo trae rutas" enabled="true">
+  <stringProp name="JSON_PATH">$[0].id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="QR GET /api/places" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/places</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="El catalogo trae lugares" enabled="true">
+  <stringProp name="JSON_PATH">$[0].id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+<HTTPSamplerProxy guiclass="HttpTestSampleGui" testclass="HTTPSamplerProxy" testname="QR GET /api/routes/search/offline" enabled="true">
+  <stringProp name="HTTPSampler.path">/api/routes/search/offline?originPlaceId=${originPlaceId}&amp;destinationPlaceId=${destinationPlaceId}</stringProp>
+  <stringProp name="HTTPSampler.method">GET</stringProp>
+  <boolProp name="HTTPSampler.follow_redirects">true</boolProp>
+  <boolProp name="HTTPSampler.use_keepalive">true</boolProp>
+  <elementProp name="HTTPsampler.Arguments" elementType="Arguments" guiclass="HTTPArgumentsPanel" testclass="Arguments">
+    <collectionProp name="Arguments.arguments"/>
+  </elementProp>
+</HTTPSamplerProxy>
+<hashTree>
+<ResponseAssertion guiclass="AssertionGui" testclass="ResponseAssertion" testname="HTTP 200" enabled="true">
+  <collectionProp name="Asserion.test_strings"><stringProp name="code">200</stringProp></collectionProp>
+  <stringProp name="Assertion.custom_message"></stringProp>
+  <stringProp name="Assertion.test_field">Assertion.response_code</stringProp>
+  <boolProp name="Assertion.assume_success">true</boolProp>
+  <intProp name="Assertion.test_type">8</intProp>
+</ResponseAssertion><hashTree/>
+<JSONPathAssertion guiclass="JSONPathAssertionGui" testclass="JSONPathAssertion" testname="La busqueda sugiere una ruta" enabled="true">
+  <stringProp name="JSON_PATH">$.route.id</stringProp>
+  <stringProp name="EXPECTED_VALUE"></stringProp>
+  <boolProp name="JSONVALIDATION">false</boolProp>
+  <boolProp name="EXPECT_NULL">false</boolProp>
+  <boolProp name="INVERT">false</boolProp>
+  <boolProp name="ISREGEX">false</boolProp>
+</JSONPathAssertion><hashTree/>
+</hashTree>
+</hashTree>
 </hashTree>
 </hashTree>
 </jmeterTestPlan>

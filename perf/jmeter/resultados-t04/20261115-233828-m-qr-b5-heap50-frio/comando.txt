@@ -1,0 +1,5 @@
+# 2026-11-15 23:38:31 -0500 · plan m-qr · etiqueta b5-heap50-frio
+# commit del repo: e9679cd
+perf/jmeter/run-t04.sh m-qr b5-heap50-frio
+# que por dentro ejecuta:
+/c/Users/Santiago/dev/FusaRoute/.tools/apache-jmeter-5.6.3/bin/jmeter.bat -n -t C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/fusaroute.jmx -Jhost=localhost -Jport=18080 -Jprotocol=http -Jdata=C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-233828-m-qr-b5-heap50-frio/data -Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1 -l C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-233828-m-qr-b5-heap50-frio/resultado.jtl -j C:/Users/Santiago/dev/FusaRoute/FusaRoute-BACKEND-opt/perf/jmeter/resultados-t04/20261115-233828-m-qr-b5-heap50-frio/jmeter.log

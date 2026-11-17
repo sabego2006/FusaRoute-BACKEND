@@ -39,6 +39,11 @@ public class PlacePersistenceAdapter implements PlaceRepositoryPort {
             return snapshot;
         }
         List<Place> fresh = repository.findAll().stream().map(PlacePersistenceAdapter::toDomain).toList();
+        // Misma lista si nada cambio (SCRUM-192): ListPlacesService reutiliza su calculo mientras
+        // reciba la misma instancia.
+        if (snapshot != null && snapshot.equals(fresh)) {
+            fresh = snapshot;
+        }
         cached = fresh;
         cachedAt = now;
         return fresh;

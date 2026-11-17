@@ -1,0 +1,2 @@
+# Los scripts de shell se ejecutan con bash tambien en Windows (Git Bash): con CRLF fallan.
+*.sh text eol=lf

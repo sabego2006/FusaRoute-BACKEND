@@ -1,0 +1,1 @@
+-Jqr.users=25 -Jqr.rampup=5 -Jqr.loops=1

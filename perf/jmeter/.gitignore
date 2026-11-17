@@ -1,3 +1,9 @@
 # Datos reales de prueba (cuentas, secretos TOTP y tokens del ambiente local) y resultados crudos
 data/
 results/
+resultados-t04/*/jmeter.log
+resultados-t04/*/data/
+resultados-t04/_diag/
+resultados-t04/_descartadas/
+resultados-t04/*/resultado.jtl
+resultados-t04/resumen.json

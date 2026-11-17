@@ -1,0 +1,34 @@
+# Limites de Render free para las mediciones M-LOCAL y M-QR (SCRUM-192). Se superpone a
+# docker-compose.yml y a docker-compose.perf.yml, en ese orden:
+#
+#   T04_TAG=main docker compose -p fusaroute-t04 -f docker-compose.yml \
+#     -f perf/jmeter/docker-compose.perf.yml -f perf/jmeter/docker-compose.t04.yml up --build -d db backend
+#
+# docker-compose.perf.yml deja 1 CPU para que la bateria de 9 escenarios termine. Aqui
+# se baja a 0,1 CPU, lo que da Render free, porque lo que se mide es justo la contencion
+# por CPU de los lectores del catalogo. El arranque de la JVM tarda varios minutos.
+#
+# El proyecto se llama fusaroute-t04 (-p) y la imagen lleva etiqueta propia para no pisar
+# el stack `fusaroute` de otra sesion ni su volumen de datos.
+
+services:
+  backend:
+    image: fusaroute-t04-backend:${T04_TAG:-dev}
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+          cpus: "0.1"
+    # Render no da swap. Sin esto Docker deja usar otros 512 MB de swap y la JVM, en vez de
+    # quedarse sin memoria, se arrastra paginando: colas de 30 s que en PROD no existen.
+    memswap_limit: 512M
+    healthcheck:
+      # Con 0,1 CPU el arranque no cabe en los 60 s del compose base.
+      start_period: 600s
+    environment:
+      # Mismo valor que el Dockerfile; T04_JAVA_OPTS lo reemplaza para probar banderas de la JVM
+      # sin reconstruir la imagen.
+      - JAVA_TOOL_OPTIONS=${T04_JAVA_OPTS:--XX:MaxRAMPercentage=50 -XX:+UseSerialGC -XX:+ExitOnOutOfMemoryError -XX:TieredStopAtLevel=1}
+    volumes:
+      # Volcados de diagnostico (JFR, logs de GC) que se leen desde el anfitrion.
+      - ${T04_DIAG_DIR:-./perf/jmeter/resultados-t04/_diag}:/diag
