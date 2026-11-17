@@ -325,12 +325,18 @@ respaldo.
 - **`401`** con `error: "TOTP_REQUIRED"`: falta el `totpCode`. El frontend muestra el paso 2.
 - **`401`** con `error: "INVALID_TOTP"`: el código no es válido ni como TOTP ni como
   respaldo. Cuenta como intento fallido (SCRUM-36).
+- **`423`** con `error: "ACCOUNT_LOCKED"`: la cuenta llegó a `User.MAX_FAILED_ATTEMPTS` (5)
+  intentos fallidos consecutivos (contraseña o TOTP, da igual) y queda bloqueada
+  `User.LOCK_DURATION` (15 minutos, SCRUM-155). Mientras dure el bloqueo, cualquier intento
+  recibe este mismo aviso sin siquiera verificar la contraseña; al expirar la ventana, el
+  contador se limpia solo y el siguiente intento se evalúa de cero.
 
 Cualquier otro endpoint (salvo `/health`, el registro, el login y el catálogo público de
 rutas) responde **`401`** sin token, o con un token inválido o vencido.
 
-Fuera de este sprint: el contador de intentos fallidos y el bloqueo temporal (SCRUM-155,
-Sprint 3), y no hay logout ni revocación: un token es válido hasta que vence.
+No hay logout ni revocación en el servidor: un token de acceso es válido hasta que vence
+(el dispositivo de confianza del segundo factor, en cambio, sí sobrevive al logout a
+propósito — ver más abajo).
 
 **Configuración:** requiere la variable `JWT_SECRET` (Base64, mínimo 32 bytes decodificados);
 sin ella, o si es débil, la aplicación no arranca. Genérala con `openssl rand -base64 32`.
