@@ -200,7 +200,7 @@ sequenceDiagram
 |--------|------|------|-----------|-------------|
 | `GET` | `/health` | No | 200 | Estado del servicio |
 | `POST` | `/api/auth/register` | No | 201 / 400 / 409 | Registro de usuario |
-| `POST` | `/api/auth/login` | No | 200 / 401 | Inicio de sesión (JWT) |
+| `POST` | `/api/auth/login` | No | 200 / 401 / 423 | Inicio de sesión (JWT + segundo factor; 423 = cuenta bloqueada, SCRUM-155) |
 | `GET` | `/api/routes` | No | 200 | Catálogo de rutas activas |
 | `GET` | `/api/routes/{id}` | No | 200 / 404 | Detalle de una ruta |
 | `GET` | `/api/routes/{id}/fare` | No | 200 / 404 | Costo del pasaje de una ruta (RF-06) |
