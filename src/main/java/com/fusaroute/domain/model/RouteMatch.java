@@ -20,4 +20,13 @@ public record RouteMatch(Route route, BoardingPoint boarding, BoardingPoint drop
     public java.util.List<Coordinate> ridePath() {
         return route.pathBetween(boarding.distanceAlongPathInMeters(), dropOff.distanceAlongPathInMeters());
     }
+
+    /**
+     * Barrios que la buseta pasa entre el abordaje y la bajada (SCRUM-198), que son los unicos que
+     * el resultado de la busqueda debe nombrar. Ver {@link Route#neighborhoodsBetween}.
+     */
+    public java.util.List<String> tripNeighborhoods() {
+        return route.neighborhoodsBetween(
+                boarding.distanceAlongPathInMeters(), dropOff.distanceAlongPathInMeters());
+    }
 }

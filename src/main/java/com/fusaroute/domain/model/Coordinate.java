@@ -24,6 +24,33 @@ public record Coordinate(double latitude, double longitude) {
     /** Radio medio terrestre (WGS-84), en metros. */
     private static final double EARTH_RADIUS_METERS = 6_371_008.8;
 
+    /** Por debajo de esta distancia los dos puntos son el mismo sitio y no hay rumbo que dar. */
+    public static final double MIN_BEARING_DISTANCE_METERS = 20;
+
+    /**
+     * Rumbo INICIAL hacia {@code other}, en grados desde el norte y en sentido horario
+     * (0 = norte, 90 = oriente, 180 = sur, 270 = occidente).
+     *
+     * Es un dato geometrico, no una frase: quien lo muestra decide con que palabra lo dice
+     * ("hacia el nororiente"). Es el rumbo del circulo maximo y no el de una calle, asi que
+     * orienta pero no reemplaza mirar el mapa; a las distancias de la ultima milla la diferencia
+     * con la loxodromica es de centesimas de grado.
+     *
+     * @return vacio si los dos puntos estan a menos de {@link #MIN_BEARING_DISTANCE_METERS}:
+     *     ahi no hay una direccion que tenga sentido dar, y devolver una seria inventar precision
+     */
+    public java.util.OptionalDouble bearingDegreesTo(Coordinate other) {
+        if (distanceInMetersTo(other) < MIN_BEARING_DISTANCE_METERS) {
+            return java.util.OptionalDouble.empty();
+        }
+        double lat1 = Math.toRadians(latitude);
+        double lat2 = Math.toRadians(other.latitude);
+        double lonDelta = Math.toRadians(other.longitude - longitude);
+        double y = Math.sin(lonDelta) * Math.cos(lat2);
+        double x = Math.cos(lat1) * Math.sin(lat2) - Math.sin(lat1) * Math.cos(lat2) * Math.cos(lonDelta);
+        return java.util.OptionalDouble.of((Math.toDegrees(Math.atan2(y, x)) + 360) % 360);
+    }
+
     /**
      * Distancia en linea recta sobre la superficie terrestre, en metros (haversine).
      *

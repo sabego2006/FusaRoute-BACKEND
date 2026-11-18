@@ -161,7 +161,9 @@ final class PathProjection {
         return path.get(path.size() - 1);
     }
 
-    private static double totalLength(List<Coordinate> path) {
+    /** Largo total del trazado, en metros. Visible al paquete: {@link Route} lo necesita para pasar
+     * de una distancia acumulada a una fraccion del recorrido. */
+    static double totalLength(List<Coordinate> path) {
         double total = 0;
         for (int i = 0; i < path.size() - 1; i++) {
             total += path.get(i).distanceInMetersTo(path.get(i + 1));

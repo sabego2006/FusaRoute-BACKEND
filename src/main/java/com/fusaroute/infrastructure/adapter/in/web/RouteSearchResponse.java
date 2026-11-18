@@ -29,17 +29,21 @@ import java.util.List;
  * @param congestionSectors sectores con congestion en su franja que el tramo en buseta atraviesa
  * @param origin punta de origen ya resuelta
  * @param destination punta de destino ya resuelta
- * @param path trazado de la ruta sugerida como LineString de GeoJSON; {@code null} si la ruta todavia no
- *     tiene trazado cargado
+ * @param path trazado COMPLETO de la ruta sugerida como LineString de GeoJSON; {@code null} si la ruta
+ *     todavia no tiene trazado cargado. Es el recorrido de la ruta de punta a punta, NO el viaje de
+ *     quien busco: ese va en {@code tripSegment.ridePath} (SCRUM-198)
  * @param lastUpdatedAt el {@code validFrom} mas reciente entre las tarifas vigentes de la ruta sugerida
  *     (RF-06); {@code null} si no tiene ninguna
+ * @param tripSegment el tramo que la persona recorre de verdad (SCRUM-198): trazado recortado entre
+ *     subida y bajada, sus barrios y como se explica cada caminata. Campo nuevo y opcional
  */
 public record RouteSearchResponse(RouteResponse route, Long estimatedMinutes, String etaSource,
                                   Long travelDistanceInMeters,
                                   BoardingPointResponse boarding, BoardingPointResponse dropOff,
                                   boolean longWalk, List<CongestionSectorResponse> congestionSectors,
                                   SearchPointResponse origin, SearchPointResponse destination,
-                                  GeoJsonLineStringResponse path, LocalDate lastUpdatedAt) {
+                                  GeoJsonLineStringResponse path, LocalDate lastUpdatedAt,
+                                  TripSegmentResponse tripSegment) {
 
     /** Punta resuelta: donde cayo y como se llama. */
     public record SearchPointResponse(Double lat, Double lng, String label) {
@@ -68,7 +72,8 @@ public record RouteSearchResponse(RouteResponse route, Long estimatedMinutes, St
                 SearchPointResponse.from(result.origin()),
                 SearchPointResponse.from(result.destination()),
                 GeoJsonLineStringResponse.from(result.route().path()),
-                result.route().lastFareUpdate().orElse(null));
+                result.route().lastFareUpdate().orElse(null),
+                TripSegmentResponse.from(result.tripSegment()));
     }
 
     private static CongestionSectorResponse sector(TrafficSector sector) {

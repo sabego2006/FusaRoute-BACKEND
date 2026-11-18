@@ -176,6 +176,64 @@ public record Route(Long id, String name, String signFile, RouteType type, Route
     }
 
     /**
+     * Tolerancia solo para comparar fracciones en coma flotante; no ensancha el tramo. Sobre un
+     * trazado de 13 km equivale a centesimas de milimetro.
+     */
+    private static final double FRACTION_EPSILON = 1e-9;
+
+    /**
+     * Barrios que la buseta pasa ENTRE dos distancias acumuladas del trazado: el tramo que la
+     * persona de verdad recorre (SCRUM-198). El resultado de la busqueda mostraba antes la lista
+     * completa de la ruta, asi que quien subia en la mitad leia tambien los barrios por los que
+     * la buseta ya habia pasado.
+     *
+     * <p>Ubica cada barrio con la MISMA suposicion de {@link #pointAtNeighborhood}: el barrio del
+     * indice {@code i} cae a la fraccion {@code i / (size - 1)} del recorrido. Es una aproximacion
+     * deliberada — {@code route_neighborhoods} no guarda coordenada por barrio — y se midio contra
+     * la alternativa de proyectar la coordenada real del lugar del catalogo: de los 393 barrios de
+     * las 32 rutas con trazado, solo 253 tienen un lugar con ese nombre en el catalogo, y en 13 de
+     * esas 32 rutas las coordenadas reales contradicen el orden que registro el trabajo de campo.
+     * La fraccion uniforme cubre los 393 y nunca sale del orden de recorrido.
+     *
+     * <p>El rango es CERRADO en los dos extremos, asi que subir a la altura de un barrio lo incluye:
+     * la ruta A-B-C-D-E con subida en C y bajada en E da C, D, E. Y es ESTRICTO hacia atras: un
+     * barrio que queda antes de la subida nunca entra, aunque la aproximacion lo deje a pocos metros.
+     *
+     * <p>Los nombres repetidos CONSECUTIVOS se colapsan (son deriva de los datos de campo, no dos
+     * pasadas); uno que reaparece mas adelante se conserva, porque ahi la buseta si vuelve a pasar.
+     *
+     * @return lista vacia si no hay trazado, si {@code toAlongInMeters} va antes que
+     *     {@code fromAlongInMeters} (no hay viaje que mostrar) o si ningun barrio cae dentro del
+     *     tramo. Lo ultimo es lo normal en recorridos cortos, no un error: en los 6 pares reales
+     *     medidos el 17-nov, 5 recorrian entre 195 m y 1,4 km de rutas de 9 a 13 km
+     */
+    public List<String> neighborhoodsBetween(double fromAlongInMeters, double toAlongInMeters) {
+        if (!hasPath() || neighborhoods.isEmpty() || toAlongInMeters < fromAlongInMeters) {
+            return List.of();
+        }
+        double total = PathProjection.totalLength(path);
+        if (total == 0) {
+            // Trazado degenerado: todos los vertices en el mismo punto, no hay tramo que repartir.
+            return List.of();
+        }
+        double fromFraction = fromAlongInMeters / total;
+        double toFraction = toAlongInMeters / total;
+        int lastIndex = neighborhoods.size() - 1;
+        List<String> inside = new java.util.ArrayList<>();
+        for (int i = 0; i < neighborhoods.size(); i++) {
+            double fraction = lastIndex == 0 ? 0d : (double) i / lastIndex;
+            if (fraction < fromFraction - FRACTION_EPSILON || fraction > toFraction + FRACTION_EPSILON) {
+                continue;
+            }
+            String name = neighborhoods.get(i);
+            if (inside.isEmpty() || !inside.get(inside.size() - 1).equals(name)) {
+                inside.add(name);
+            }
+        }
+        return List.copyOf(inside);
+    }
+
+    /**
      * Punto del trazado mas cercano a {@code from} y cuanto hay que caminar hasta el
      * (RF-04, ultima milla). Sirve igual para el abordaje (desde el origen) y para la
      * bajada (hacia el destino), y da el mismo resultado online y offline: es

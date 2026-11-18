@@ -646,8 +646,9 @@ criterio de aceptación.
 
 `GET /api/places` (público, ETag + `Cache-Control` 10 min) lista los lugares canónicos con coordenada:
 `[{ id, slug, name, lat, lng, aliases, routeCount }]` ordenado por nombre. Salen de la migración V21
-(generada desde la tabla de lugares de P0); `route_neighborhoods` no se toca y sigue alimentando
-"Por dónde pasa".
+(generada desde la tabla de lugares de P0); `route_neighborhoods` no se toca y sigue siendo la lista
+de barrios de la ruta, que el cliente usa en el **detalle** (`/{id}`) y de la que la búsqueda recorta
+el tramo del viaje (ver `tripSegment` abajo).
 
 `GET /api/routes/search` y `GET /api/routes/search/offline`: cada punta acepta **una** forma, con esta
 prioridad: `originPlaceId` · `originLat`+`originLng` · `originNeighborhood` (legado: nombre o alias,
@@ -666,6 +667,27 @@ sin tildes ni mayúsculas). Igual con `destination…`. Una punta que no se resu
   y la búsqueda no falla. `/search/offline` nunca llama a Google.
 - Congestión del Indio: círculo de 450 m (V22) sobre el **tramo en buseta**; `congestionSectors` va en
   la respuesta y el detalle de ruta (`/{id}`) lo evalúa sobre el trazado completo.
+- **`tripSegment`: el tramo que la persona recorre de verdad** (T17a, SCRUM-198). Campo nuevo y
+  **opcional** — un cliente anterior lo ignora. Lleva:
+  - `ridePath`: el trazado **recortado** entre el abordaje y la bajada, como LineString de GeoJSON.
+    `path` sigue siendo el recorrido COMPLETO de la ruta; son dos cosas distintas y el resultado de la
+    búsqueda debe dibujar el primero. `null` si la ruta no tiene trazado.
+  - `neighborhoods`: los barrios que la buseta pasa **dentro del tramo**, en orden. Lista **vacía es
+    una respuesta válida y frecuente**, no un error: con recorridos cortos no queda ningún barrio entre
+    la subida y la bajada (en los 6 pares reales medidos el 17-nov, 5 recorrían entre 195 m y 1,4 km de
+    rutas de 9 a 13 km).
+  - `boardingWalk` / `dropOffWalk`: `bearingDegrees` (rumbo desde el norte en sentido horario hacia el
+    punto al que se camina; `null` si los dos puntos están a menos de 20 m) y `reference` (el lugar del
+    catálogo más cercano a ese punto, `null` si ninguno queda a menos de 300 m). Viajan los **grados**,
+    no la palabra: con qué palabra se dice ("hacia el nororiente") lo decide el cliente.
+
+  Los barrios del tramo se ubican con la misma suposición de `Route.pointAtNeighborhood`: el barrio del
+  índice `i` cae a la fracción `i / (size - 1)` del recorrido. Es una aproximación deliberada —
+  `route_neighborhoods` no guarda coordenada por barrio — y se midió contra la alternativa de proyectar
+  la coordenada real del lugar del catálogo: de los 393 barrios de las 32 rutas con trazado solo 253
+  tienen un lugar con ese nombre, y en 13 de esas 32 rutas las coordenadas reales contradicen el orden
+  que registró el trabajo de campo. El rango es cerrado en los dos extremos (subir a la altura de un
+  barrio lo incluye) y estricto hacia atrás (un barrio anterior a la subida nunca entra).
 - Las rutas sin trazado (hoy ids 5 y 6, y la de Pasca hasta P2) solo salen por el camino legado de
   nombres, sin abordaje ni tiempo, y nunca le ganan a una con trazado.
 - La cobertura se mide con `SearchCoverageIT` y queda en `docs/calidad/cobertura-busqueda.md`.

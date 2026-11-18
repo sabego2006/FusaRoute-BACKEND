@@ -19,29 +19,48 @@ import java.util.OptionalDouble;
  *     {@code null} si la ruta no tiene trazado cargado
  * @param boardingPoint donde tomar la buseta; {@code null} sin trazado
  * @param dropOffPoint donde bajarse; {@code null} sin trazado
+ * @param tripSegment el tramo que la persona recorre de verdad (SCRUM-198): el trazado recortado
+ *     entre subida y bajada, sus barrios y como se explica cada caminata. Nunca {@code null} —
+ *     una ruta sin trazado lleva {@link TripSegment#UNKNOWN}, que dice "no se sabe" en vez de
+ *     dejar que quien lo muestre caiga en la ruta completa
  */
 public record RouteSearchResult(Route route, Duration estimatedTime, Double travelDistanceInMeters,
                                 BoardingPoint boardingPoint, BoardingPoint dropOffPoint,
                                 EtaSource etaSource, boolean longWalk,
                                 java.util.List<TrafficSector> congestionSectors,
-                                ResolvedPoint origin, ResolvedPoint destination) {
+                                ResolvedPoint origin, ResolvedPoint destination,
+                                TripSegment tripSegment) {
 
     public RouteSearchResult {
         etaSource = etaSource == null ? EtaSource.ESTIMATED : etaSource;
         congestionSectors = congestionSectors == null ? java.util.List.of() : java.util.List.copyOf(congestionSectors);
+        tripSegment = tripSegment == null ? TripSegment.UNKNOWN : tripSegment;
     }
 
     /** Resultado sin los datos de la busqueda por geometria (P1): estimado, caminata normal, sin aviso. */
     public RouteSearchResult(Route route, Duration estimatedTime, Double travelDistanceInMeters,
                              BoardingPoint boardingPoint, BoardingPoint dropOffPoint) {
         this(route, estimatedTime, travelDistanceInMeters, boardingPoint, dropOffPoint,
-                EtaSource.ESTIMATED, false, java.util.List.of(), null, null);
+                EtaSource.ESTIMATED, false, java.util.List.of(), null, null, TripSegment.UNKNOWN);
+    }
+
+    /**
+     * Resultado sin tramo calculado, para los llamadores anteriores a SCRUM-198. El tramo queda en
+     * {@link TripSegment#UNKNOWN}, que es el comportamiento honesto: sin detalle del tramo.
+     */
+    public RouteSearchResult(Route route, Duration estimatedTime, Double travelDistanceInMeters,
+                             BoardingPoint boardingPoint, BoardingPoint dropOffPoint,
+                             EtaSource etaSource, boolean longWalk,
+                             java.util.List<TrafficSector> congestionSectors,
+                             ResolvedPoint origin, ResolvedPoint destination) {
+        this(route, estimatedTime, travelDistanceInMeters, boardingPoint, dropOffPoint,
+                etaSource, longWalk, congestionSectors, origin, destination, TripSegment.UNKNOWN);
     }
 
     /** Copia con las puntas de la busqueda ya resueltas (nombre y coordenada con que se muestran). */
     public RouteSearchResult withPoints(ResolvedPoint newOrigin, ResolvedPoint newDestination) {
         return new RouteSearchResult(route, estimatedTime, travelDistanceInMeters, boardingPoint, dropOffPoint,
-                etaSource, longWalk, congestionSectors, newOrigin, newDestination);
+                etaSource, longWalk, congestionSectors, newOrigin, newDestination, tripSegment);
     }
 
     /** Resultado con red: la mejor es la mas rapida segun Google. */

@@ -19,6 +19,7 @@ import com.fusaroute.domain.model.SearchOutcome;
 import com.fusaroute.domain.model.SearchPoint;
 import com.fusaroute.domain.model.SuspendedRoute;
 import com.fusaroute.domain.model.TrafficSector;
+import com.fusaroute.domain.model.TripSegment;
 import com.fusaroute.domain.model.UsageEvent;
 import com.fusaroute.domain.model.UsageEventType;
 import com.fusaroute.domain.port.in.SearchRouteUseCase;
@@ -45,6 +46,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.OptionalDouble;
 import java.util.OptionalInt;
 
 /**
@@ -233,7 +235,7 @@ public class SearchRouteService implements SearchRouteUseCase {
         }
 
         if (best.isPresent()) {
-            return geometricResult(best.get(), origin, destination, longWalk, online, calibrated);
+            return geometricResult(best.get(), origin, destination, longWalk, online, calibrated, places);
         }
         return legacyByName(routes, origin, destination)
                 .orElseThrow(() -> noRoute(routes, origin, destination, originPoint, destinationPoint));
@@ -299,7 +301,7 @@ public class SearchRouteService implements SearchRouteUseCase {
 
     private RouteSearchResult geometricResult(Ranked winner, ResolvedPoint origin, ResolvedPoint destination,
                                               boolean longWalk, boolean online,
-                                              Map<Long, Double> calibrated) {
+                                              Map<Long, Double> calibrated, List<Place> places) {
         RouteMatch match = winner.match();
         Route route = match.route();
         List<Coordinate> ridePath = match.ridePath();
@@ -328,7 +330,38 @@ public class SearchRouteService implements SearchRouteUseCase {
 
         return new RouteSearchResult(route.withCurrentFares(LocalDate.now(clock)), ride,
                 match.rideDistanceInMeters(), match.boarding(), match.dropOff(),
-                etaSource, longWalk, congestion, origin, destination);
+                etaSource, longWalk, congestion, origin, destination,
+                tripSegment(match, origin, destination, ridePath, places));
+    }
+
+    /**
+     * El tramo que la persona recorre de verdad (SCRUM-198): el trazado ya recortado, los barrios que
+     * quedan dentro y, para cada caminata, hacia donde va y hasta que lugar reconocible llega.
+     *
+     * El rumbo de la subida se mide desde el punto del usuario HACIA la subida (para donde camina), y
+     * el de la bajada desde la bajada HACIA el destino, que es el otro sentido del recorrido a pie.
+     */
+    private static TripSegment tripSegment(RouteMatch match, ResolvedPoint origin, ResolvedPoint destination,
+                                           List<Coordinate> ridePath, List<Place> places) {
+        return new TripSegment(ridePath, match.tripNeighborhoods(),
+                walkGuide(origin.coordinate(), match.boarding().point(), places),
+                walkGuide(match.dropOff().point(), destination.coordinate(), places));
+    }
+
+    /**
+     * Como se explica una caminata de {@code from} a {@code to}: el rumbo y el lugar del catalogo mas
+     * cercano al punto al que se llega. El rumbo queda vacio cuando los dos puntos estan a menos de
+     * 20 m, y la referencia cuando ningun lugar queda a menos de 300 m: en los dos casos se prefiere
+     * no decir nada antes que inventar una direccion o mandar a la persona a otra esquina.
+     */
+    private static TripSegment.WalkGuide walkGuide(Coordinate from, Coordinate to, List<Place> places) {
+        if (to == null) {
+            return TripSegment.WalkGuide.NONE;
+        }
+        OptionalDouble bearing = from == null ? OptionalDouble.empty() : from.bearingDegreesTo(to);
+        String reference = Place.nearestTo(places, to, TripSegment.REFERENCE_RADIUS_METERS)
+                .map(Place::name).orElse(null);
+        return new TripSegment.WalkGuide(bearing.isPresent() ? bearing.getAsDouble() : null, reference);
     }
 
     private void recordObservedSpeed(Route route, double rideMeters, Duration googleTime) {
