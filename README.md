@@ -665,6 +665,13 @@ sin tildes ni mayúsculas). Igual con `destination…`. Una punta que no se resu
   mediana de las últimas 50 mediciones de Google de esa ruta con al menos 5). **Google solo cronometra la
   ganadora**, con una llamada como máximo (caché 5 min). Sin llave o con error: `etaSource: ESTIMATED`
   y la búsqueda no falla. `/search/offline` nunca llama a Google.
+- **Presupuesto de tiempo de la llamada a Google** (T15, SCRUM-199): `1,5 s` de conexión y `3 s` de
+  lectura (`google.routes.connect-timeout-ms` / `google.routes.read-timeout-ms`, ver `MapsConfig`).
+  Pasado el presupuesto la búsqueda responde igual, con `etaSource: ESTIMATED`; **nunca con error**.
+  Los números salen de medir PROD: en estado estable Google aporta menos de 0,2 s y la primera
+  llamada tras un rato sin tráfico unos 2,3 s, así que con 1,5 + 3 s el peor caso baja de 7 s a
+  4,5 s sin cortar ninguna llamada que fuera a terminar. La prueba que lo fija es
+  `MapsConfigTimeoutTest`.
 - Congestión del Indio: círculo de 450 m (V22) sobre el **tramo en buseta**; `congestionSectors` va en
   la respuesta y el detalle de ruta (`/{id}`) lo evalúa sobre el trazado completo.
 - **`tripSegment`: el tramo que la persona recorre de verdad** (T17a, SCRUM-198). Campo nuevo y
@@ -692,8 +699,10 @@ sin tildes ni mayúsculas). Igual con `destination…`. Una punta que no se resu
   nombres, sin abordaje ni tiempo, y nunca le ganan a una con trazado.
 - La cobertura se mide con `SearchCoverageIT` y queda en `docs/calidad/cobertura-busqueda.md`.
 
-Variables: `GOOGLE_MAPS_API_KEY` (opcional; vacía = siempre estimado) y `GOOGLE_ROUTES_BASE_URL`
-(solo para apuntar a un stub). `GOOGLE_MAPS_BASE_URL` ya no se usa.
+Variables: `GOOGLE_MAPS_API_KEY` (opcional; vacía = siempre estimado), `GOOGLE_ROUTES_BASE_URL`
+(solo para apuntar a un stub) y `GOOGLE_ROUTES_CONNECT_TIMEOUT_MS` / `GOOGLE_ROUTES_READ_TIMEOUT_MS`
+(el presupuesto de arriba, por si hay que apretarlo en PROD sin recompilar).
+`GOOGLE_MAPS_BASE_URL` ya no se usa.
 
 ## Métricas y p95 (RNF-01, SCRUM-127)
 
